@@ -12,9 +12,12 @@ SHIMMED = {"rapidfuzz", "pystemmer", "pyahocorasick", "marisa-trie", "psutil",
            "timezonefinder", "pexpect", "ptyprocess"}
 # only needed by pipeline stages the browser build leaves out (m2v)
 DROPPED = {"tokenizers", "hf-xet", "huggingface-hub", "model2vec", "skops",
-           "ovos-m2v-pipeline", "scikit-learn", "scipy", "timezonefinder-data"}
+           "ovos-m2v-pipeline", "scikit-learn", "scipy", "timezonefinder-data",
+           # uvicorn extras: the control panel app is called in-process, not served
+           "uvloop", "httptools", "watchfiles", "websockets"}
 # shipped as-is although tagged for a platform (pure Python inside)
-FORCE_PURE = {"watchdog"}
+# (tornado: its C speedups are optional; ovos-gui only imports it)
+FORCE_PURE = {"watchdog", "tornado"}
 
 
 def norm(n):
