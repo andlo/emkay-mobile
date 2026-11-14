@@ -31,11 +31,17 @@ def start(js_post, user_config=None):
         pyodide_http.patch_all()   # requests/urllib through the browser's XHR
     except ImportError:
         pass
+    import time
+    t = time.time()
     info = boot.start(user_config=user_config)
+    print(f"[emkay] core up in {time.time() - t:.1f}s")
     bus = boot.bus()
+    t = time.time()
     gui.start(bus, lambda raw: _post("gui", raw))
+    print(f"[emkay] gui up in {time.time() - t:.1f}s")
     speech.start(bus, lambda wav, meta: _post("audio", json.dumps(meta), wav))
     bus.on("message", _watch)
+    info["blocked"] = browser.BLOCKED[:]
     return json.dumps(info)
 
 

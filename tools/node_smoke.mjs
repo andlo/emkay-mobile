@@ -24,6 +24,7 @@ function copyDir(src, dst) {
   }
 }
 copyDir(path.join(repo, "py/emkay_mobile"), "/emkay/emkay_mobile");
+copyDir(path.join(repo, "py/ovos_visage"), "/emkay/ovos_visage");
 if (process.env.EMKAY_CACHE) copyDir(process.env.EMKAY_CACHE, "/home/pyodide/.local/share/mycroft");
 
 py.globals.set("UTTS", py.toPy(utts.length ? utts : ["what time is it", "good morning", "how are you", "what is 2 plus 2"]));
@@ -39,14 +40,21 @@ t = time.time()
 from emkay_mobile import boot
 print("import", round(time.time() - t, 2), "s")
 from ovos_bus_client.message import Message
-heard = []
-def on_msg(m):
-    m = Message.deserialize(m) if isinstance(m, str) else m
-    heard.append(m)
-info = boot.start(on_message=on_msg)
-print("boot", info["seconds"], "s,", len(info["skills"]), "skills:", ", ".join(info["skills"]))
-print("threads:", info["skipped_threads"])
+from emkay_mobile import worker_main
+heard, sent = [], {"gui": 0, "audio": 0, "bus": 0}
+def js_post(kind, payload, data=None):
+    sent[kind] = sent.get(kind, 0) + 1
+    if kind == "audio":
+        print("   audio:", json.loads(payload)["utterance"][:60], len(data) if data is not None else 0, "bytes")
+info = json.loads(worker_main.start(js_post))
+print("boot", info["seconds"], "s,", len(info["skills"]), "skills")
+print("blocked waits during boot:", len(info["blocked"]), "total", round(sum(b[0] for b in info["blocked"]), 1), "s")
+for b in sorted(info["blocked"], reverse=True)[:12]:
+    print("  ", b)
+from emkay_mobile import boot
+boot.bus().on("message", lambda m: heard.append(Message.deserialize(m) if isinstance(m, str) else m))
 t=time.time(); await asyncio.sleep(0.1); print("training", round(time.time()-t,1), "s")
+print("gui messages so far:", sent["gui"])
 for u in UTTS:
     heard.clear(); t = time.time()
     boot.utterance(u)

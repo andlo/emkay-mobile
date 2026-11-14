@@ -99,6 +99,31 @@ def _submit(self, fn, *args, **kwargs):
     return fut
 
 
+BLOCKED = []   # (seconds, what, where) for every wait that actually stalled
+
+
+def _where():
+    import traceback
+    frames = [f for f in traceback.extract_stack()[:-2]
+              if "/threading.py" not in f.filename and "emkay_mobile/browser.py" not in f.filename]
+    return " <- ".join(f"{f.filename.split('site-packages/')[-1]}:{f.lineno}" for f in frames[-3:][::-1])
+
+
+def _timed(fn, what):
+    import time
+
+    def wrapper(*a, **k):
+        t = time.time()
+        r = fn(*a, **k)
+        dt = time.time() - t
+        if dt > 0.5:
+            where = _where()
+            BLOCKED.append((round(dt, 1), what, where))
+            print(f"[emkay] blocked {dt:.1f}s in {what} at {where}", file=sys.stderr)
+        return r
+    return wrapper
+
+
 def install():
     """Apply all patches. Safe to call more than once."""
     if getattr(install, "_done", False):
@@ -110,6 +135,11 @@ def install():
     threading.Timer.start = _timer_start
     threading.Timer.cancel = _timer_cancel
     _cf.ThreadPoolExecutor.submit = _submit
+    # A single thread cannot be woken by another one, so every wait with a
+    # timeout runs to its end. Log the ones that stall, with their caller.
+    threading.Event.wait = _timed(threading.Event.wait, "Event.wait")
+    import time as _time
+    _time.sleep = _timed(_time.sleep, "time.sleep")
     os.environ.setdefault("OVOS_DEFAULT_LOG_NAME", "emkay")
     # Emscripten has no users; OVOS checks file ownership with these
     for fn in ("geteuid", "getuid", "getegid", "getgid"):
