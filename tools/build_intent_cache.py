@@ -34,6 +34,11 @@ os.symlink(REPO / "py/emkay_mobile/shims/Stemmer", Path(_only_stemmer, "Stemmer"
 sys.path.insert(0, _only_stemmer)
 sys.path.insert(0, str(REPO / "py"))
 
+# EMKAY_REUSE_CACHE=<dir>: start from an existing cache, to check it is
+# actually reused (a valid cache trains nothing and finishes in seconds)
+if os.environ.get("EMKAY_REUSE_CACHE"):
+    shutil.copytree(os.environ["EMKAY_REUSE_CACHE"], f"{home}/.local/share/mycroft", dirs_exist_ok=True)
+
 from emkay_mobile import boot  # noqa: E402
 
 trained = threading.Event()
