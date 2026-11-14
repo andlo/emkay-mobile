@@ -62,6 +62,7 @@ boot.bus().on("message", lambda m: heard.append(Message.deserialize(m) if isinst
 t=time.time(); await asyncio.sleep(0.1); print("training", round(time.time()-t,1), "s")
 diag.report()
 print("gui messages so far:", sent["gui"])
+diag.report()   # cache misses are known once every skill registered
 for u in UTTS:
     heard.clear(); t = time.time()
     boot.utterance(u)
