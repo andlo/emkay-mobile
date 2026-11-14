@@ -30,9 +30,12 @@ permissions:
   pages: write
   id-token: write
 
+# A newer push waits for the running build instead of cancelling it, so a
+# burst of pushes still ends with a deployed site (GitHub keeps only the
+# newest waiting run).
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHON: "3.14"   # the CPython version Pyodide 314 is built from
