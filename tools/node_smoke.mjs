@@ -40,6 +40,8 @@ t = time.time()
 from emkay_mobile import boot
 print("import", round(time.time() - t, 2), "s")
 from ovos_bus_client.message import Message
+from emkay_mobile import diag
+diag.install()
 from emkay_mobile import worker_main
 heard, sent = [], {"gui": 0, "audio": 0, "bus": 0}
 def js_post(kind, payload, data=None):
@@ -54,6 +56,7 @@ for b in sorted(info["blocked"], reverse=True)[:12]:
 from emkay_mobile import boot
 boot.bus().on("message", lambda m: heard.append(Message.deserialize(m) if isinstance(m, str) else m))
 t=time.time(); await asyncio.sleep(0.1); print("training", round(time.time()-t,1), "s")
+diag.report()
 print("gui messages so far:", sent["gui"])
 for u in UTTS:
     heard.clear(); t = time.time()
