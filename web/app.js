@@ -1,14 +1,27 @@
 // Emkay Mobile – the page side: screen, microphone and speaker.
-// OVOS itself runs in worker.js; ovos-visage draws the screen unchanged.
+//
+// OVOS itself runs in worker.js. ovos-visage draws the screen, unchanged:
+// it thinks it talks to its own server over WebSocket("/ws"), and gets the
+// same GUI stream from ovos-gui in the worker instead (GuiSocket below).
+//
+// URL options: ?kiosk  full screen + portrait lock on start (the installed
+// app opens with it, see manifest.webmanifest).
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const kiosk = params.has("kiosk");
+let kiosk = params.has("kiosk");
 
 // ---------------------------------------------------------------- worker
 const worker = new Worker("worker.js", { type: "module" });
 let nextId = 1;
 const waiting = new Map();
+
+/**
+ * Ask the worker to run a command; resolves with its result.
+ * @param {string} cmd one of worker.js `commands`
+ * @param {object} args the command's arguments
+ * @param {Transferable[]} transfer buffers to move instead of copy
+ */
 function call(cmd, args = {}, transfer = []) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
@@ -33,11 +46,13 @@ worker.onmessage = ({ data }) => {
 };
 
 // ---------------------------------------------- ovos-visage's GUI socket
-// ovos-visage opens WebSocket("/ws") to its own server. Here there is no
-// server: the same snapshot-then-deltas stream comes from ovos-gui in the
-// worker, so the socket is a stand-in and visage.js runs unmodified.
 let ovosReady;
 const ready = new Promise((r) => (ovosReady = r));
+
+/**
+ * Stands in for the WebSocket ovos-visage opens to its server: on "open"
+ * it delivers ovos-gui's snapshot, then every GUI message as it comes.
+ */
 class GuiSocket {
   static OPEN = 1;
   constructor() {
@@ -48,7 +63,9 @@ class GuiSocket {
       this.deliver(await call("gui_snapshot"));
     });
   }
+  /** One GUI message (JSON text) for visage. */
   deliver(raw) { this.onmessage?.({ data: raw }); }
+  /** A message from visage (page focus, events) for ovos-gui. */
   send(raw) { call("gui_message", { raw }); }
   close() { guiSockets.delete(this); this.readyState = 3; }
 }
@@ -60,37 +77,63 @@ window.WebSocket = new Proxy(NativeWebSocket, {
 });
 
 // ------------------------------------------------------------------ boot
+/** Show boot progress on the start screen. */
 function bootStatus(text, progress) {
   $("boot-text").textContent = text;
   if (progress !== undefined) $("boot-bar").style.width = `${Math.round(progress * 100)}%`;
 }
 
 let audioCtx = null;
+
+/**
+ * The first tap. Browsers only allow sound, the microphone and full screen
+ * after the user did something, so all of it is switched on here.
+ */
 async function start() {
   $("start").hidden = true;
   audioCtx = new AudioContext();
   await audioCtx.resume();
-  if (kiosk) {
-    document.documentElement.requestFullscreen?.().catch(() => {});
-    screen.orientation?.lock?.("portrait").catch(() => {});
-  }
+  if (kiosk) enterKiosk();
   keepAwake();
   $("boot").hidden = true;
-  $("mic").hidden = false;
-  $("keyboard").hidden = false;
+  for (const id of ["mic", "keyboard", "menu-button"]) $(id).hidden = false;
 }
 
+/** Full screen and portrait, like a device on the shelf. */
+function enterKiosk() {
+  document.documentElement.requestFullscreen?.().catch(() => {});
+  screen.orientation?.lock?.("portrait").catch(() => {});
+}
+
+/** Keep the screen on while the page is visible (Screen Wake Lock API). */
 async function keepAwake() {
   try {
-    let lock = await navigator.wakeLock?.request("screen");
+    await navigator.wakeLock?.request("screen");
     document.addEventListener("visibilitychange", async () => {
-      if (document.visibilityState === "visible") lock = await navigator.wakeLock?.request("screen");
+      if (document.visibilityState === "visible") await navigator.wakeLock?.request("screen");
     });
   } catch {}
 }
 
+/**
+ * Ask the browser to keep this site's storage (settings, downloads) even
+ * when the phone runs low on space. Browsers grant it to installed apps
+ * and to sites used often; the answer is shown in the menu.
+ */
+async function keepStorage() {
+  try {
+    const kept = (await navigator.storage?.persisted?.()) || (await navigator.storage?.persist?.());
+    $("storage-state").textContent = kept
+      ? "Gemt varigt på telefonen"
+      : "Kan ryddes af browseren – gem en kopi";
+  } catch {
+    $("storage-state").textContent = "";
+  }
+}
+
 (async () => {
   try {
+    keepStorage();
     const info = await call("boot", { userConfig: null });
     console.log("[emkay] OVOS up", info);
     ovosReady();
@@ -105,8 +148,10 @@ async function keepAwake() {
 })();
 
 // ------------------------------------------------------------ microphone
-// The whole screen is the talk button, like tapping a Mark II. A simple
-// energy VAD ends the recording; the STT plugin runs in the worker.
+/**
+ * Tap-to-talk. The whole screen is the button, like tapping a Mark II.
+ * A simple energy VAD ends the recording; the STT plugin runs in the worker.
+ */
 const mic = {
   busy: false,
   async listen() {
@@ -128,6 +173,14 @@ const mic = {
 };
 
 let stream = null;
+
+/**
+ * Record one utterance from the microphone.
+ * Starts at once; stops after `silenceMs` of quiet once speech was heard,
+ * after `noSpeechMs` with no speech at all, or after `maxSeconds`.
+ * @returns {Promise<Uint8Array|null>} 16 kHz mono 16-bit PCM, or null if
+ *   nothing was said
+ */
 async function record({ maxSeconds = 10, silenceMs = 900, noSpeechMs = 5000 } = {}) {
   stream ??= await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -158,6 +211,7 @@ async function record({ maxSeconds = 10, silenceMs = 900, noSpeechMs = 5000 } = 
   return toPcm16(chunks, audioCtx.sampleRate, 16000);
 }
 
+/** Float32 chunks at `from` Hz -> one 16-bit PCM buffer at `to` Hz. */
 function toPcm16(chunks, from, to) {
   const n = chunks.reduce((a, c) => a + c.length, 0);
   const all = new Float32Array(n);
@@ -180,6 +234,10 @@ $("screen").addEventListener("click", (e) => {
 });
 
 // --------------------------------------------------------------- speaker
+/**
+ * Plays the WAVs the TTS plugin makes, one after another, and tells OVOS
+ * when each starts and ends (that is what moves the face's mouth).
+ */
 const speaker = {
   queue: [],
   playing: false,
@@ -205,6 +263,7 @@ const speaker = {
 };
 
 // ------------------------------------------------------------- bus events
+/** React to the few bus events the page itself cares about. */
 function onBus(msg) {
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
 }
@@ -219,6 +278,43 @@ $("type").onsubmit = (e) => {
   const text = $("type-text").value.trim();
   if (text) call("say", { text });
   $("type-text").value = "";
+};
+
+// ------------------------------------------------------------------ menu
+$("menu-button").onclick = () => { $("menu").hidden = !$("menu").hidden; };
+$("menu-close").onclick = () => { $("menu").hidden = true; };
+$("menu-kiosk").onclick = () => { kiosk = true; enterKiosk(); $("menu").hidden = true; };
+
+/** Save the settings as a file on the phone (Downloads). */
+$("menu-export").onclick = async () => {
+  try {
+    const zip = await call("export_settings");
+    const name = `emkay-indstillinger-${new Date().toISOString().slice(0, 10)}.zip`;
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(new Blob([zip], { type: "application/zip" })),
+      download: name,
+    });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    $("menu-note").textContent = `Gemt som ${name}`;
+  } catch (e) {
+    $("menu-note").textContent = `Kunne ikke gemme: ${e.message}`;
+  }
+};
+
+/** Restore settings from a file saved earlier, then restart OVOS. */
+$("menu-import").onclick = () => $("import-file").click();
+$("import-file").onchange = async () => {
+  const file = $("import-file").files[0];
+  if (!file) return;
+  try {
+    const data = await file.arrayBuffer();
+    const manifest = await call("import_settings", { data }, [data]);
+    $("menu-note").textContent = `Hentet (${manifest.files} filer fra ${manifest.exported}). Genstarter…`;
+    setTimeout(() => location.reload(), 1200);
+  } catch (e) {
+    $("menu-note").textContent = `Kunne ikke hente: ${e.message}`;
+  }
 };
 
 window.emkay = { call, mic, speaker };

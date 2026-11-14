@@ -44,6 +44,23 @@
   <button id="mic" class="mic" aria-label="Tal" hidden></button>
   <form id="type" class="type" hidden><input id="type-text" placeholder="Skriv til Emkay…" autocomplete="off"></form>
   <button id="keyboard" class="keyboard" aria-label="Skriv" hidden>⌨</button>
+  <button id="menu-button" class="menu-button" aria-label="Menu" hidden>⚙</button>
+
+  <!-- the menu: settings that stay on the phone, kiosk mode -->
+  <div id="menu" class="menu" hidden>
+    <div class="menu-card">
+      <h2>Emkay</h2>
+      <p id="storage-state" class="small"></p>
+      <button id="menu-export">Gem opsætning på telefonen</button>
+      <button id="menu-import">Hent opsætning fra en fil</button>
+      <input id="import-file" type="file" accept=".zip,application/zip" hidden>
+      <button id="menu-kiosk">Fuld skærm</button>
+      <p id="menu-note" class="small"></p>
+      <p class="small">OpenVoiceOS i din browser ·
+        <a href="https://github.com/andlo/emkay-mobile" target="_blank" rel="noopener">kildekode</a></p>
+      <button id="menu-close" class="secondary">Luk</button>
+    </div>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>
