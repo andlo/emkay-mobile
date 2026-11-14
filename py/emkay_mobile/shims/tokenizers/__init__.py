@@ -39,6 +39,14 @@ def _strip_accents(text):
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
 
+_INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00ad\t\n\r\x0b\x0c"), " ")
+
+
+def _nmt_nfkc(text):
+    text = unicodedata.normalize("NFKC", text).translate(_INVISIBLE)
+    return "".join(c for c in text if c == " " or unicodedata.category(c) != "Cc")
+
+
 def _normalizer(spec):
     if spec is None:
         return lambda s: s
@@ -54,8 +62,10 @@ def _normalizer(spec):
     if t in ("NFC", "NFD", "NFKC", "NFKD"):
         return lambda s: unicodedata.normalize(t, s)
     if t == "Precompiled":
-        # SentencePiece's compiled nmt_nfkc table; NFKC is what it encodes
-        return lambda s: unicodedata.normalize("NFKC", s)
+        # SentencePiece's compiled nmt_nfkc table: NFKC, plus zero-width and
+        # other invisible format characters turned into spaces and control
+        # characters dropped (checked against the real tokenizers)
+        return _nmt_nfkc
     if t == "Lowercase":
         return str.lower
     if t == "StripAccents":
@@ -139,6 +149,8 @@ def _pre_tokenizer(spec):
         def meta(words):
             out = []
             for i, w in enumerate(words):
+                if not w:
+                    continue
                 w = w.replace(" ", rep)
                 if scheme == "always" or (scheme == "first" and i == 0):
                     if not w.startswith(rep):
