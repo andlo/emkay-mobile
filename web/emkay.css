@@ -48,6 +48,10 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 /* On a phone the phone is the device: no Mark II drawing, the screen fills
    the display (app.js layout() sets html.fullscreen and --screen-h). */
 html.fullscreen, html.fullscreen body { background: var(--page-bg); }
+/* visage centres the device with left/top 50% and a transform; unscaled it
+   sticks out past the right edge, and a phone then widens the whole page
+   to fit it (everything looks zoomed out). Fixed boxes do not widen it. */
+.device { position: fixed; }
 html.fullscreen .silhouette { display: none; }
 html.fullscreen .device { width: var(--screen-w); height: var(--screen-h); }
 html.fullscreen .screen { left: 0; top: 0; border-radius: 0; }
