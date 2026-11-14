@@ -14,6 +14,8 @@ Usage:
 """
 import hashlib
 import io
+import re
+import urllib.request
 import json
 import shutil
 import sys
@@ -26,6 +28,45 @@ PYODIDE_VERSION = json.load(open(REPO / "package.json"))["devDependencies"]["pyo
 OUT = REPO / "build/site"
 
 SKIP_PARTS = {"__pycache__", "tests", "test"}
+PYODIDE_CORE = ["pyodide.js", "pyodide.mjs", "pyodide.asm.mjs", "pyodide.asm.wasm",
+                "python_stdlib.zip", "pyodide-lock.json"]
+PYODIDE_CDN = f"https://cdn.jsdelivr.net/pyodide/v{PYODIDE_VERSION}/full/"
+
+
+def norm(n):
+    return re.sub(r"[-_.]+", "-", n).lower()
+
+
+def vendor_pyodide(packages):
+    """Copy Pyodide and the packages OVOS needs into the site.
+
+    Served from the same origin, so the app does not depend on a CDN, works
+    offline once cached, and needs no cross-origin requests from the worker.
+    """
+    src = REPO / "node_modules/pyodide"
+    dst = OUT / "pyodide"
+    dst.mkdir(parents=True)
+    for f in PYODIDE_CORE:
+        shutil.copy(src / f, dst / f)
+    lock = json.load(open(src / "pyodide-lock.json"))["packages"]
+    by_norm = {norm(k): v for k, v in lock.items()}
+    need, todo = set(), [norm(p) for p in packages]
+    while todo:
+        n = todo.pop()
+        if n in need:
+            continue
+        need.add(n)
+        todo += [norm(d) for d in by_norm[n].get("depends", [])]
+    cache = REPO / "build/pyodide-cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    total = 0
+    for n in sorted(need):
+        fn = by_norm[n]["file_name"]
+        if not (cache / fn).exists():
+            urllib.request.urlretrieve(PYODIDE_CDN + fn, cache / fn)
+        shutil.copy(cache / fn, dst / fn)
+        total += (dst / fn).stat().st_size
+    return sorted(need), total
 
 
 def short_hash(data: bytes) -> str:
@@ -91,11 +132,15 @@ def main():
         (OUT / name).write_bytes(data)
         intents[lang] = {"url": name, "hash": h, "bytes": len(data)}
 
+    packages, pyodide_bytes = vendor_pyodide(plan["pyodide"] + ["micropip"])
+
     versions = sorted(n.split("-")[0] + "==" + n.split("-")[1] for n in plan["pure"])
     build = {
         "built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "pyodide_index": f"https://cdn.jsdelivr.net/pyodide/v{PYODIDE_VERSION}/full/",
-        "pyodide_packages": plan["pyodide"] + ["micropip"],
+        "pyodide_version": PYODIDE_VERSION,
+        "pyodide_index": "pyodide/",
+        "pyodide_packages": packages,
+        "pyodide_bytes": pyodide_bytes,
         "bundle": bundle_name,
         "bundle_bytes": len(bundle),
         "intent_cache": intents,
@@ -105,7 +150,7 @@ def main():
     }
     (OUT / "build.json").write_text(json.dumps(build, indent=1))
     mb = lambda n: f"{n / 1e6:.1f} MB"
-    print(f"site in {OUT}: bundle {mb(len(bundle))}, "
+    print(f"site in {OUT}: pyodide {mb(pyodide_bytes)} + core, bundle {mb(len(bundle))}, "
           + ", ".join(f"intents {k} {mb(v['bytes'])}" for k, v in intents.items()))
 
 

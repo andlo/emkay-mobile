@@ -48,8 +48,9 @@ function syncfs(populate) {
 async function boot({ userConfig }) {
   const b = await build;
   status("Starter Python…");
-  importScripts(`${b.pyodide_index}pyodide.js`);
-  py = await loadPyodide({ indexURL: b.pyodide_index });
+  const index = new URL(b.pyodide_index, self.location).href;  // served with the site
+  importScripts(`${index}pyodide.js`);
+  py = await loadPyodide({ indexURL: index });
 
   // ~/.config (mycroft.conf, skill settings) and ~/.local/share (intent
   // cache, skill data) survive reloads, like the disk of a device.
