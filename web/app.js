@@ -6,7 +6,7 @@ const params = new URLSearchParams(location.search);
 const kiosk = params.has("kiosk");
 
 // ---------------------------------------------------------------- worker
-const worker = new Worker("worker.js");
+const worker = new Worker("worker.js", { type: "module" });
 let nextId = 1;
 const waiting = new Map();
 function call(cmd, args = {}, transfer = []) {

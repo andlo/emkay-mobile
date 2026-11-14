@@ -1,4 +1,4 @@
-// Emkay Mobile – the OVOS side. Runs Pyodide in a Web Worker so a busy
+// Emkay Mobile – the OVOS side. Runs Pyodide in a (module) Web Worker so a busy
 // Python (training, a slow skill) never freezes the face.
 //
 // Page -> worker: {id, cmd, ...args}   worker -> page: {id, result|error} or
@@ -49,7 +49,7 @@ async function boot({ userConfig }) {
   const b = await build;
   status("Starter Python…");
   const index = new URL(b.pyodide_index, self.location).href;  // served with the site
-  importScripts(`${index}pyodide.js`);
+  const { loadPyodide } = await import(`${index}pyodide.mjs`);   // Pyodide 314: module workers only
   py = await loadPyodide({ indexURL: index });
 
   // ~/.config (mycroft.conf, skill settings) and ~/.local/share (intent
