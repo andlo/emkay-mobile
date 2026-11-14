@@ -1,9 +1,11 @@
-"""Where does an utterance get stuck in Pyodide?
+"""Where does the Pyodide event loop get stuck?
 
-In the page, a typed "what time is it" left the worker busy for minutes
-with nothing logged. Pyodide has no signals, so a watchdog in
-sys.setprofile prints the Python stack once the utterance has run for
-WATCHDOG seconds, then every 30 s after that, and gives up after LIMIT.
+In the page the worker stopped answering after padatious' deferred padaos
+compile, with nothing logged. Pyodide has no signals, so this uses a
+heartbeat: an asyncio task stamps the time every second, and a
+sys.setprofile hook prints the Python stack whenever the stamp is older
+than STALE seconds (the loop is then stuck in some callback), at most
+every EVERY seconds. After the loop has settled, it sends an utterance.
 
   EMKAY_MOUNT=build/intent_cache:/home/pyodide/.local/share/mycroft,build/m2v:/home/pyodide/.local/share/emkay-mobile/m2v \
     node tools/node_run.mjs wheelhouse plan.json tools/probes/utter_hang.py ["utterance"]
@@ -15,28 +17,26 @@ import traceback
 
 from emkay_mobile import boot
 
-WATCHDOG, EVERY, LIMIT = 20.0, 30.0, 400.0
+STALE, EVERY = 20.0, 30.0
 text = sys.argv[1] if len(sys.argv) > 1 else "what time is it"
+beat = [time.time()]
+next_dump = [0.0]
 
 
-class Stuck(Exception):
-    """Raised by the watchdog to end a hung utterance."""
+async def heartbeat():
+    """Stamp the time while the event loop gets to run."""
+    while True:
+        beat[0] = time.time()
+        await asyncio.sleep(1)
 
 
-def watch(started):
-    """A profile function that dumps the stack of whoever runs too long."""
-    nxt = [started + WATCHDOG]
-
-    def prof(frame, event, arg):
-        now = time.time()
-        if now >= nxt[0]:
-            nxt[0] = now + EVERY
-            print(f"\n=== still running after {now - started:.0f}s ===", flush=True)
-            print("".join(traceback.format_stack(frame)[-25:]), flush=True)
-            if now - started > LIMIT:
-                sys.setprofile(None)
-                raise Stuck()
-    return prof
+def prof(frame, event, arg):
+    """Dump the stack of whatever keeps the loop from running."""
+    now = time.time()
+    if now - beat[0] > STALE and now >= next_dump[0]:
+        next_dump[0] = now + EVERY
+        print(f"\n=== loop stuck for {now - beat[0]:.0f}s ===", flush=True)
+        print("".join(traceback.format_stack(frame)[-30:]), flush=True)
 
 
 info = boot.start()
@@ -44,18 +44,29 @@ print(f"boot done: {info['seconds']}s", flush=True)
 bus = boot.bus()
 for t in ("speak", "intent_failure", "ovos.utterance.handled", "complete_intent_failure"):
     bus.on(t, lambda m, t=t: print(f"BUS {t}: {str(m.data)[:200]}", flush=True))
-# let padatious' deferred pass finish first, as it would in the page
-for _ in range(60):
-    await asyncio.sleep(1)
+asyncio.ensure_future(heartbeat())
+
+# The profile hook makes padaos' compile many times slower, so it goes in
+# only once the deferred compile is over (the hang came after it).
+from ovos_padatious import padaos  # noqa: E402
+_compile = padaos.IntentContainer._compile
+
+
+def compiled_then_watch(self, *a, **k):
+    """Run padaos' compile, then start watching the loop."""
+    try:
+        return _compile(self, *a, **k)
+    finally:
+        print(f"padaos compiled; watching the loop", flush=True)
+        beat[0] = time.time()
+        sys.setprofile(prof)
+
+
+padaos.IntentContainer._compile = compiled_then_watch
+await asyncio.sleep(90)
 print(f"utterance: {text!r}", flush=True)
 t = time.time()
-sys.setprofile(watch(t))
-try:
-    boot.utterance(text)
-    for _ in range(30):
-        await asyncio.sleep(1)
-except Stuck:
-    print("gave up", flush=True)
-finally:
-    sys.setprofile(None)
+boot.utterance(text)
+await asyncio.sleep(60)
+sys.setprofile(None)
 print(f"done after {time.time() - t:.1f}s", flush=True)

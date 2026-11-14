@@ -11,6 +11,31 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 let kiosk = params.has("kiosk");
 
+// ---------------------------------------------------------------- layout
+// On a large screen visage draws the whole Mark II and scales it to the
+// window. On a phone the phone *is* the device: html.fullscreen hides the
+// drawing (emkay.css) and the 480 px wide Mark II screen gets the phone's
+// own aspect ratio, so visage's scaling makes it fill the display. This
+// listener is registered before visage's own resize handler (visage.js is
+// imported later), so visage always measures the new size.
+const phoneScreen = matchMedia("(max-width: 700px), (pointer: coarse) and (max-width: 1100px)");
+
+/** Size the screen for this window: full screen on phones, the device elsewhere. */
+function layout() {
+  const root = document.documentElement;
+  const full = phoneScreen.matches;
+  root.classList.toggle("fullscreen", full);
+  if (full) {
+    // the Mark II screen is 480 x 800; never shorter than 640 (landscape)
+    const h = Math.max(640, Math.round(480 * innerHeight / innerWidth));
+    root.style.setProperty("--screen-h", `${h}px`);
+  } else {
+    root.style.removeProperty("--screen-h");
+  }
+}
+layout();
+addEventListener("resize", layout);
+
 // ---------------------------------------------------------------- worker
 const worker = new Worker("worker.js", { type: "module" });
 let nextId = 1;

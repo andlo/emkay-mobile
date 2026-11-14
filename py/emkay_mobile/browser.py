@@ -13,10 +13,14 @@ threads in a few places; each gets its own treatment, applied by `install()`:
 * Event.wait / time.sleep: nothing else can run while the one thread waits,
   so a wait could only ever run out its timeout. Waits return at once and
   are noted in SKIPPED_WAITS, so a dependency on them can be found.
+* Condition.wait (Queue.get, Queue.join, Future.result): a timed wait is
+  answered at once; an endless one raises where it was made instead of
+  freezing the page (_WaiterLock).
 
 `adapt_ovos()` holds the few changes that are about OVOS itself rather than
-the platform. Each one is a speed-up OVOS makes for a normal CPU that costs
-more than it saves in WebAssembly, and none changes an answer.
+the platform: a speed-up made for a normal CPU that costs more than it saves
+in WebAssembly, or a worker thread that waits forever and is replaced by work
+on the event loop. None changes an answer.
 """
 import asyncio
 import concurrent.futures as _cf
@@ -132,7 +136,7 @@ def _where():
 
 def _note(seconds, what):
     """Remember a skipped wait of half a second or more (or an endless one)."""
-    if seconds is None or seconds >= 0.5:
+    if (seconds is None or seconds >= 0.5) and len(SKIPPED_WAITS) < 500:
         SKIPPED_WAITS.append((seconds, what, _where()))
 
 
@@ -151,6 +155,51 @@ def _sleep(seconds):
     _note(seconds, "time.sleep")
 
 
+class _WaiterLock:
+    """The lock threading.Condition.wait parks on (threading._allocate_lock).
+
+    Condition.wait takes this lock once and then waits to take it again until
+    notify() releases it from another thread. With one thread that second
+    take can never succeed: a real lock would spin forever and freeze the
+    page (Queue.get, Queue.join, Future.result all wait this way). So a wait
+    with a timeout is answered at once, like Event.wait, and a wait without
+    one raises with the place it was made, instead of hanging.
+    """
+
+    def __init__(self):
+        self._held = False
+
+    def acquire(self, blocking=True, timeout=-1):
+        if not self._held:
+            self._held = True
+            return True
+        if not blocking:
+            return False
+        if timeout is not None and timeout >= 0:
+            # not noted: a caller like Queue.get(timeout=...) asks again in a
+            # loop until its own deadline, which a device would also wait out
+            return False
+        where = _where()
+        _note(None, "Condition.wait (forever)")
+        raise RuntimeError(f"waiting forever on a Condition in a single thread, at {where}")
+
+    __enter__ = acquire
+
+    def __exit__(self, *exc):
+        self.release()
+
+    def release(self):
+        if not self._held:
+            raise RuntimeError("release unlocked lock")
+        self._held = False
+
+    def locked(self):
+        return self._held
+
+    def _at_fork_reinit(self):
+        self._held = False
+
+
 def install():
     """Apply the platform patches above. Safe to call more than once."""
     if getattr(install, "_done", False):
@@ -163,6 +212,7 @@ def install():
     threading.Timer.cancel = _timer_cancel
     _cf.ThreadPoolExecutor.submit = _submit
     threading.Event.wait = _event_wait
+    threading._allocate_lock = _WaiterLock
     import time as _time
     _time.sleep = _sleep
     os.environ.setdefault("OVOS_DEFAULT_LOG_NAME", "emkay")
@@ -173,11 +223,50 @@ def install():
     install._done = True
 
 
+def _send_to_scheduler(self, description, request):
+    """OVOSSkill._send_to_scheduler without its sending thread.
+
+    The skill queues each scheduler request and a thread sends them, in
+    order, by waiting on the queue forever (_send_scheduler_requests). That
+    wait cannot work with one thread, so the request is queued exactly as
+    before and the queue is drained on the next turn of the event loop:
+    same order, still never blocking or raising at the caller.
+    """
+    self._scheduler_requests.put((description, request))
+    _loop().call_soon(self._send_scheduler_requests)
+
+
+def _send_scheduler_requests(self):
+    """Send every queued scheduler request now, in order (see above)."""
+    import queue
+    from ovos_utils.log import LOG
+    from ovos_workshop.skills.ovos import _STOP_SENDING
+    while True:
+        try:
+            description, request = self._scheduler_requests.get_nowait()
+        except queue.Empty:
+            return
+        try:
+            if request is _STOP_SENDING:
+                continue
+            request()
+        except Exception as failure:
+            LOG.error(f"{description} failed: {failure}")
+        finally:
+            self._scheduler_requests.task_done()
+
+
+def _scheduler_requests_sent(self):
+    """OVOSSkill._scheduler_requests_sent: send what is queued, then return
+    (on a device it waits for the sending thread to get through the queue)."""
+    self._send_scheduler_requests()
+
+
 def adapt_ovos():
-    """OVOS speed-ups that cost more than they save in WebAssembly.
+    """Changes to OVOS itself for a single-threaded WebAssembly host.
 
     Called by boot.start() once the OVOS packages are importable. Each change
-    keeps every answer the same; it only moves work to where it is cheaper.
+    keeps every answer the same; it only moves work to where it can run.
 
     * padatious: after each training pass, PadatiousPipeline._warm_prefilters
       compiles one combined regex per padaos intent "so the first query in
@@ -186,9 +275,18 @@ def adapt_ovos():
       (padaos.Regexes.built_prefilter). Regex compilation is about ten times
       slower in WebAssembly, so the warm-up cost minutes of boot to save
       milliseconds per query. It is left out.
+    * ovos-workshop: scheduler requests go out from the event loop instead of
+      from a thread that waits on a queue forever (_send_to_scheduler above).
     """
     try:
         from ovos_padatious.opm import PadatiousPipeline
+        PadatiousPipeline._warm_prefilters = lambda self, lang: None
+    except ImportError:
+        pass
+    try:
+        from ovos_workshop.skills.ovos import OVOSSkill
     except ImportError:
         return
-    PadatiousPipeline._warm_prefilters = lambda self, lang: None
+    OVOSSkill._send_to_scheduler = _send_to_scheduler
+    OVOSSkill._send_scheduler_requests = _send_scheduler_requests
+    OVOSSkill._scheduler_requests_sent = _scheduler_requests_sent
