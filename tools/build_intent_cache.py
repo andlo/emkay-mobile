@@ -57,7 +57,9 @@ info = boot.start(on_message=on_msg, user_config={"lang": langs[0], "secondary_l
 print(f"loaded {len(info['skills'])} skills in {info['seconds']} s, training...")
 t = time.time()
 if not trained.wait(int(os.environ.get("EMKAY_TRAIN_WAIT", 1800))):
-    sys.exit("padatious did not finish training in 30 minutes")
+    if os.environ.get("EMKAY_DIAG"):
+        diag.report()
+    sys.exit("padatious did not report training finished in time")
 print(f"trained in {time.time() - t:.1f} s", flush=True)
 if os.environ.get("EMKAY_DIAG"):
     diag.report()
