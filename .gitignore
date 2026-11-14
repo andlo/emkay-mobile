@@ -7,3 +7,4 @@ wheelhouse/
 intent_cache/
 plan.json
 *.log
+package-lock.json
