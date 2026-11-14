@@ -1,0 +1,24 @@
+# What runs in the browser. Mirrors what ovos-installer puts on a device
+# (ansible/roles/ovos_virtualenv/templates/virtualenv/*-requirements.txt.j2),
+# minus the parts that are hardware: listener, audio service, PHAL.
+# Built with `pip wheel --pre`, i.e. the alpha channel.
+
+# core-requirements.txt.j2: ovos-core[plugins], public speech (the installer's default)
+ovos-core[plugins]
+ovos-stt-plugin-server
+ovos-tts-plugin-server
+
+# skills-requirements.txt.j2 (profile "ovos"): essential, internet and audio skills
+ovos-core[skills-essential,skills-internet,skills-audio]
+
+# GUI (installer feature "gui"): ovos-gui + homescreen.
+# ovos-gui is held at the last 1.5 alpha: 1.6.0a1 moved clients to adapter
+# plugins and the legacy websocket adapter ovos-visage speaks is not on PyPI yet.
+ovos-gui==1.5.4a1
+ovos-skill-homescreen
+
+# the setup page: the stock OpenVoiceOS control panel
+ovos-control-panel
+
+# browser glue
+pyodide-http
