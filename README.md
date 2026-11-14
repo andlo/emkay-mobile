@@ -6,9 +6,14 @@ no app store, no sideloading – with the Mycroft Mark II Kickstarter face
 
 "Emkay" is "MK" said out loud, a nod to Mycroft's Mark I and Mark II.
 
-> **Status: work in progress, nothing to try yet.** The OVOS core and the
-> installer's default skills boot in Pyodide; speech, the face and the setup
-> page are being wired up.
+> **Status: early alpha.** OVOS core, the installer's 22 default skills,
+> ovos-gui with the homescreen and the Mark II face boot in the browser
+> (about 2½ minutes the first time on a PC, longer on a phone). A typed or
+> spoken question goes the whole way: intent, skill, the public OVOS TTS
+> server, sound and the face's mouth. The setup page (ovos-control-panel)
+> is not wired in yet.
+>
+> Site: <https://andlo.github.io/emkay-mobile/> (built by GitHub Actions).
 
 ## What it is
 
@@ -18,40 +23,99 @@ device gets, on the **alpha** channel, compiled to WebAssembly with
 
 | Part | What runs |
 |---|---|
-| Core | `ovos-core[plugins]` – SkillManager, IntentService and pipeline plugins on an in-process bus |
+| Core | `ovos-core[plugins]` – SkillManager, IntentService and the pipeline plugins (m2v, padatious, adapt, …) on an in-process bus |
 | Skills | the installer defaults: `ovos-core[skills-essential,skills-internet,skills-audio]` |
 | Speech | the installer default (public servers): `ovos-stt-plugin-server`, `ovos-tts-plugin-server` |
-| Screen | `ovos-gui` + homescreen, with ovos-visage drawing the Mark II face |
-| Setup | the stock `ovos-control-panel` |
+| Screen | `ovos-gui` + `ovos-skill-homescreen`, drawn by ovos-visage (the Mark II face) |
+| Setup | the stock `ovos-control-panel` (coming) |
 
-See [`requirements/browser.txt`](requirements/browser.txt) for the exact list.
+See [`requirements/`](requirements) for the exact lists.
+
+Skills install the usual way – they are Python packages, and everything in
+`~/.config` and `~/.local` lives in the browser's IndexedDB. The menu (⚙)
+exports the whole configuration as a zip file to the phone and imports it
+again, so settings survive clearing the browser.
+
+## How it fits together
+
+```
+page (web/app.js)                 Web Worker (web/worker.js + Pyodide)
+ ├─ ovos-visage (unmodified) ◄──► BrowserGuiClient ─ ovos-gui ─┐
+ ├─ microphone → 16 kHz PCM  ───► speech.heard → STT plugin    ├─ FakeBus ─ ovos-core
+ ├─ speaker ◄─ WAV + visemes ◄─── speech.on_speak → TTS plugin ┘            + skills
+ └─ menu: export / import settings, kiosk
+```
+
+- `py/emkay_mobile/boot.py` starts OVOS the way `ovos_core.__main__` does.
+- `py/emkay_mobile/gui.py` makes the page a GUI client of ovos-gui; visage's
+  own `GuiState` (vendored in `py/ovos_visage`) keeps the screen state.
+- `py/emkay_mobile/speech.py` runs whatever STT/TTS plugin `mycroft.conf` names.
+- `web/worker.js` downloads the bundle once, caches it, and mounts IndexedDB.
 
 ## How the browser differs from a device
 
+We stay as close to OVOS as possible; these are the places where the browser
+forces a workaround:
+
 - **No threads.** Pyodide cannot start OS threads. Thread pools run their
-  work at once, timers go on the browser event loop, and service loops that
-  never return are not started ([`py/emkay_mobile/browser.py`](py/emkay_mobile/browser.py)).
-- **A few native packages have no WebAssembly build yet** (rapidfuzz,
-  PyStemmer, pyahocorasick, marisa-trie, psutil, timezonefinder). Small
-  pure-Python stand-ins take their place ([`py/emkay_mobile/shims`](py/emkay_mobile/shims)).
-- **Left out:** the m2v intent pipeline (needs `tokenizers`) and
-  `ovos-skill-boot-finished` (waits for an audio service and listener).
-- **Pre-trained intents.** Padatious trains a neural net per intent, which
-  takes minutes in WebAssembly. [`tools/build_intent_cache.py`](tools/build_intent_cache.py)
-  trains it on a normal CPython with the same versions, one job per language,
-  and the browser loads that cache.
-- **ovos-gui is held at 1.5.4a1.** 1.6.0a1 moved GUI clients to adapter
-  plugins, and the legacy adapter ovos-visage speaks is not on PyPI yet.
+  work at once, timers go on the browser event loop, `Event.wait` and
+  `time.sleep` return at once, and service loops that never return are not
+  started; the event scheduler is driven from the loop instead. A
+  `Condition.wait`/`Queue.get` without a timeout raises where it was made
+  instead of freezing the page, and ovos-workshop's scheduler-request
+  thread is replaced by work on the loop
+  ([`browser.py`](py/emkay_mobile/browser.py)).
+- **Native packages without a WebAssembly build** (rapidfuzz, PyStemmer,
+  pyahocorasick, marisa-trie, psutil, timezonefinder, tokenizers) get small
+  pure-Python stand-ins ([`shims/`](py/emkay_mobile/shims)). The tokenizers
+  stand-in is checked token for token against the real one
+  (`tools/check_tokenizers_shim.py`).
+- **m2v uses one model per language** (via the plugin's documented `models`
+  setting) instead of the 141 MB multilingual default.
+- **Padatious is pre-trained.** Training its networks takes minutes in
+  WebAssembly, so [`tools/build_intent_cache.py`](tools/build_intent_cache.py)
+  trains them on normal CPython with the same versions, one CI job per
+  language, and the phone loads the cache. Padaos' prefilter warm-up is
+  skipped (it only speeds queries up).
+- **ovos-gui is held at 1.5.4a1** and its websocket server is not started; the
+  page is its client directly. 1.6 moved GUI clients to adapter plugins
+  (ovos-gui-plugin-visage), which is the way forward once it is released.
+- **Location:** a device finds its location by IP (ovos-phal-plugin-ipgeo),
+  but that asks an `http://` service an https page may not call. Until the
+  setup page sets one, OVOS gets the browser's time zone.
+- **On a phone** the screen fills the display; on a larger screen visage
+  draws the whole Mark II around it.
+- **Left out:** `ovos-skill-boot-finished` (waits for an audio service and a
+  listener that do not exist here).
 
 ## Developing
 
 ```bash
-npm install                       # Pyodide for the Node smoke test
+npm install --include=dev            # Pyodide, for Node runs
 python3 -m pip wheel --pre -w wheelhouse -r requirements/browser.txt
-python3 -m pip wheel --pre --no-deps -w wheelhouse -r requirements/browser-nodeps.txt -r requirements/browser-emscripten.txt
+python3 -m pip wheel --pre --no-deps -w wheelhouse \
+    -r requirements/browser-nodeps.txt -r requirements/browser-emscripten.txt
 python3 tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json
+
+# pre-train padatious (normal CPython venv with requirements/browser*.txt,
+# minus ovos-m2v-pipeline) and fetch the m2v models
+python tools/build_intent_cache.py build/intent_cache en-US da-DK
+python tools/fetch_m2v_models.py build/m2v en-US da-DK
+
+# build and serve the site on http://127.0.0.1:8080/
+EMKAY_M2V=build/m2v python3 tools/build_site.py wheelhouse plan.json build/intent_cache
+python3 tools/serve.py
+
+# or run OVOS in Pyodide under Node
 node tools/node_smoke.mjs wheelhouse plan.json "what time is it"
 ```
+
+`tools/probes/` holds measurement scripts for `tools/node_run.mjs`.
+
+### Adding a language
+
+Add it to `matrix.lang` in [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
+CI pre-trains padatious for it and fetches its m2v model.
 
 ## License
 

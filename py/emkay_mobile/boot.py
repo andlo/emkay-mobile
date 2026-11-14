@@ -77,7 +77,8 @@ def _browser_defaults(first_boot: bool) -> dict:
     """The few settings that differ from a device, as a user-layer patch.
 
     On the first boot the blacklist is written once, so the setup page can
-    change it later. The m2v model folders are written on every boot, since
+    change it later. The browser's time zone is written once, while the user
+    layer holds no location of its own. The m2v model folders are written on every boot, since
     they follow whatever the site shipped this time.
     """
     from ovos_config import Configuration
@@ -87,6 +88,14 @@ def _browser_defaults(first_boot: bool) -> dict:
         blacklisted = list(cfg.get("skills", {}).get("blacklisted_skills", []))
         blacklisted += [s for s in UNAVAILABLE_SKILLS if s not in blacklisted]
         out["skills"] = {"blacklisted_skills": blacklisted}
+    tz = os.environ.get("EMKAY_TZ")  # the browser's own time zone (worker.js)
+    if tz and "location" not in read_user_config():
+        # A device finds its location by IP on first boot (ovos-phal-plugin-
+        # ipgeo), but that asks http://ip-api.com, which an https page may
+        # not fetch. The browser already knows its time zone, so until the
+        # setup page sets a real location, the clock and the time skill go
+        # by that instead of the installer default (Lawrence, Kansas).
+        out["location"] = {"timezone": {"code": tz, "name": tz}}
     models = _m2v_models()
     if models:
         # ovos-m2v-pipeline's documented per-language "models" map, pointed at

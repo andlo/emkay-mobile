@@ -2,9 +2,10 @@
 
 On a normal device ovos-gui-service listens on ws://...:18181/gui and every
 GUI (mycroft-gui, ovos-visage, ...) connects to it as a websocket client.
-ovos-gui keeps its clients in GUIWebsocketHandler.clients and only ever
-calls .send(dict) and .framework on them, so the browser joins that list
-as an in-process client: no server, no socket, same GUI protocol.
+ovos-gui keeps its clients in GUIWebsocketHandler.clients and only calls
+.send(dict), .framework and .send_gui_pages(...) on them (the last one is
+GUIWebsocketHandler's own, borrowed in start()), so the browser joins that
+list as an in-process client: no server, no socket, same GUI protocol.
 
 ovos-visage's own server-side state model (GuiState) runs here too, so its
 frontend gets exactly the snapshot-then-deltas stream it gets from
@@ -71,6 +72,8 @@ def start(bus, post):
     # A browser cannot listen on a port, and the browser is the GUI client
     # anyway, so the server is left out.
     ns_module.create_gui_service = lambda _ns_manager: None
+    # the stock page-list sender; it only uses .framework and .send()
+    BrowserGuiClient.send_gui_pages = GUIWebsocketHandler.send_gui_pages
     ns = ns_module.NamespaceManager(bus)
     _client = BrowserGuiClient(ns, post)
     GUIWebsocketHandler.clients.append(_client)
