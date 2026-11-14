@@ -1,0 +1,136 @@
+# Build Emkay Mobile from the OVOS alpha channel and publish it on GitHub Pages.
+#
+#   wheelhouse ──┬── intents (en-US) ──┐
+#                ├── intents (da-DK) ──┼── site ── deploy
+#                └── intents (...)   ──┘
+#
+# wheelhouse  every package the browser runs, built with `pip wheel --pre`
+#             (the alpha channel), exactly what tools/build_site.py ships
+# intents     one job per language: padatious is pre-trained on a normal
+#             CPython with those same wheels, so a phone loads the networks
+#             instead of training them for minutes
+# site        Pyodide + the OVOS bundle + the intent caches + one m2v model
+#             per language, assembled into a static site
+# deploy      GitHub Pages
+#
+# To add a language: add it to `matrix.lang` below. The site job takes the
+# language list from the intent caches it receives, and fetches the m2v
+# model for each of them.
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"   # nightly: pick up new OVOS alphas
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  PYTHON: "3.14"   # the CPython version Pyodide 314 is built from
+
+jobs:
+  wheelhouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON }}
+      - name: Build wheels (alpha channel)
+        run: |
+          python -m pip install -U pip
+          pip wheel --pre -w wheelhouse -r requirements/browser.txt
+          pip wheel --pre --no-deps -w wheelhouse \
+            -r requirements/browser-nodeps.txt -r requirements/browser-emscripten.txt
+          ls wheelhouse | wc -l
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheelhouse
+          path: wheelhouse
+          retention-days: 3
+
+  intents:
+    needs: wheelhouse
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [en-US, da-DK]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheelhouse
+          path: wheelhouse
+      - name: Install what the browser runs
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q --pre --no-index --find-links wheelhouse -r requirements/browser.txt
+          .venv/bin/pip install -q --no-deps --no-index --find-links wheelhouse -r requirements/browser-nodeps.txt
+          # m2v takes no part in padatious' cache, and embedding every intent
+          # registration on the way makes training many times slower
+          .venv/bin/pip uninstall -y ovos-m2v-pipeline model2vec
+      - name: Pre-train padatious (${{ matrix.lang }})
+        run: .venv/bin/python -u tools/build_intent_cache.py intent-cache ${{ matrix.lang }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: intents-${{ matrix.lang }}
+          path: intent-cache
+          retention-days: 3
+
+  site:
+    needs: [wheelhouse, intents]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --include=dev
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheelhouse
+          path: wheelhouse
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: intents-*
+          path: intents
+      - name: Fetch one m2v model per language
+        run: |
+          pip install -q huggingface_hub
+          langs=$(ls intents | sed 's/^intents-//')
+          echo "languages: $langs"
+          python tools/fetch_m2v_models.py m2v $langs
+      - name: Build the site
+        run: |
+          python tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json
+          EMKAY_M2V=m2v python tools/build_site.py wheelhouse plan.json intents/*
+          du -sh build/site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+
+  deploy:
+    needs: site
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
