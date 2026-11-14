@@ -26,6 +26,8 @@ function copyDir(src, dst) {
 copyDir(path.join(repo, "py/emkay_mobile"), "/emkay/emkay_mobile");
 copyDir(path.join(repo, "py/ovos_visage"), "/emkay/ovos_visage");
 if (process.env.EMKAY_CACHE) copyDir(process.env.EMKAY_CACHE, "/home/pyodide/.local/share/mycroft");
+// EMKAY_M2V=<dir from tools/fetch_m2v_models.py>: the m2v models, as the worker unpacks them
+if (process.env.EMKAY_M2V) copyDir(process.env.EMKAY_M2V, "/home/pyodide/.local/share/emkay-mobile/m2v");
 
 py.globals.set("UTTS", py.toPy(utts.length ? utts : ["what time is it", "good morning", "how are you", "what is 2 plus 2"]));
 await py.runPythonAsync(`

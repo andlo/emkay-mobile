@@ -15,9 +15,9 @@ from . import browser
 if sys.platform == "emscripten":
     browser.install()
 
-# Pipeline stages that need native code with no WebAssembly build yet.
-UNAVAILABLE_PIPELINES = ("ovos-m2v-pipeline-high", "ovos-m2v-pipeline-medium",
-                         "ovos-m2v-pipeline-low")
+# Where the worker unpacks the m2v intent models it fetched from the site,
+# one folder per language (see tools/fetch_m2v_models.py).
+M2V_DIR = os.path.expanduser("~/.local/share/emkay-mobile/m2v")
 
 # Skills that wait for host services a browser does not have (they loop
 # until ovos-audio/ovos-dinkum-listener report ready).
@@ -55,14 +55,21 @@ def write_user_config(overrides: dict):
 
 
 def _browser_defaults():
+    """The few settings that differ from a device, as a user layer."""
     from ovos_config import Configuration
     cfg = Configuration()
-    pipeline = [p for p in cfg.get("intents", {}).get("pipeline", [])
-                if p not in UNAVAILABLE_PIPELINES]
     blacklisted = list(cfg.get("skills", {}).get("blacklisted_skills", []))
     blacklisted += [s for s in UNAVAILABLE_SKILLS if s not in blacklisted]
-    return {"intents": {"pipeline": pipeline},
-            "skills": {"blacklisted_skills": blacklisted}}
+    out = {"skills": {"blacklisted_skills": blacklisted}}
+    # m2v: the per-language "models" map ovos-m2v-pipeline documents, pointed
+    # at the copies the site ships (the Hub default is 141 MB for every
+    # language, too much for a phone)
+    if os.path.isdir(M2V_DIR):
+        models = {lang: os.path.join(M2V_DIR, lang) for lang in sorted(os.listdir(M2V_DIR))
+                  if os.path.isfile(os.path.join(M2V_DIR, lang, "model.safetensors"))}
+        if models:
+            out["intents"] = {"ovos_m2v_pipeline": {"models": models}}
+    return out
 
 
 def start(on_message=None, user_config=None):
@@ -80,8 +87,12 @@ def start(on_message=None, user_config=None):
     if os.path.exists(CONF_PATH):
         with open(CONF_PATH) as f:
             user = json.load(f)
-    if "pipeline" not in user.get("intents", {}):
-        write_user_config(_browser_defaults())
+    defaults = _browser_defaults()
+    if user.get("emkay_mobile_defaults"):
+        # set once, so the setup page can change them; the m2v model paths
+        # follow whatever the site shipped this time
+        defaults = {k: v for k, v in defaults.items() if k == "intents"}
+    write_user_config({**defaults, "emkay_mobile_defaults": 1})
     Configuration.reload()
 
     from ovos_core.skill_manager import SkillManager

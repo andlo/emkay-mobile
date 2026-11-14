@@ -11,6 +11,7 @@
 
 Usage:
   python3 tools/build_site.py WHEELHOUSE PLAN.json [INTENT_CACHE_DIR ...]
+  (EMKAY_M2V=<dir from tools/fetch_m2v_models.py> adds the m2v models)
 """
 import hashlib
 import io
@@ -132,6 +133,21 @@ def main():
         (OUT / name).write_bytes(data)
         intents[lang] = {"url": name, "hash": h, "bytes": len(data)}
 
+    m2v = {}
+    import os
+    if os.environ.get("EMKAY_M2V"):
+        for d in sorted(Path(os.environ["EMKAY_M2V"]).iterdir()):
+            if (d / "model.safetensors").exists():
+                buf = io.BytesIO()
+                with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+                    add_tree(zf, d, d.name)
+                data = buf.getvalue()
+                h = short_hash(data)
+                name = f"m2v-{d.name}-{h}.zip"
+                (OUT / name).write_bytes(data)
+                m2v[d.name] = {"url": name, "hash": h, "bytes": len(data),
+                               "source": (d / "SOURCE").read_text().strip()}
+
     packages, pyodide_bytes = vendor_pyodide(plan["pyodide"] + ["micropip"])
 
     versions = sorted(n.split("-")[0] + "==" + n.split("-")[1] for n in plan["pure"])
@@ -144,6 +160,7 @@ def main():
         "bundle": bundle_name,
         "bundle_bytes": len(bundle),
         "intent_cache": intents,
+        "m2v_models": m2v,
         "shimmed": plan["shimmed"],
         "dropped": plan["dropped"],
         "versions": versions,
@@ -151,7 +168,8 @@ def main():
     (OUT / "build.json").write_text(json.dumps(build, indent=1))
     mb = lambda n: f"{n / 1e6:.1f} MB"
     print(f"site in {OUT}: pyodide {mb(pyodide_bytes)} + core, bundle {mb(len(bundle))}, "
-          + ", ".join(f"intents {k} {mb(v['bytes'])}" for k, v in intents.items()))
+          + ", ".join(f"intents {k} {mb(v['bytes'])}" for k, v in intents.items())
+          + "".join(f", m2v {k} {mb(v['bytes'])}" for k, v in m2v.items()))
 
 
 if __name__ == "__main__":

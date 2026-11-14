@@ -77,6 +77,13 @@ async function boot({ userConfig }) {
     have[lang] = entry.hash;
   }
 
+  for (const [lang, entry] of Object.entries(b.m2v_models || {})) {
+    if (have[`m2v-${lang}`] === entry.hash) continue;
+    const zip = await fetchBytes(entry.url, `Henter sprogmodel (${lang})…`);
+    py.FS.writeFile(`/tmp/m2v-${lang}.zip`, zip);
+    have[`m2v-${lang}`] = entry.hash;
+  }
+
   status("Pakker ud…");
   py.globals.set("HAVE_INTENTS", JSON.stringify(have));
   await py.runPythonAsync(`
@@ -87,6 +94,11 @@ os.remove("/tmp/bundle.zip")
 share = os.path.expanduser("~/.local/share/mycroft")
 for z in glob.glob("/tmp/intents-*.zip"):
     zipfile.ZipFile(z).extractall(share)
+    os.remove(z)
+m2v = os.path.expanduser("~/.local/share/emkay-mobile/m2v")
+for z in glob.glob("/tmp/m2v-*.zip"):
+    os.makedirs(m2v, exist_ok=True)
+    zipfile.ZipFile(z).extractall(m2v)
     os.remove(z)
 os.makedirs(os.path.expanduser("~/.local/share/emkay-mobile"), exist_ok=True)
 with open(os.path.expanduser("~/.local/share/emkay-mobile/intent-cache.json"), "w") as f:
