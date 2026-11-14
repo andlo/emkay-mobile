@@ -59,10 +59,10 @@ for (what, where), n in Counter((x[1], x[2]) for x in w).most_common(10):
     print(f"   {n:4d} x {what} at {where}")
 from emkay_mobile import boot
 boot.bus().on("message", lambda m: heard.append(Message.deserialize(m) if isinstance(m, str) else m))
+diag.report()   # cache misses are known once every skill has registered
 t=time.time(); await asyncio.sleep(0.1); print("training", round(time.time()-t,1), "s")
 diag.report()
 print("gui messages so far:", sent["gui"])
-diag.report()   # cache misses are known once every skill registered
 for u in UTTS:
     heard.clear(); t = time.time()
     boot.utterance(u)
