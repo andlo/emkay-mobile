@@ -39,6 +39,10 @@ sys.path.insert(0, str(REPO / "py"))
 if os.environ.get("EMKAY_REUSE_CACHE"):
     shutil.copytree(os.environ["EMKAY_REUSE_CACHE"], f"{home}/.local/share/mycroft", dirs_exist_ok=True)
 
+if os.environ.get("EMKAY_DIAG"):
+    from emkay_mobile import diag  # noqa: E402
+    diag.install()
+
 from emkay_mobile import boot  # noqa: E402
 
 trained = threading.Event()
@@ -52,9 +56,11 @@ def on_msg(m):
 info = boot.start(on_message=on_msg, user_config={"lang": langs[0], "secondary_langs": langs[1:]})
 print(f"loaded {len(info['skills'])} skills in {info['seconds']} s, training...")
 t = time.time()
-if not trained.wait(1800):
+if not trained.wait(int(os.environ.get("EMKAY_TRAIN_WAIT", 1800))):
     sys.exit("padatious did not finish training in 30 minutes")
-print(f"trained in {time.time() - t:.1f} s")
+print(f"trained in {time.time() - t:.1f} s", flush=True)
+if os.environ.get("EMKAY_DIAG"):
+    diag.report()
 
 src = Path(home, ".local/share/mycroft")
 out.mkdir(parents=True, exist_ok=True)

@@ -59,6 +59,9 @@ def install():
     _probe(intent.Intent, "from_file", "padatious: load an intent from cache")
     _probe(entity.Entity, "from_file", "padatious: load an entity from cache")
     _probe(intent_container.IntentContainer, "train", "padatious: IntentContainer.train")
+    from ovos_padatious import padaos, opm
+    _probe(padaos.IntentContainer, "compile", "padaos: compile")
+    _probe(opm.PadatiousPipeline, "_warm_prefilters", "padaos: warm prefilters")
 
 
 def report():
