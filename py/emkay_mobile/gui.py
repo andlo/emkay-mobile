@@ -66,8 +66,12 @@ def start(bus, post):
     """Boot the namespace manager on the core bus and attach the browser."""
     global _client
     from ovos_gui.bus import GUIWebsocketHandler
-    from ovos_gui.namespace import NamespaceManager
-    ns = NamespaceManager(bus)
+    from ovos_gui import namespace as ns_module
+    # NamespaceManager starts the tornado websocket server GUIs connect to.
+    # A browser cannot listen on a port, and the browser is the GUI client
+    # anyway, so the server is left out.
+    ns_module.create_gui_service = lambda _ns_manager: None
+    ns = ns_module.NamespaceManager(bus)
     _client = BrowserGuiClient(ns, post)
     GUIWebsocketHandler.clients.append(_client)
     from ovos_bus_client.message import Message
