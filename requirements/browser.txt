@@ -11,11 +11,10 @@ ovos-tts-plugin-server
 # skills-requirements.txt.j2 (profile "ovos"): essential, internet and audio skills
 ovos-core[skills-essential,skills-internet,skills-audio]
 
-# GUI (installer feature "gui"): ovos-gui + homescreen.
+# GUI (installer feature "gui"): ovos-gui + homescreen (see browser-nodeps.txt).
 # ovos-gui is held at the last 1.5 alpha: 1.6.0a1 moved clients to adapter
 # plugins and the legacy websocket adapter ovos-visage speaks is not on PyPI yet.
 ovos-gui==1.5.4a1
-ovos-skill-homescreen
 
 # the setup page: the stock OpenVoiceOS control panel
 ovos-control-panel

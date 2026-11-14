@@ -1,0 +1,6 @@
+# Installed with --no-deps: their pins cannot be met next to ovos-core alpha.
+# On a device ovos-visage puts these in a virtualenv of their own; a browser
+# has one Python, so they share the core's packages.
+
+# pins ovos-workshop<9; ovos-core alpha needs >=9.6
+ovos-skill-homescreen
