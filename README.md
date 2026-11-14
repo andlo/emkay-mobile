@@ -83,6 +83,10 @@ forces a workaround:
 - **Location:** a device finds its location by IP (ovos-phal-plugin-ipgeo),
   but that asks an `http://` service an https page may not call. Until the
   setup page sets one, OVOS gets the browser's time zone.
+- **The phone's "hardware"** is a PHAL plugin whose device is the page
+  ([`phal.py`](py/emkay_mobile/phal.py)). Volume answers `mycroft.volume.*`
+  exactly like ovos-PHAL-plugin-alsa, with the page's output gain as the
+  mixer; location, battery and network are next.
 - **On a phone** the screen fills the display; on a larger screen visage
   draws the whole Mark II around it.
 - **Left out:** `ovos-skill-boot-finished` (waits for an audio service and a

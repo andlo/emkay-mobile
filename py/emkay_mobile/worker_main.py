@@ -1,8 +1,9 @@
 """The Python end of the page's Web Worker.
 
-The worker owns everything OVOS: the bus, ovos-core and its skills, ovos-gui
-and the small listener/audio halves (speech.py). The page owns what only a
-browser tab can reach: the screen, the microphone and the speaker.
+The worker owns everything OVOS: the bus, ovos-core and its skills, ovos-gui,
+the small listener/audio halves (speech.py) and the PHAL plugin for the
+phone's "hardware" (phal.py). The page owns what only a browser tab can
+reach: the screen, the microphone and the speaker.
 
 They talk through postMessage. worker.js calls the functions below; Python
 answers through the `js_post(kind, payload, data=None)` callable given to
@@ -11,11 +12,12 @@ answers through the `js_post(kind, payload, data=None)` callable given to
   "gui"    one GUI-protocol message (JSON) for ovos-visage
   "audio"  speech to play: payload is JSON metadata, data the WAV bytes
   "bus"    one of the few bus events the page reacts to itself
+  "phal"   a hardware change from the browser PHAL plugin (volume level)
 """
 import json
 import time
 
-from . import boot, browser, gui, settings, speech
+from . import boot, browser, gui, phal, settings, speech
 
 _js_post = None   # set by start(): post(kind, payload[, data])
 
@@ -48,6 +50,7 @@ def start(js_post, user_config=None) -> str:
     gui.start(bus, lambda raw: _post("gui", raw))
     print(f"[emkay] gui up in {time.time() - t:.1f}s")
     speech.start(bus, lambda wav, meta: _post("audio", json.dumps(meta), wav))
+    phal.start(bus, lambda raw: _post("phal", raw))   # the phone's "hardware"
     bus.on("message", _watch)
     info["skipped_waits"] = browser.SKIPPED_WAITS[:]
     return json.dumps(info)

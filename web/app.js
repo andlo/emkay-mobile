@@ -66,6 +66,7 @@ worker.onmessage = ({ data }) => {
     case "status": return bootStatus(data.text, data.progress);
     case "gui": for (const s of guiSockets) s.deliver(data.payload); return;
     case "audio": return speaker.enqueue(data.data, data.payload);
+    case "phal": return speaker.setVolume(JSON.parse(data.payload));
     case "bus": return onBus(JSON.parse(data.payload));
   }
 };
@@ -117,6 +118,7 @@ let audioCtx = null;
 async function start() {
   $("start").hidden = true;
   audioCtx = new AudioContext();
+  speaker.attach(audioCtx);
   await audioCtx.resume();
   if (kiosk) enterKiosk();
   keepAwake();
@@ -262,10 +264,27 @@ $("screen").addEventListener("click", (e) => {
 /**
  * Plays the WAVs the TTS plugin makes, one after another, and tells OVOS
  * when each starts and ends (that is what moves the face's mouth).
+ *
+ * Everything goes through one gain node: the "mixer" of the browser PHAL
+ * plugin (py/emkay_mobile/phal.py), which answers OVOS' mycroft.volume.*
+ * messages and sends the level here.
  */
 const speaker = {
   queue: [],
   playing: false,
+  level: { volume: 0.75, muted: false },
+  gain: null,
+  /** Create the output gain once the AudioContext exists. */
+  attach(ctx) {
+    this.gain = ctx.createGain();
+    this.gain.connect(ctx.destination);
+    this.setVolume(this.level);
+  },
+  /** Apply {volume: 0..1, muted} from the PHAL plugin. */
+  setVolume(level) {
+    this.level = level;
+    if (this.gain) this.gain.gain.value = level.muted ? 0 : level.volume;
+  },
   enqueue(wav, meta) { this.queue.push({ wav, meta }); if (!this.playing) this.next(); },
   async next() {
     const item = this.queue.shift();
@@ -275,7 +294,7 @@ const speaker = {
       const buf = await audioCtx.decodeAudioData(item.wav);
       const src = audioCtx.createBufferSource();
       src.buffer = buf;
-      src.connect(audioCtx.destination);
+      src.connect(this.gain || audioCtx.destination);
       src.onended = () => { call("playback_ended", { ident: item.meta.ident }); this.next(); };
       src.start();
       call("playback_started", { ident: item.meta.ident, visemes: item.meta.visemes });
