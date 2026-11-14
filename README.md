@@ -48,6 +48,7 @@ See [`requirements/browser.txt`](requirements/browser.txt) for the exact list.
 ```bash
 npm install                       # Pyodide for the Node smoke test
 python3 -m pip wheel --pre -w wheelhouse -r requirements/browser.txt
+python3 -m pip wheel --pre --no-deps -w wheelhouse -r requirements/browser-nodeps.txt -r requirements/browser-emscripten.txt
 python3 tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json
 node tools/node_smoke.mjs wheelhouse plan.json "what time is it"
 ```

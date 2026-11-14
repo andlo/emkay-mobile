@@ -1,0 +1,6 @@
+# Dependencies that only apply on sys_platform == "emscripten". The wheelhouse
+# is built on Linux, where pip skips them, so they are listed here.
+# Find new ones with:  unzip -p wheelhouse/*.whl '*.dist-info/METADATA' | grep emscripten
+
+# httpx2 (huggingface_hub's HTTP client): fetch-API transport in the browser
+httpx2-jsfetch
