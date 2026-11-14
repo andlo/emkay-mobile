@@ -73,13 +73,44 @@ def _m2v_models() -> dict:
             if os.path.isfile(os.path.join(M2V_DIR, lang, "model.safetensors"))}
 
 
+def _unused_pipelines(user_blacklist) -> list:
+    """intents.blacklisted_pipelines with every installed pipeline plugin the
+    active pipeline does not use.
+
+    ovos-core loads every installed pipeline plugin, used or not, "because a
+    remote client/session may select a different pipeline at runtime" - and
+    each one then takes part in every skill's intent registration. A phone
+    has no remote sessions, and in WebAssembly the unused ones (padacioso,
+    persona, common query, the adapt variants, legacy OCP) cost over half of
+    the boot. ovos-core's own `intents.blacklisted_pipelines` setting opts
+    them out. Recomputed every boot with ovos-core's own matching rule, so a
+    plugin put back into `intents.pipeline` (setup page) is loaded again.
+    """
+    from ovos_config import Configuration
+    from ovos_plugin_manager.pipeline import OVOSPipelineFactory
+    try:
+        from ovos_core.intent_services.service import _PIPELINE_MIGRATION_MAP as legacy
+    except ImportError:
+        legacy = {}
+    active = [legacy.get(m, m) for m in Configuration().get("intents", {}).get("pipeline", [])]
+
+    def used(plugin_id):
+        return any(m == plugin_id or m.startswith(f"{plugin_id}-") for m in active)
+
+    keep = [p for p in user_blacklist if not used(p)]  # never block an active one
+    unused = [p for p in OVOSPipelineFactory.get_installed_pipeline_ids()
+              if not used(p) and p not in keep]
+    return keep + unused
+
+
 def _browser_defaults(first_boot: bool) -> dict:
     """The few settings that differ from a device, as a user-layer patch.
 
     On the first boot the blacklist is written once, so the setup page can
     change it later. The browser's time zone is written once, while the user
-    layer holds no location of its own. The m2v model folders are written on every boot, since
-    they follow whatever the site shipped this time.
+    layer holds no location of its own. The m2v model folders and the
+    unused pipeline plugins are written on every boot, since they follow
+    whatever the site shipped and the pipeline the user chose.
     """
     from ovos_config import Configuration
     out = {"emkay_mobile_defaults": 1}
@@ -96,12 +127,14 @@ def _browser_defaults(first_boot: bool) -> dict:
         # setup page sets a real location, the clock and the time skill go
         # by that instead of the installer default (Lawrence, Kansas).
         out["location"] = {"timezone": {"code": tz, "name": tz}}
+    user_bl = read_user_config().get("intents", {}).get("blacklisted_pipelines", [])
+    out["intents"] = {"blacklisted_pipelines": _unused_pipelines(user_bl)}
     models = _m2v_models()
     if models:
         # ovos-m2v-pipeline's documented per-language "models" map, pointed at
         # the copies the site ships (its Hub default is 141 MB for every
         # language, too much for a phone)
-        out["intents"] = {"ovos_m2v_pipeline": {"models": models}}
+        out["intents"]["ovos_m2v_pipeline"] = {"models": models}
     return out
 
 
