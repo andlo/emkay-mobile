@@ -83,11 +83,15 @@ jobs:
           # registration on the way makes training many times slower
           .venv/bin/pip uninstall -y ovos-m2v-pipeline model2vec
       - name: Pre-train padatious (${{ matrix.lang }})
-        run: .venv/bin/python -u tools/build_intent_cache.py intent-cache ${{ matrix.lang }}
+        run: |
+          .venv/bin/python -u tools/build_intent_cache.py intent-cache ${{ matrix.lang }}
+          # cache file names hold "skill:intent", and upload-artifact refuses
+          # colons in file names, so the cache travels as one tar
+          tar -cf intents.tar -C intent-cache .
       - uses: actions/upload-artifact@v4
         with:
           name: intents-${{ matrix.lang }}
-          path: intent-cache
+          path: intents.tar
           retention-days: 3
 
   site:
@@ -110,6 +114,10 @@ jobs:
         with:
           pattern: intents-*
           path: intents
+      - name: Unpack the intent caches
+        run: |
+          for d in intents/*/; do tar -xf "$d/intents.tar" -C "$d" && rm "$d/intents.tar"; done
+          ls intents
       - name: Fetch one m2v model per language
         run: |
           pip install -q huggingface_hub
