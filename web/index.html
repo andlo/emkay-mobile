@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Emkay</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="visage/visage.css">
+  <link rel="stylesheet" href="visage/face/face.css">
+  <link rel="stylesheet" href="visage/skills.css">
+  <link rel="stylesheet" href="visage/alerts.css">
+  <link rel="stylesheet" href="visage/ocp.css">
+  <link rel="stylesheet" href="visage/templates.css">
+  <link rel="stylesheet" href="emkay.css">
+</head>
+<body>
+  <!-- ovos-visage's screen, unchanged -->
+  <div id="device" class="device" aria-label="Emkay display">
+    <svg class="silhouette" viewBox="0 0 560 960" aria-hidden="true">
+      <rect x="4" y="4" width="552" height="952" rx="96" class="shell"/>
+      <rect x="22" y="22" width="516" height="916" rx="80" class="bezel"/>
+      <circle cx="280" cy="52" r="5" class="camera"/>
+    </svg>
+    <main id="screen" class="screen">
+      <section id="page" class="page"></section>
+      <section id="attention" class="attention" data-state="rest" aria-hidden="true"></section>
+      <div id="link" class="link offline" title="GUI connection">GUI offline</div>
+    </main>
+  </div>
+
+  <!-- Emkay's own layer: boot, start button, mic, typing -->
+  <div id="boot" class="boot">
+    <div class="boot-face" aria-hidden="true"><span></span><span></span></div>
+    <h1>Emkay</h1>
+    <p id="boot-text">Henter…</p>
+    <div class="bar"><div id="boot-bar"></div></div>
+    <button id="start" hidden>Tryk for at starte</button>
+    <p class="small">OpenVoiceOS i din browser · <a href="https://github.com/andlo/emkay-mobile">kildekode</a></p>
+  </div>
+  <button id="mic" class="mic" aria-label="Tal" hidden></button>
+  <form id="type" class="type" hidden><input id="type-text" placeholder="Skriv til Emkay…" autocomplete="off"></form>
+  <button id="keyboard" class="keyboard" aria-label="Skriv" hidden>⌨</button>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
