@@ -52,9 +52,11 @@ def js_post(kind, payload, data=None):
         print("   audio:", json.loads(payload)["utterance"][:60], len(data) if data is not None else 0, "bytes")
 info = json.loads(worker_main.start(js_post))
 print("boot", info["seconds"], "s,", len(info["skills"]), "skills")
-print("blocked waits during boot:", len(info["blocked"]), "total", round(sum(b[0] for b in info["blocked"]), 1), "s")
-for b in sorted(info["blocked"], reverse=True)[:12]:
-    print("  ", b)
+from collections import Counter
+w = info["skipped_waits"]
+print("skipped waits during boot:", len(w), "worth", round(sum(x[0] or 0 for x in w), 1), "s")
+for (what, where), n in Counter((x[1], x[2]) for x in w).most_common(10):
+    print(f"   {n:4d} x {what} at {where}")
 from emkay_mobile import boot
 boot.bus().on("message", lambda m: heard.append(Message.deserialize(m) if isinstance(m, str) else m))
 t=time.time(); await asyncio.sleep(0.1); print("training", round(time.time()-t,1), "s")

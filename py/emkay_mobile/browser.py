@@ -7,10 +7,11 @@ its own treatment:
   call synchronously and hand back an already-finished Future.
 * threading.Timer (timeouts, delayed speech, skill schedules): schedule the
   callback on the browser event loop with loop.call_later.
-* threading.Thread (long-lived service loops such as the skill manager's
-  30 s rescan or the event scheduler's poll): not started. Each one is
-  recorded in STARTED so the page can show what was skipped; the few loops
-  that matter are driven from JavaScript timers instead (see boot.tick()).
+* threading.Thread: the body runs later on the event loop; service loops
+  that never return (the skill manager's 30 s rescan, the event scheduler)
+  are not started.
+* Event.wait / time.sleep: nothing else can run while the one thread waits,
+  so waits return at once (noted in SKIPPED_WAITS).
 """
 import asyncio
 import concurrent.futures as _cf
@@ -99,7 +100,7 @@ def _submit(self, fn, *args, **kwargs):
     return fut
 
 
-BLOCKED = []   # (seconds, what, where) for every wait that actually stalled
+SKIPPED_WAITS = []   # (seconds asked, what, where) for every wait not slept
 
 
 def _where():
@@ -109,19 +110,23 @@ def _where():
     return " <- ".join(f"{f.filename.split('site-packages/')[-1]}:{f.lineno}" for f in frames[-3:][::-1])
 
 
-def _timed(fn, what):
-    import time
+def _note(seconds, what):
+    if seconds is None or seconds >= 0.5:
+        SKIPPED_WAITS.append((seconds, what, _where()))
 
-    def wrapper(*a, **k):
-        t = time.time()
-        r = fn(*a, **k)
-        dt = time.time() - t
-        if dt > 0.5:
-            where = _where()
-            BLOCKED.append((round(dt, 1), what, where))
-            print(f"[emkay] blocked {dt:.1f}s in {what} at {where}", file=sys.stderr)
-        return r
-    return wrapper
+
+def _event_wait(self, timeout=None):
+    """Nothing can set the event while this one thread waits for it, so the
+    wait is answered with what is true now (a device would time out)."""
+    if not self._flag:
+        _note(timeout, "Event.wait")
+    return self._flag
+
+
+def _sleep(seconds):
+    """Sleeping holds back every timer and bus message queued behind it,
+    and nothing else runs meanwhile, so it is skipped."""
+    _note(seconds, "time.sleep")
 
 
 def install():
@@ -135,11 +140,11 @@ def install():
     threading.Timer.start = _timer_start
     threading.Timer.cancel = _timer_cancel
     _cf.ThreadPoolExecutor.submit = _submit
-    # A single thread cannot be woken by another one, so every wait with a
-    # timeout runs to its end. Log the ones that stall, with their caller.
-    threading.Event.wait = _timed(threading.Event.wait, "Event.wait")
+    # One thread cannot be woken by another, so a wait only ever runs out its
+    # timeout: answer it at once and keep a note (SKIPPED_WAITS).
+    threading.Event.wait = _event_wait
     import time as _time
-    _time.sleep = _timed(_time.sleep, "time.sleep")
+    _time.sleep = _sleep
     os.environ.setdefault("OVOS_DEFAULT_LOG_NAME", "emkay")
     # Emscripten has no users; OVOS checks file ownership with these
     for fn in ("geteuid", "getuid", "getegid", "getgid"):

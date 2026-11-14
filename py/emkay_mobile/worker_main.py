@@ -41,7 +41,7 @@ def start(js_post, user_config=None):
     print(f"[emkay] gui up in {time.time() - t:.1f}s")
     speech.start(bus, lambda wav, meta: _post("audio", json.dumps(meta), wav))
     bus.on("message", _watch)
-    info["blocked"] = browser.BLOCKED[:]
+    info["skipped_waits"] = browser.SKIPPED_WAITS[:]
     return json.dumps(info)
 
 
