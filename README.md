@@ -80,13 +80,16 @@ forces a workaround:
 - **ovos-gui is held at 1.5.4a1** and its websocket server is not started; the
   page is its client directly. 1.6 moved GUI clients to adapter plugins
   (ovos-gui-plugin-visage), which is the way forward once it is released.
-- **Location:** a device finds its location by IP (ovos-phal-plugin-ipgeo),
-  but that asks an `http://` service an https page may not call. Until the
-  setup page sets one, OVOS gets the browser's time zone.
 - **The phone's "hardware"** is a PHAL plugin whose device is the page
   ([`phal.py`](py/emkay_mobile/phal.py)). Volume answers `mycroft.volume.*`
   exactly like ovos-PHAL-plugin-alsa, with the page's output gain as the
-  mixer; location, battery and network are next.
+  mixer. Location works like ovos-phal-plugin-ipgeo (assistant config
+  layer, `ovos.ipgeo.update`), but from the browser's geolocation, since
+  ipgeo's `http://` service cannot be called from an https page; until the
+  user allows it, OVOS gets the browser's time zone. Battery and network
+  are next.
+- **Config changes are followed over the bus** (`configuration.updated`),
+  as the services on a device do; the file watcher thread is left out.
 - **On a phone** the screen fills the display; on a larger screen visage
   draws the whole Mark II around it.
 - **Left out:** `ovos-skill-boot-finished` (waits for an audio service and a

@@ -66,7 +66,7 @@ worker.onmessage = ({ data }) => {
     case "status": return bootStatus(data.text, data.progress);
     case "gui": for (const s of guiSockets) s.deliver(data.payload); return;
     case "audio": return speaker.enqueue(data.data, data.payload);
-    case "phal": return speaker.setVolume(JSON.parse(data.payload));
+    case "phal": return onPhal(JSON.parse(data.payload));
     case "bus": return onBus(JSON.parse(data.payload));
   }
 };
@@ -305,6 +305,32 @@ const speaker = {
     }
   },
 };
+
+// ------------------------------------------------------------ PHAL plugin
+/**
+ * A message from the browser PHAL plugin (py/emkay_mobile/phal.py), which
+ * answers OVOS' hardware messages: a volume level to apply, or a request
+ * for something only the page can reach.
+ */
+function onPhal(msg) {
+  if (msg.request === "location") return locate();
+  speaker.setVolume(msg);
+}
+
+/**
+ * The phone's position for OVOS' location (the plugin turns it into city,
+ * country and time zone). The browser asks the user first; a "no" leaves
+ * OVOS on the browser's time zone.
+ */
+function locate() {
+  const answer = (args) => call("phal_position", args);
+  if (!navigator.geolocation) return answer({ error: "geolocation unsupported" });
+  navigator.geolocation.getCurrentPosition(
+    (p) => answer({ lat: p.coords.latitude, lon: p.coords.longitude }),
+    (e) => answer({ error: e.message || `code ${e.code}` }),
+    { maximumAge: 3600e3, timeout: 60e3 },
+  );
+}
 
 // ------------------------------------------------------------- bus events
 /** React to the few bus events the page itself cares about. */

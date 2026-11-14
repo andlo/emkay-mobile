@@ -12,7 +12,8 @@ answers through the `js_post(kind, payload, data=None)` callable given to
   "gui"    one GUI-protocol message (JSON) for ovos-visage
   "audio"  speech to play: payload is JSON metadata, data the WAV bytes
   "bus"    one of the few bus events the page reacts to itself
-  "phal"   a hardware change from the browser PHAL plugin (volume level)
+  "phal"   from the browser PHAL plugin: a volume level, or a request
+           such as {"request": "location"}
 """
 import json
 import time
@@ -116,6 +117,12 @@ def playback_started(ident: str, visemes_json: str = "[]"):
 def playback_ended(ident: str):
     """The page finished playing speech `ident`."""
     speech.playback_ended(ident)
+
+
+def phal_position(lat=None, lon=None, error=None):
+    """The browser's geolocation answer, for the PHAL plugin (phal.py)."""
+    if phal.plugin() is not None:
+        phal.plugin().on_position(lat, lon, error)
 
 
 def export_settings():

@@ -11,11 +11,25 @@ reported the same way, and the level is kept in the plugin's own settings
 file (~/.config/OpenVoiceOS/ovos-phal-plugin-browser.json, which lives in
 IndexedDB like the rest of ~/.config). The page plays everything through
 one gain node, which is this plugin's "mixer".
+
+Location follows ovos-phal-plugin-ipgeo, which a device uses on first boot:
+it fills the *assistant* config layer (below the user layer, so a location
+the user sets always wins), only when that layer has none, and again on
+`ovos.ipgeo.update` (with "overwrite"). ipgeo asks http://ip-api.com, which
+an https page may not call, so the position comes from the browser's own
+geolocation instead (it asks the user first) and OVOS' own
+`get_reverse_geolocation` turns it into city, country and time zone. Until
+then, or if the user says no, the layer gets the browser's time zone, so
+clocks and timers are right from the start.
 """
+import os
 import json
 
 from ovos_bus_client.message import Message
 from ovos_bus_client.session import SessionManager
+from ovos_bus_client.util import get_message_lang
+from ovos_config import Configuration
+from ovos_config.models import AssistantConfig
 from ovos_plugin_manager.phal import PHALPlugin
 from ovos_utils.log import LOG
 
@@ -26,7 +40,7 @@ except ImportError:  # pragma: no cover
 
 
 class BrowserPHAL(PHALPlugin):
-    """PHAL for a browser tab: volume now; location, battery, network next."""
+    """PHAL for a browser tab: volume and location; battery, network next."""
 
     def __init__(self, bus=None, config=None, post=None):
         """
@@ -47,6 +61,9 @@ class BrowserPHAL(PHALPlugin):
         for topic, handler in self._handlers().items():
             self.bus.on(topic, handler)
         self._report()  # the page starts at the stored level
+        self.assistant_config = AssistantConfig()
+        self._location_request = None  # the ovos.ipgeo.update waiting for an answer
+        self.on_location_update()       # first boot: as ipgeo does
 
     def _handlers(self):
         return {
@@ -57,6 +74,7 @@ class BrowserPHAL(PHALPlugin):
             "mycroft.volume.mute": self.handle_mute_request,
             "mycroft.volume.unmute": self.handle_unmute_request,
             "mycroft.volume.mute.toggle": self.handle_mute_toggle_request,
+            "ovos.ipgeo.update": self.on_location_update,
         }
 
     # --- the "mixer" ----------------------------------------------------
@@ -92,6 +110,66 @@ class BrowserPHAL(PHALPlugin):
         self._store()
         self._report()
         self.handle_volume_request(Message("mycroft.volume.get"))
+
+    # --- location (same contract as ovos-phal-plugin-ipgeo) -------------
+    def _has_location(self) -> bool:
+        """True once the assistant layer holds a real location (a city), not
+        just the time-zone stand-in written below."""
+        loc = self.assistant_config.get("location") or {}
+        return bool(loc.get("city"))
+
+    def on_location_update(self, message=None):
+        """Ask the page for the phone's position, unless a location is known
+        and the request does not ask to overwrite it (as ipgeo's on_reset)."""
+        if self._has_location() and (message is None or not message.data.get("overwrite")):
+            LOG.debug("Skipping overwrite of existing location")
+            return
+        if not self.assistant_config.get("location"):
+            self._store_location({"timezone": self._browser_timezone()})
+        self._location_request = message
+        self._post({"request": "location"})
+
+    @staticmethod
+    def _browser_timezone() -> dict:
+        tz = os.environ.get("EMKAY_TZ") or "UTC"  # set by worker.js
+        return {"code": tz, "name": tz.replace("/", " ")}
+
+    def on_position(self, lat=None, lon=None, error=None):
+        """The page's answer: coordinates, or why there are none."""
+        message, self._location_request = self._location_request, None
+        if error or lat is None or lon is None:
+            LOG.info(f"No position from the browser: {error}")
+            if message:
+                self.bus.emit(message.response(data={"error": True}))
+            return
+        try:
+            from ovos_utils.geolocation import get_reverse_geolocation
+            lang = get_message_lang(message) or Configuration().get("lang", "en")
+            location = get_reverse_geolocation(float(lat), float(lon), lang=lang)
+        except Exception as e:  # offline, service refused: keep what we have
+            LOG.error(f"Reverse geolocation failed: {e}")
+            if message:
+                self.bus.emit(message.response(data={"error": True}))
+            return
+        LOG.info(f"Browser geolocation: {location.get('address')}")
+        self._store_location(location)
+        if message:
+            self.bus.emit(message.response(data={"location": location}))
+
+    def _store_location(self, location: dict):
+        """Write the assistant layer and tell OVOS, as ipgeo does.
+
+        The device's default session carries its own copy of the location
+        (OVOS-SESSION-1 stamps lat/lon/tz into it when it is created), and
+        skills read the time zone from there. On a device ipgeo has usually
+        run before the first question; here the position may come minutes
+        later, when the user allows it, so the default session is created
+        anew from the updated configuration.
+        """
+        self.assistant_config["location"] = location
+        self.assistant_config.store()
+        self.bus.emit(Message("configuration.updated"))
+        SessionManager.reset_default_session()
 
     # --- bus handlers (same contract as ovos-PHAL-plugin-alsa) -----------
     def validate_message_context(self, message) -> bool:
@@ -152,7 +230,11 @@ _plugin = None
 def start(bus, post):
     """Load the plugin on the bus; `post(str)` sends JSON to the page."""
     global _plugin
-    from ovos_config import Configuration
     conf = Configuration().get("PHAL", {}).get("ovos-phal-plugin-browser", {})
     _plugin = BrowserPHAL(bus=bus, config=conf, post=lambda change: post(json.dumps(change)))
+    return _plugin
+
+
+def plugin():
+    """The loaded plugin (None before start())."""
     return _plugin

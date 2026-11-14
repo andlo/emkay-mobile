@@ -58,11 +58,16 @@ def write_user_config(overrides: dict) -> dict:
     This is what the setup page does on a device: the system and default
     layers stay untouched, the user layer holds only what was changed.
     """
-    os.makedirs(os.path.dirname(CONF_PATH), exist_ok=True)
     cur = _merge(read_user_config(), overrides or {})
-    with open(CONF_PATH, "w") as f:
-        json.dump(cur, f, indent=2)
+    _write_whole_user_config(cur)
     return cur
+
+
+def _write_whole_user_config(conf: dict):
+    """Replace the user mycroft.conf (write_user_config only merges)."""
+    os.makedirs(os.path.dirname(CONF_PATH), exist_ok=True)
+    with open(CONF_PATH, "w") as f:
+        json.dump(conf, f, indent=2)
 
 
 def _m2v_models() -> dict:
@@ -107,10 +112,9 @@ def _browser_defaults(first_boot: bool) -> dict:
     """The few settings that differ from a device, as a user-layer patch.
 
     On the first boot the blacklist is written once, so the setup page can
-    change it later. The browser's time zone is written once, while the user
-    layer holds no location of its own. The m2v model folders and the
-    unused pipeline plugins are written on every boot, since they follow
-    whatever the site shipped and the pipeline the user chose.
+    change it later. The m2v model folders and the unused pipeline plugins
+    are written on every boot, since they follow whatever the site shipped
+    and the pipeline the user chose.
     """
     from ovos_config import Configuration
     out = {"emkay_mobile_defaults": 1}
@@ -119,14 +123,16 @@ def _browser_defaults(first_boot: bool) -> dict:
         blacklisted = list(cfg.get("skills", {}).get("blacklisted_skills", []))
         blacklisted += [s for s in UNAVAILABLE_SKILLS if s not in blacklisted]
         out["skills"] = {"blacklisted_skills": blacklisted}
-    tz = os.environ.get("EMKAY_TZ")  # the browser's own time zone (worker.js)
-    if tz and "location" not in read_user_config():
-        # A device finds its location by IP on first boot (ovos-phal-plugin-
-        # ipgeo), but that asks http://ip-api.com, which an https page may
-        # not fetch. The browser already knows its time zone, so until the
-        # setup page sets a real location, the clock and the time skill go
-        # by that instead of the installer default (Lawrence, Kansas).
-        out["location"] = {"timezone": {"code": tz, "name": tz}}
+    # The location now comes from the browser PHAL plugin, in the assistant
+    # layer like ipgeo's (phal.py). Builds of 2026-11-14 wrote the browser's
+    # time zone into the user layer instead, where it would hide that; such
+    # an entry, and only that, is dropped again.
+    user = read_user_config()
+    loc = user.get("location")
+    if isinstance(loc, dict) and list(loc) == ["timezone"] and \
+            loc["timezone"].get("code") == loc["timezone"].get("name"):
+        del user["location"]
+        _write_whole_user_config(user)
     user_bl = read_user_config().get("intents", {}).get("blacklisted_pipelines", [])
     out["intents"] = {"blacklisted_pipelines": _unused_pipelines(user_bl)}
     models = _m2v_models()
@@ -136,6 +142,26 @@ def _browser_defaults(first_boot: bool) -> dict:
         # language, too much for a phone)
         out["intents"]["ovos_m2v_pipeline"] = {"models": models}
     return out
+
+
+def _follow_config_changes(bus):
+    """Reload the merged mycroft.conf when a service announces a change.
+
+    On a device every config file is watched (a watchdog thread), and the
+    services also listen for `configuration.updated` and friends - that is
+    Configuration.set_config_update_handlers, which ovos-gui's service
+    calls. The browser has neither the watcher thread nor that service, so
+    the bus half is registered here, with ovos-config's own handlers: a
+    PHAL plugin or the setup page writing a layer and emitting
+    `configuration.updated` is then seen at once, as on a device.
+    """
+    from ovos_config import Configuration
+    Configuration.deregister_bus()
+    Configuration.bus = bus
+    bus.on("configuration.updated", Configuration.updated)
+    bus.on("configuration.patch", Configuration.patch)
+    bus.on("configuration.patch.clear", Configuration.patch_clear)
+    bus.on("configuration.cache.clear", Configuration.clear_cache)
 
 
 def _drive_scheduler(scheduler, every: float = 0.5):
@@ -192,6 +218,7 @@ def start(on_message=None, user_config=None) -> dict:
     _bus = FakeBus()
     if on_message is not None:
         _bus.on("message", on_message)
+    _follow_config_changes(_bus)
     _manager = SkillManager(_bus,
                             enable_file_watcher=False,   # nothing edits files behind OVOS here
                             enable_installer=False,      # skills come with the site
