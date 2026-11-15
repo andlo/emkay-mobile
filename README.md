@@ -185,14 +185,21 @@ forces a workaround:
 - **Left out:** `ovos-skill-boot-finished` (waits for an audio service and a
   listener that do not exist here).
 - **Added to the "ovos" skill profile:** skills that answer without a server
-  (calculator, convert, geography, geometry, NATO alphabet, Morse code), and
+  (calculator, geography, geometry, NATO alphabet, Morse code), and
   reading aloud: `ovos-common-reading-pipeline-plugin` with the providers
   whose sources a browser may read (the OpenVoiceOS blog, horoscopes). A
   browser can only fetch from sites that allow it (CORS), and public
   servers fail more often than a device notices. The pipeline plugin is put
   into OVOS' pipeline where its README says, once; the setup page can move it.
-- **Questions back** (`get_response`: "for when?", yes/no) are asked but not
-  waited for, see [#20](https://github.com/emkay-voice/emkay/issues/20).
+- **Waiting works as with threads** where the browser has JavaScript Promise
+  Integration (JSPI: Chrome and Edge 137+, Firefox 153+, Safari 27+, and their
+  Android/iOS versions): a `time.sleep`
+  or `Event.wait` suspends Python where it is while the worker goes on with
+  the page's messages, so a skill that asks back (`get_response`: "for
+  when?", "is it that one?", yes/no, quizzes) gets the answer, and `stop`
+  reaches a skill that is reading aloud. Without JSPI (older browsers)
+  waits return at once, and a question back is asked but not waited
+  for ([#20](https://github.com/emkay-voice/emkay/issues/20)).
 
 ## Developing
 

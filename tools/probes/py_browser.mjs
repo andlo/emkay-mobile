@@ -54,9 +54,22 @@ try {
   await until(`!!document.getElementById("start") && !document.getElementById("start").hidden`, 400, "OVOS boot");
   if (process.env.START) await js(`document.getElementById("start").click(); true`);
   if (process.env.SLEEP_MS) await sleep(Number(process.env.SLEEP_MS));
+  if (process.env.JS) {   // JS=expression: evaluated in the page (awaited), e.g. window.emkay.call("sync")
+    const t = Date.now();
+    log(`JS: ${await Promise.race([js(process.env.JS).then(String), sleep(30000).then(() => "STILL WAITING after 30 s")])} (${Date.now() - t} ms)`);
+  }
   for (const code of (process.env.PY || "1").split("\n---\n")) {
     log(`>>> ${code.split("\n").at(-1).slice(0, 100)}`);
-    log(String(await js(`window.emkay.call("python", {code: ${JSON.stringify(code)}})`)));
+    const cmd = process.env.ASYNC ? "python_async" : "python";
+    if (process.env.ALSO) {   // ALSO=code: run alongside (does the worker answer while the first waits?)
+      const t = Date.now();
+      const first = js(`window.emkay.call("${cmd}", {code: ${JSON.stringify(code)}}).then(String)`);
+      await sleep(300);
+      log(`alongside: ${await js(`window.emkay.call("python", {code: ${JSON.stringify(process.env.ALSO)}}).then(String)`)} after ${Date.now() - t} ms`);
+      log(`first: ${await first} after ${Date.now() - t} ms`);
+      continue;
+    }
+    log(String(await js(`window.emkay.call("${cmd}", {code: ${JSON.stringify(code)}})`)));
   }
 } catch (e) {
   log(`FAILED: ${e.message}`);

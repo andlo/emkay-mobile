@@ -255,8 +255,8 @@ const mic = {
         if (!text) caption(t("mic.nothing"), null, 4000);
         else {
           caption(`“${text}”`, null, 6000);
-          const before = speaker.spoken;
-          if (await call("heard_text", { text })) unanswered(before);
+          const before = speaker.spoken, handled = utterancesHandled;
+          if (await call("heard_text", { text })) unanswered(before, handled);
         }
         return;
       }
@@ -272,10 +272,10 @@ const mic = {
         caption(t("mic.nothing"), null, 4000);
       } else {
         caption(t("mic.thinking"));
-        const before = speaker.spoken;
+        const before = speaker.spoken, handled = utterancesHandled;
         const text = await call("heard", { pcm: pcm.buffer, rate: 16000 }, [pcm.buffer]);
         caption(text ? `“${text}”` : t("mic.unclear"), null, text ? 6000 : 4000);
-        if (text) unanswered(before);
+        if (text) unanswered(before, handled);
       }
     } catch (e) {
       console.warn("[emkay] mic", e);
@@ -290,16 +290,22 @@ const mic = {
 let stream = null;
 let captionTimer = null;
 let questionsAsked = 0;   // typed or spoken; ends the warm-up note
+let utterancesHandled = 0;   // ovos.utterance.handled seen (unanswered() waits for one)
 
 /**
  * A question was handled and nothing was said: a skill or fallback that
  * failed quietly, often because its service cannot be reached from a
  * browser (issue #6). Instead of silence: OVOS' error sound (sounds.error,
  * as the listener plays it) and a line under the face. `before` is
- * speaker.spoken when the question went in; speech may follow the
- * handling by a moment, so it waits a little first.
+ * speaker.spoken when the question went in. The question is done when
+ * OVOS says so (ovos.utterance.handled; the worker may hand the question
+ * over and return before that, JSPI #20), and speech may follow by a moment,
+ * so it waits for both.
  */
-async function unanswered(before) {
+async function unanswered(before, handledBefore = utterancesHandled - 1) {
+  for (let i = 0; i < 1200 && utterancesHandled <= handledBefore; i++) {
+    await new Promise((r) => setTimeout(r, 100));   // at most 2 minutes
+  }
   await new Promise((r) => setTimeout(r, 1500));
   if (speaker.spoken !== before || speaker.playing) return;
   caption(t("noanswer"), null, 6000);
@@ -649,6 +655,7 @@ function locate() {
 /** React to the few bus events the page itself cares about. */
 function onBus(msg) {
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
+  if (msg.type === "ovos.utterance.handled") utterancesHandled++;
   if (msg.type === "mycroft.mic.mute") mic.setMuted(true);
   if (msg.type === "emkay.lang") {   // a config change, e.g. in the panel
     languageChanged(msg.data.lang);
@@ -667,9 +674,9 @@ $("type").onsubmit = (e) => {
   e.preventDefault();
   const text = $("type-text").value.trim();
   if (text) {
-    const before = speaker.spoken;
+    const before = speaker.spoken, handled = utterancesHandled;
     questionsAsked++;
-    call("say", { text }).then(() => unanswered(before));
+    call("say", { text }).then(() => unanswered(before, handled));
   }
   $("type-text").value = "";
 };

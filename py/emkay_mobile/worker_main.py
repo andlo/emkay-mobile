@@ -127,7 +127,8 @@ def gui_message(raw: str):
 
 def say(text: str):
     """Typed input: handled exactly like a spoken utterance."""
-    boot.utterance(text)
+    from .browser import hand_over
+    hand_over(lambda: boot.utterance(text))
 
 
 def wakeword(name: str):

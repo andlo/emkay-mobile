@@ -8,7 +8,10 @@
 #             (the alpha channel), exactly what tools/build_site.py ships
 # intents     one job per language: padatious is pre-trained on a normal
 #             CPython with those same wheels, so a phone loads the networks
-#             instead of training them for minutes
+#             instead of training them for minutes. The result is kept in
+#             the Actions cache, keyed by the exact wheels and the training
+#             script: a push that changes neither (most do) reuses it.
+#             "Run workflow" with retrain ticked trains anyway.
 # site        Pyodide + the OVOS bundle + the intent caches + one m2v model
 #             per language, assembled into a static site, then tested in a
 #             headless Chrome (tools/probes/ci.py) before it may deploy
@@ -23,6 +26,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      retrain:
+        description: "Train the intent caches again, even if the wheels did not change"
+        type: boolean
+        default: false
   schedule:
     - cron: "17 3 * * *"   # nightly: pick up new OVOS alphas
 
@@ -82,7 +90,22 @@ jobs:
         with:
           name: wheelhouse
           path: wheelhouse
+      # the same wheels (names carry the versions), the same training script
+      # and the same requirements give the same networks
+      - name: Cache key
+        id: key
+        run: |
+          w=$(ls wheelhouse | sort | sha256sum | cut -c1-16)
+          t=$(cat tools/build_intent_cache.py requirements/*.txt | sha256sum | cut -c1-12)
+          echo "key=intents-${{ matrix.lang }}-$w-$t" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: cache
+        if: ${{ !inputs.retrain }}
+        with:
+          path: intents.tar
+          key: ${{ steps.key.outputs.key }}
       - name: Install what the browser runs
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           python -m venv .venv
           .venv/bin/pip install -q --pre --no-index --find-links wheelhouse -r requirements/browser.txt
@@ -91,11 +114,17 @@ jobs:
           # registration on the way makes training many times slower
           .venv/bin/pip uninstall -y ovos-m2v-pipeline model2vec
       - name: Pre-train padatious (${{ matrix.lang }})
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           .venv/bin/python -u tools/build_intent_cache.py intent-cache ${{ matrix.lang }}
           # cache file names hold "skill:intent", and upload-artifact refuses
           # colons in file names, so the cache travels as one tar
           tar -cf intents.tar -C intent-cache .
+      - uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: intents.tar
+          key: ${{ steps.key.outputs.key }}
       - uses: actions/upload-artifact@v4
         with:
           name: intents-${{ matrix.lang }}

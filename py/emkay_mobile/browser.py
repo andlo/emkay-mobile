@@ -11,12 +11,17 @@ threads in a few places; each gets its own treatment, applied by `install()`:
   something joins the thread before that (a join waits for the body).
   Service loops that never return (the skill manager's 30 s rescan, the
   event scheduler) are not started at all.
-* Event.wait / time.sleep: nothing else can run while the one thread waits,
-  so a wait could only ever run out its timeout. Waits return at once and
-  are noted in SKIPPED_WAITS, so a dependency on them can be found.
-* Condition.wait (Queue.get, Queue.join, Future.result): a timed wait is
-  answered at once; an endless one raises where it was made instead of
-  freezing the page (_WaiterLock).
+* Event.wait / time.sleep / Condition.wait / join: with JavaScript Promise
+  Integration (JSPI: Chrome/Edge 137+, Firefox 153+, Safari 27+) a wait
+  really waits. Python
+  is suspended where it waits and the worker goes on receiving the page's
+  messages and running the event loop meanwhile, so a skill waiting for the
+  user's answer (get_response) gets it, as with threads (issue #20).
+  Without JSPI (older browsers; and boot, which runs synchronously) nothing
+  else can run while the one thread waits, so a wait could only ever run
+  out its timeout: waits return at once and are noted in SKIPPED_WAITS, a
+  timed Condition.wait is answered at once and an endless one raises where
+  it was made instead of freezing the page (_WaiterLock).
 
 `adapt_ovos()` holds the few changes that are about OVOS itself rather than
 the platform: a speed-up made for a normal CPU that costs more than it saves
@@ -49,6 +54,60 @@ _ORIGINAL_JOIN = threading.Thread.join
 
 #: Pure-Python stand-ins for native packages without a WebAssembly build.
 _SHIMS = os.path.join(os.path.dirname(__file__), "shims")
+
+
+#: Waits really wait where the call stack allows it (JSPI). EMKAY_INSTANT_WAITS=1
+#: turns that off, for comparing with the old behaviour.
+REAL_WAITS = os.environ.get("EMKAY_INSTANT_WAITS") != "1"
+
+#: How often a real wait looks again at what it waits for, in seconds.
+_POLL = 0.05
+
+
+def can_wait() -> bool:
+    """True when this call stack can really wait: JSPI is there and Python was
+    entered in a way that can be suspended (an event loop callback, or a
+    command the worker calls with callPromising). Boot is not, so boot
+    keeps its instant waits and takes no longer than before."""
+    if not REAL_WAITS:
+        return False
+    try:
+        from pyodide.ffi import can_run_sync
+    except ImportError:   # not in Pyodide (tests, CPython)
+        return False
+    return can_run_sync()
+
+
+def _really_wait(seconds):
+    """Suspend this call stack for `seconds`; the worker runs on meanwhile."""
+    from pyodide.ffi import run_sync
+    run_sync(asyncio.sleep(max(0.0, seconds)))
+
+
+def _wait_until(done, timeout=None) -> bool:
+    """Wait (really) until done() is true or `timeout` seconds have passed;
+    return done(). Polls: the things waited for (an event set by a bus
+    handler, a lock released) are plain Python state."""
+    import time as _t
+    end = None if timeout is None else _t.monotonic() + max(0.0, timeout)
+    while not done():
+        left = None if end is None else end - _t.monotonic()
+        if left is not None and left <= 0:
+            break
+        _really_wait(_POLL if left is None else min(_POLL, left))
+    return bool(done())
+
+
+def hand_over(fn):
+    """Run fn() as its own piece of work on the event loop, the way the
+    listener puts an utterance on the bus and goes back to listening: the
+    caller returns at once while fn() is handled (and may wait, JSPI).
+    Without real waits it runs now, as before."""
+    loop = _loop()
+    if can_wait() and loop is not None:
+        loop.call_soon(fn)
+    else:
+        fn()
 
 
 def _loop():
@@ -103,14 +162,19 @@ def _thread_start(self):
 def _thread_join(self, timeout=None):
     """Thread.join: the body has not run yet (it waits for the event loop),
     and joining means waiting until it has, so it runs now. With a timeout
-    it still runs to the end: there is no other thread to leave it to.
+    it still runs to the end: there is no other thread to leave it to. A
+    body that already runs and is waiting itself (JSPI) is waited for.
     Threads not started by _thread_start (none here) join as usual."""
     body = getattr(self, "_emkay_body", None)
     if body is None:
         return _ORIGINAL_JOIN(self, timeout)
-    if timeout is not None:
-        SKIPPED_WAITS.append((timeout, f"join {_target_name(self)}", _where()))
-    body()
+    if not self._emkay_ran:
+        if timeout is not None:
+            SKIPPED_WAITS.append((timeout, f"join {_target_name(self)}", _where()))
+        body()
+    elif not self._emkay_done and can_wait():
+        # the body is running and waiting somewhere itself (JSPI): wait for it
+        _wait_until(lambda: self._emkay_done, timeout)
 
 
 def _timer_start(self):
@@ -166,15 +230,22 @@ def _note(seconds, what):
 def _event_wait(self, timeout=None):
     """Event.wait: nothing can set the event while this one thread waits for
     it, so the wait is answered with what is true now (a device would have
-    timed out with the same answer)."""
-    if not self._flag:
-        _note(timeout, "Event.wait")
+    timed out with the same answer). With JSPI it really waits (#20)."""
+    if self._flag:
+        return True
+    if can_wait():
+        return _wait_until(lambda: self._flag, timeout)
+    _note(timeout, "Event.wait")
     return self._flag
 
 
 def _sleep(seconds):
     """time.sleep: sleeping holds back every timer and bus message queued
-    behind it, and nothing else runs meanwhile, so it is skipped."""
+    behind it, and nothing else runs meanwhile, so it is skipped. With JSPI
+    it really sleeps, and the rest goes on meanwhile (#20)."""
+    if can_wait():
+        _really_wait(seconds)
+        return
     _note(seconds, "time.sleep")
 
 
@@ -197,6 +268,11 @@ class _WaiterLock:
             self._held = True
             return True
         if not blocking:
+            return False
+        if can_wait():   # JSPI: wait for notify() (another call stack) to release it
+            if _wait_until(lambda: not self._held, None if timeout is None or timeout < 0 else timeout):
+                self._held = True
+                return True
             return False
         if timeout is not None and timeout >= 0:
             # not noted: a caller like Queue.get(timeout=...) asks again in a
@@ -300,6 +376,9 @@ def _scheduler_requests_sent(self):
 QUESTIONS_NOT_WAITED = []   # (skill_id, dialog) get_response could not wait for (issue #20)
 
 
+_ORIGINAL_GET_RESPONSE = None
+
+
 def _get_response(self, dialog="", data=None, validator=None, on_fail=None,
                   num_retries=-1, message=None, wait=True):
     """OVOSSkill.get_response without waiting for the answer.
@@ -316,7 +395,12 @@ def _get_response(self, dialog="", data=None, validator=None, on_fail=None,
     returns when the user says nothing, and every skill handles that (an
     ask_yesno gets None too). The listening that would follow is not started:
     what the user then says goes to ovos-core as a new question.
+
+    Where the call stack can really wait (JSPI), OVOS' own get_response runs
+    unchanged.
     """
+    if can_wait() and _ORIGINAL_GET_RESPONSE is not None:
+        return _ORIGINAL_GET_RESPONSE(self, dialog, data, validator, on_fail, num_retries, message, wait)
     if dialog:
         self.speak_dialog(dialog, data or {}, wait=False)
     QUESTIONS_NOT_WAITED.append((self.skill_id, dialog))
@@ -357,4 +441,7 @@ def adapt_ovos():
     OVOSSkill._send_to_scheduler = _send_to_scheduler
     OVOSSkill._send_scheduler_requests = _send_scheduler_requests
     OVOSSkill._scheduler_requests_sent = _scheduler_requests_sent
+    global _ORIGINAL_GET_RESPONSE
+    if OVOSSkill.get_response is not _get_response:
+        _ORIGINAL_GET_RESPONSE = OVOSSkill.get_response
     OVOSSkill.get_response = _get_response

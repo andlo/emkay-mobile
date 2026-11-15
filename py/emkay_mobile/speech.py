@@ -103,7 +103,8 @@ def heard(pcm16: bytes, sample_rate: int = 16000):
     if not text:
         bus.emit(Message("recognizer_loop:speech.recognition.unknown"))
         return ""
-    boot.utterance(text, lang=lang)
+    from .browser import hand_over
+    hand_over(lambda: boot.utterance(text, lang=lang))   # as the listener: on the bus, back to listening
     return text
 
 
@@ -122,7 +123,8 @@ def heard_text(text: str) -> str:
         bus.emit(Message("recognizer_loop:speech.recognition.unknown"))
         return ""
     print(f"[emkay] stt (browser): {text!r}")
-    boot.utterance(text, lang=lang)
+    from .browser import hand_over
+    hand_over(lambda: boot.utterance(text, lang=lang))   # as the listener: on the bus, back to listening
     return text
 
 

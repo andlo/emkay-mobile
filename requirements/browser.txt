@@ -25,11 +25,13 @@ ovos-gui==1.5.4a1
 # sites do not allow a browser to read them, CORS), so skills that answer
 # offline come as standard:
 ovos-skill-calculator
-ovos-skill-convert
 ovos-skill-geography
 ovos-skill-geometry
 ovos-skill-nato-alphabet
 ovos-skill-morse-code
+# not ovos-skill-convert (yet): in Danish its "{x} i {y}" intent takes
+# "hvilken dag er det i dag", and its 210 unit names make padaos' warm-up
+# the longest of all; installable from the control panel
 # reading aloud (ovos-common-reading-pipeline-plugin) and the providers whose
 # sources a browser may read (they send CORS headers). The fairy tale
 # providers (andersenstories.com, grimmstories.com) do not, so they wait.

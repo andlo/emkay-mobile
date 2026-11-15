@@ -60,8 +60,8 @@ PROBES = [
     # a skill asking back (get_response) gets the answer: Python really waits (JSPI, #20)
     ("noanswer_browser.mjs", {"QUESTIONS": "set an alarm|in five minutes|read the latest post from ovosblog|yes|stop"}, [], [
         r'"in five minutes": said \["Your alarm is set',
-        r'"yes": said \["Here it is',
-        r'"stop": said \[[^\]]*another time',
+        r'"yes": said \["[^"]*from the OpenVoiceOS Blog',     # the skill's dialogs vary
+        r'"stop": said \["[^"]+"\] \| captions \[\]',          # a stop line, not "couldn't help"
     ]),
     ("panel_mobile.mjs", {}, [], [
         r"after tapping Settings: /panel/config",       # the panel's menu by touch
@@ -69,9 +69,8 @@ PROBES = [
     ("noanswer_browser.mjs", {}, [], [
         r'"what time is it": said \["(It|Currently)[^|]*\|[^|]*\| sounds 0',   # answered: no error sound, no "couldn't help"
     ]),
-    ("noanswer_browser.mjs", {"QUESTIONS": "what is 17 times 23|convert 10 miles to kilometers|what is the capital of australia|read my horoscope for leo"}, [], [
+    ("noanswer_browser.mjs", {"QUESTIONS": "what is 17 times 23|what is the capital of australia|read my horoscope for leo"}, [], [
         r'"what is 17 times 23": said \[[^\]]*391',            # the skills Emkay adds
-        r'"convert 10 miles to kilometers": said \[[^\]]*16\.09',
         r'"what is the capital of australia": said \[[^\]]*Canberra',
         r'"read my horoscope for leo": said \["[^"]*Leo',       # common reading
     ]),

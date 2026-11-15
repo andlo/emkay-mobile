@@ -174,30 +174,41 @@ importlib.invalidate_caches()
   return info;
 }
 
+/**
+ * Call a Python function so that it may wait (JSPI, issue #20): entered
+ * with callPromising, a time.sleep or Event.wait in it suspends Python
+ * where it is, and this worker goes on with the page's next messages. Where
+ * the browser has no JSPI (older browsers) it is an ordinary call, and Python's
+ * waits return at once (browser.py).
+ */
+const promising = (fn, ...args) => (fn.callPromising ? fn.callPromising(...args) : fn(...args));
+
 /** Everything the page can ask for. Each returns a value or a Promise. */
 const commands = {
   boot,
   gui_snapshot: () => main.gui_snapshot(),
-  gui_message: ({ raw }) => main.gui_message(raw),
-  say: ({ text }) => main.say(text),
-  record_begin: () => main.record_begin(),
-  wakeword: ({ name }) => main.wakeword(name),
-  heard_text: ({ text }) => main.heard_text(text),
+  gui_message: ({ raw }) => promising(main.gui_message, raw),
+  say: ({ text }) => promising(main.say, text),
+  record_begin: () => promising(main.record_begin),
+  wakeword: ({ name }) => promising(main.wakeword, name),
+  heard_text: ({ text }) => promising(main.heard_text, text),
   sound_bytes: ({ uri }) => main.sound_bytes(uri),
-  heard: ({ pcm, rate }) => main.heard(new Uint8Array(pcm), rate),
-  playback_started: ({ ident, visemes }) => main.playback_started(ident, JSON.stringify(visemes || [])),
-  playback_ended: ({ ident }) => main.playback_ended(ident),
+  heard: ({ pcm, rate }) => promising(main.heard, new Uint8Array(pcm), rate),
+  playback_started: ({ ident, visemes }) => promising(main.playback_started, ident, JSON.stringify(visemes || [])),
+  playback_ended: ({ ident }) => promising(main.playback_ended, ident),
   /** One request for the settings panel (see sw.js and panel.py). */
   panel_request: async ({ method, path, query, headers, body }) =>
     main.panel_request(method, path, query, JSON.stringify(headers), body ? new Uint8Array(body) : null),
   /** Something the page saw for the PHAL plugin (device.js, phal_device.py). */
-  phal_event: ({ event, data }) => main.phal_event(event, JSON.stringify(data ?? {})),
+  phal_event: ({ event, data }) => promising(main.phal_event, event, JSON.stringify(data ?? {})),
   /** Write the IndexedDB-backed folders now (before a reload). */
   sync: () => syncfs(false),
   /** The page's answer to the PHAL plugin's location request. */
-  phal_position: ({ lat, lon, error }) => main.phal_position(lat ?? null, lon ?? null, error ?? null),
+  phal_position: ({ lat, lon, error }) => promising(main.phal_position, lat ?? null, lon ?? null, error ?? null),
   /** Run a line of Python and return its value as text (for debugging). */
   python: ({ code }) => String(py.runPython(code)),
+  /** The same through runPythonAsync: Python that may wait (JSPI, issue #20). */
+  python_async: async ({ code }) => String(await py.runPythonAsync(code)),
 };
 
 self.onmessage = async (event) => {

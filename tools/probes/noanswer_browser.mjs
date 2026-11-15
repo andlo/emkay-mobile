@@ -14,7 +14,7 @@ const ask = process.argv[4] || "flip a coin";
 const port = 9346;
 const chrome = spawn(process.env.CHROME, [
   "--headless=new", `--remote-debugging-port=${port}`, "--user-data-dir=/tmp/emkay-chrome-na",
-  "--window-size=390,844", "--autoplay-policy=no-user-gesture-required", "--no-first-run", "--lang=en-US", "--accept-lang=en-US",
+  "--window-size=390,844", "--autoplay-policy=no-user-gesture-required", "--no-first-run", `--lang=${process.env.PHONE_LANG || "en-US"}`, `--accept-lang=${process.env.PHONE_LANG || "en-US"}`,
   "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const t0 = Date.now();

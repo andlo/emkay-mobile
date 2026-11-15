@@ -267,6 +267,40 @@ def _phone_language():
         layer.store()
 
 
+def _phone_timezone():
+    """OVOS' time zone: the phone's, until a real location is known.
+
+    OVOS' default location is Lawrence, Kansas, and some skills read the
+    time zone once, when they are imported (alerts: "set an alarm in five
+    minutes" said 10:29 a.m. for 17:29 in Copenhagen). The browser PHAL
+    plugin finds the real location later (geolocation, with permission), so
+    the phone's time zone (EMKAY_TZ, worker.js) goes into the assistant
+    layer first, before any skill loads - the stand-in phal.py writes too.
+    A location found later, or one set in the control panel, replaces it.
+    """
+    from ovos_config.models import AssistantConfig
+    tz = os.environ.get("EMKAY_TZ")
+    if not tz:
+        return
+    layer = AssistantConfig()
+    loc = layer.get("location") or {}
+    if loc.get("city"):   # a real location (geolocation or ipgeo): its own time zone
+        return
+    if (loc.get("timezone") or {}).get("code") != tz:
+        zone = {"code": tz, "name": tz.replace("/", " ")}
+        try:   # the offsets too, or the default's (Chicago's) stay merged in
+            import datetime as dt
+            from zoneinfo import ZoneInfo
+            now = dt.datetime.now(ZoneInfo(tz))
+            dst = now.dst() or dt.timedelta(0)
+            zone["offset"] = int((now.utcoffset() - dst).total_seconds() * 1000)
+            zone["dstOffset"] = int(dst.total_seconds() * 1000)
+        except Exception as e:
+            print(f"[emkay] time zone {tz}: {e!r}")
+        layer["location"] = {**loc, "timezone": zone}
+        layer.store()
+
+
 def _warm_models_soon(delay: float = 2.0):
     """Load the intent models a pipeline plugin defers to its first query.
 
@@ -370,7 +404,12 @@ def start(on_message=None, user_config=None) -> dict:
 
     done = int(read_user_config().get("emkay_mobile_defaults") or 0)
     _phone_language()        # first: the defaults below depend on the language
+    _phone_timezone()        # before skills load: some read it once (alerts)
     Configuration.reload()
+    # the default session keeps its own copy of the location from when it
+    # was made (before the step above); make it again, as phal.py does
+    from ovos_bus_client.session import SessionManager
+    SessionManager.reset_default_session()
     write_user_config(_browser_defaults(done))
     Configuration.reload()
     if sys.platform == "emscripten":
