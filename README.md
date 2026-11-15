@@ -201,6 +201,14 @@ forces a workaround:
   waits return at once, and a question back is asked but not waited
   for ([#20](https://github.com/emkay-voice/emkay/issues/20)).
 
+## The skill store
+
+[store.emkay.ai](https://store.emkay.ai) ([emkay-voice/store](https://github.com/emkay-voice/store))
+lists the OVOS skills Emkay can use, by category and in the visitor's language.
+Its "Get" opens `app.emkay.ai/?install=<package>`: Emkay opens the control
+panel's Plugins page searched for that package, and the panel's own Install
+button installs it (Emkay installs nothing on a link's say-so).
+
 ## Versions and releases
 
 app.emkay.ai is always the newest build of `main`. The boot screen and

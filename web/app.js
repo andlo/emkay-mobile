@@ -157,6 +157,7 @@ async function start() {
   }
   $("boot").hidden = true;
   for (const id of ["mic", "keyboard", "menu-button"]) $(id).hidden = false;
+  installFromStore();
 }
 
 const WELCOMED = "emkay-welcomed";
@@ -768,6 +769,32 @@ function languageChanged(lang) {
     el.textContent = t("restart.lang", { lang: want });
     el.onclick = async () => { await call("sync").catch(() => {}); location.reload(); };
   }
+}
+
+/**
+ * A skill handed over by the store (store.emkay.ai "Get" opens
+ * app.emkay.ai/?install=<package>): open the control panel's Plugins page
+ * searched for that package, where the panel's own Install button (and its
+ * own "are you sure?") installs it with ovos-core's installer. Emkay itself
+ * installs nothing on a link's say-so.
+ */
+function installFromStore() {
+  const pkg = params.get("install");
+  if (!pkg || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(pkg)) return;
+  const url = new URL(location);
+  url.searchParams.delete("install");   // a reload must not ask again
+  history.replaceState(null, "", url);
+  const frame = $("panel-frame");
+  frame.addEventListener("load", () => {
+    try {
+      const doc = frame.contentDocument;
+      doc.getElementById("q").value = pkg;
+      doc.getElementById("go").click();
+    } catch (e) {
+      console.warn("[emkay] store install", e);
+    }
+  }, { once: true });
+  openPanel("plugins");
 }
 
 /**
