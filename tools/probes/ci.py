@@ -42,7 +42,7 @@ PROBES = [
     ]),
     ("tx_browser.mjs", {}, [], [
         r"enable: \['ovos-dialog-normalizer-plugin'\]",
-        r"spoken: I've got (three|tre) apples",   # rewritten before TTS
+        r"spoken: I('ve| have) got (three|tre) apples",   # rewritten before TTS
     ]),
     ("backup_browser.mjs", {}, [], [
         r"backup: 200 application/gzip attachment",   # the panel's Backup page
