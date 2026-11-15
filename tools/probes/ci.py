@@ -64,7 +64,7 @@ PROBES = [
         r"after tapping Settings: /panel/config",       # the panel's menu by touch
     ]),
     ("noanswer_browser.mjs", {}, [], [
-        r'"what time is it": said \["(It|Currently) [^|]*\| captions \[\]',   # answered: no "couldn't help"
+        r'"what time is it": said \["(It|Currently)[^|]*\|[^|]*\| sounds 0',   # answered: no error sound, no "couldn't help"
     ]),
     ("noanswer_browser.mjs", {"QUESTIONS": "what is 17 times 23|convert 10 miles to kilometers|what is the capital of australia|read my horoscope for leo"}, [], [
         r'"what is 17 times 23": said \[[^\]]*391',            # the skills Emkay adds
