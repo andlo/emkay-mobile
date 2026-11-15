@@ -159,6 +159,8 @@ addEventListener("click", (e) => {
  * face (visage.css) and the boot screen. Only the values change; the
  * panel's CSS is untouched. "html:root:not([data-emkay])" outranks both of
  * the panel's dark-mode rules, so Emkay's palette holds in every mode.
+ * It also leaves the pages for hardware a phone does not have out of the
+ * panel's menu.
  */
 const THEME = `<style id="emkay-theme">
 html:root:not([data-emkay]) {
@@ -171,4 +173,9 @@ html:root:not([data-emkay]) {
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 34px rgba(0, 0, 0, 0.45);
   --radius: 16px;
 }
+/* pages for hardware a browser tab does not have (Wi-Fi, the Mark 1
+   faceplate, hardware sensors, desktop apps): left out of the menu; the
+   pages themselves still open if asked for */
+nav a[href$="/network"], nav a[href$="/mark1"], nav a[href$="/sensors"],
+nav a[href$="/apps"] { display: none !important; }
 </style>`;

@@ -23,6 +23,7 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
   width: 14px; height: 14px; border-radius: 50%; border: 0; background: #333; z-index: 20; pointer-events: none; }
 .mic.listening { background: #22a7f0; box-shadow: 0 0 0 8px #22a7f055; }
 .mic.thinking { background: #888; }
+.mic.muted { background: #ff5c5c55; }   /* the listener is muted (panel, voice) */
 
 .keyboard { position: fixed; right: 12px; bottom: max(8px, env(safe-area-inset-bottom)); z-index: 30;
   background: none; border: 0; color: #444; font-size: 22px; }

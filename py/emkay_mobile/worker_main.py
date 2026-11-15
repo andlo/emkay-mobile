@@ -81,6 +81,7 @@ def _report_status(bus):
 _STATE_TOPICS = {
     "recognizer_loop:wakeword", "recognizer_loop:record_begin",
     "recognizer_loop:record_end", "mycroft.mic.listen",
+    "mycroft.mic.mute", "mycroft.mic.unmute",
     "ovos.utterance.handled", "mycroft.skill.handler.complete",
     "complete_intent_failure", "ovos.intent.unmatched",
 }

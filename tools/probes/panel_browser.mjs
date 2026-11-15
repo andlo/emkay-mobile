@@ -73,7 +73,9 @@ try {
   log(`fetch /api/status from the panel: ${status}`);
   const post = await js(`document.getElementById("panel-frame").contentWindow.fetch("/api/logout", {method: "POST"}).then((r) => r.status)`);
   log(`POST /api/logout from the panel (same site): ${post}`);
-  for (const api of ["/api/device/volume", "/api/health"]) {
+  const nav = await js(`[...${doc}.querySelectorAll("nav a")].filter((a) => a.offsetParent !== null || getComputedStyle(a).display !== "none").map((a) => a.textContent).join(", ")`);
+  log(`menu entries shown: ${nav}`);
+  for (const api of ["/api/device/mic", "/api/device/capabilities", "/api/device/volume", "/api/health"]) {
     const body = await js(`document.getElementById("panel-frame").contentWindow.fetch("${api}").then((r) => r.text())`);
     log(`GET ${api}: ${body.slice(0, 400)}`);
   }

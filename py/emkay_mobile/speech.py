@@ -65,6 +65,8 @@ def transcribe(pcm16: bytes, sample_rate: int = 16000, lang: str = None) -> str:
 
 def heard(pcm16: bytes, sample_rate: int = 16000):
     """What the listener does after a recording ends."""
+    if _mic_muted:   # muted while recording: hear nothing, as a muted listener
+        return ""
     from . import boot
     bus = boot.bus()
     from ovos_bus_client.message import Message
@@ -186,11 +188,45 @@ def _once(m):
     on_speak(m)
 
 
+#: The listener's mute state, as ovos-dinkum-listener keeps it (not saved:
+#: a device's listener also starts unmuted).
+_mic_muted = False
+
+
+def _mic_status(message):
+    """mycroft.mic.get_status: answer like ovos-dinkum-listener does."""
+    _bus.emit(_as_message(message).response({"muted": _mic_muted}))
+
+
+def _mic_mute(_message=None):
+    """mycroft.mic.mute: stop listening (the page greys its mic out)."""
+    global _mic_muted
+    _mic_muted = True
+
+
+def _mic_unmute(_message=None):
+    """mycroft.mic.unmute: listen again."""
+    global _mic_muted
+    _mic_muted = False
+
+
+def mic_muted() -> bool:
+    return _mic_muted
+
+
+_bus = None
+
+
 def start(bus, post_audio):
-    global _post_audio
+    global _post_audio, _bus
     _post_audio = post_audio
+    _bus = bus
     bus.on("speak", _once)
     bus.on("ovos.utterance.speak", _once)
+    # the listener's microphone controls (ovos-dinkum-listener's messages)
+    bus.on("mycroft.mic.get_status", _mic_status)
+    bus.on("mycroft.mic.mute", _mic_mute)
+    bus.on("mycroft.mic.unmute", _mic_unmute)
 
 
 def _as_message(m):

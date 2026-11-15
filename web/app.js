@@ -181,8 +181,14 @@ async function keepStorage() {
  */
 const mic = {
   busy: false,
+  muted: false,   // the listener was muted (mycroft.mic.mute), e.g. from the panel
+  /** Follow the listener's mute state; a muted mic shows as such. */
+  setMuted(muted) {
+    this.muted = muted;
+    $("mic").classList.toggle("muted", muted);
+  },
   async listen() {
-    if (this.busy || !audioCtx) return;
+    if (this.busy || this.muted || !audioCtx) return;
     this.busy = true;
     $("mic").className = "mic listening";
     call("record_begin");
@@ -193,7 +199,7 @@ const mic = {
     } catch (e) {
       console.warn("[emkay] mic", e);
     } finally {
-      $("mic").className = "mic";
+      $("mic").className = this.muted ? "mic muted" : "mic";
       this.busy = false;
     }
   },
@@ -342,6 +348,8 @@ function locate() {
 /** React to the few bus events the page itself cares about. */
 function onBus(msg) {
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
+  if (msg.type === "mycroft.mic.mute") mic.setMuted(true);
+  if (msg.type === "mycroft.mic.unmute") mic.setMuted(false);
 }
 
 // ---------------------------------------------------------------- typing

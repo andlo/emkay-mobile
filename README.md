@@ -86,8 +86,12 @@ forces a workaround:
   mixer. Location works like ovos-phal-plugin-ipgeo (assistant config
   layer, `ovos.ipgeo.update`), but from the browser's geolocation, since
   ipgeo's `http://` service cannot be called from an https page; until the
-  user allows it, OVOS gets the browser's time zone. Battery and network
-  are next.
+  user allows it, OVOS gets the browser's time zone. It ships as an
+  ordinary installed PHAL plugin (`ovos-phal-plugin-browser`, entry point
+  `opm.phal`), so the control panel sees it. Battery and network are next.
+- **The listener's microphone controls** (`mycroft.mic.get_status`, `mute`,
+  `unmute`) are answered as ovos-dinkum-listener does; a muted mic does not
+  listen.
 - **The control panel has no port to listen on.** The stock FastAPI app is
   built with `create_app(bus=..., connect_bus=False)`, as its own tests do,
   and called as ASGI inside the worker ([`panel.py`](py/emkay_mobile/panel.py));
@@ -97,8 +101,10 @@ forces a workaround:
   one site show it in a frame (it forbids all frames otherwise), and gives
   it Emkay's colours through its own CSS variables. A Service Worker's
   responses cannot set cookies, so the Emkay page keeps the panel's sign-in
-  cookie for it ([`app.js`](web/app.js)). The panel is only reachable on
-  the phone itself: a browser tab cannot listen on the network.
+  cookie for it ([`app.js`](web/app.js)). Pages for hardware a phone does
+  not have (Wi-Fi, Mark 1 faceplate, sensors, desktop apps) are left out of
+  its menu. The panel is only reachable on the phone itself: a browser tab
+  cannot listen on the network.
 - **Config changes are followed over the bus** (`configuration.updated`),
   as the services on a device do; the file watcher thread is left out.
 - **On a phone** the screen fills the display; on a larger screen visage

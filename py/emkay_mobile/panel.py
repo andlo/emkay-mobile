@@ -68,12 +68,28 @@ def _bus_calls_inline():
     deadline.run_with_deadline = run_with_deadline
 
 
+def _browser_capabilities():
+    """Tell the panel which device controls the browser PHAL plugin gives.
+
+    The panel enables a control (e.g. the volume slider) when a plugin it
+    knows provides it is installed (ovos_webui.phal.CAPABILITIES). The
+    browser plugin (phal.py, installed as ovos-phal-plugin-browser) answers
+    the volume messages the same way ovos-PHAL-plugin-alsa does, so it is
+    added to the volume providers.
+    """
+    from ovos_webui import phal as capabilities
+    providers = capabilities.CAPABILITIES["volume"]["plugins"]
+    if "ovos-phal-plugin-browser" not in providers:
+        providers.append("ovos-phal-plugin-browser")
+
+
 def app():
     """The panel's ASGI app, built once on OVOS' bus."""
     global _app
     if _app is None:
         _run_inline()
         _bus_calls_inline()
+        _browser_capabilities()
         from ovos_webui.service import create_app
         from . import boot
         _app = create_app(bus=boot.bus(), host=HOST, connect_bus=False)

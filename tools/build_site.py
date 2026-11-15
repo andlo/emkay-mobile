@@ -96,7 +96,28 @@ def build_bundle(wheelhouse: Path, plan: dict) -> bytes:
                     out.writestr(item.filename, whl.read(item))
         add_tree(out, REPO / "py/emkay_mobile", "emkay_mobile")
         add_tree(out, REPO / "py/ovos_visage", "ovos_visage")
+        add_phal_distribution(out)
     return buf.getvalue()
+
+
+def add_phal_distribution(zf):
+    """Install emkay_mobile.phal as an ordinary PHAL plugin distribution.
+
+    OVOS finds PHAL plugins by their "opm.phal" entry point, and the control
+    panel decides what a device can do from the installed distributions. So
+    the browser's PHAL plugin gets the metadata any pip-installed plugin
+    has: name ovos-phal-plugin-browser, the entry point, no files of its
+    own (the code ships in emkay_mobile).
+    """
+    info = "ovos_phal_plugin_browser-0.1.0.dist-info"
+    zf.writestr(f"{info}/METADATA", "Metadata-Version: 2.1\n"
+                "Name: ovos-phal-plugin-browser\nVersion: 0.1.0\n"
+                "Summary: Emkay Mobile: the browser tab as OVOS hardware (volume, location)\n"
+                "Home-page: https://github.com/andlo/emkay-mobile\nLicense: Apache-2.0\n")
+    zf.writestr(f"{info}/entry_points.txt",
+                "[opm.phal]\novos-phal-plugin-browser = emkay_mobile.phal:BrowserPHAL\n")
+    zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
+    zf.writestr(f"{info}/RECORD", "")
 
 
 def build_intents(cache_dirs):
