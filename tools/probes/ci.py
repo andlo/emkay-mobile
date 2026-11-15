@@ -61,7 +61,9 @@ PROBES = [
     ("noanswer_browser.mjs", {"QUESTIONS": "set an alarm|in five minutes|read the latest post from ovosblog|yes|stop"}, [], [
         r'"in five minutes": said \["Your alarm is set',
         r'"yes": said \["[^"]*from the OpenVoiceOS Blog',     # the skill's dialogs vary
-        r'"stop": said \["[^"]+"\] \| captions \[\]',          # a stop line, not "couldn't help"
+        # a stop line, not "couldn't help"; the line being read when "stop"
+        # came may still be in the list before it
+        r'"stop": said \["(?![^|]*(couldn.t|can.t) help)[^|]*\] \| captions \[\]',
     ]),
     # speech without the wake word, for a minute: Precise must stay quiet
     ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/what_time.wav"), "WAIT_S": "60"}, [], [
