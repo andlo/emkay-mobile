@@ -205,8 +205,9 @@ def _browser_defaults(done: int) -> dict:
         del user["location"]
         _write_whole_user_config(user)
     user_bl = read_user_config().get("intents", {}).get("blacklisted_pipelines", [])
+    new_pipeline = out.get("intents", {}).get("pipeline")   # set above on a defaults step, else None
     out.setdefault("intents", {})["blacklisted_pipelines"] = \
-        _unused_pipelines(user_bl, out["intents"].get("pipeline")) + _m2v_without_model()
+        _unused_pipelines(user_bl, new_pipeline) + _m2v_without_model()
     models = _m2v_models()
     if models:
         # ovos-m2v-pipeline's documented per-language "models" map, pointed at

@@ -57,8 +57,11 @@ PROBES = [
         r'said: \["(It|Currently) ',                        # no tap: the wake word
         r"answer 2; mic: mic, wake listening",                # and back waiting for the next one
     ]),
-    ("busy_browser.mjs", {"QUESTION": "set an alarm", "WATCH_MS": "20000"}, [], [
-        r"asked a question; a browser cannot wait",           # get_response does not hang (#20)
+    # a skill asking back (get_response) gets the answer: Python really waits (JSPI, #20)
+    ("noanswer_browser.mjs", {"QUESTIONS": "set an alarm|in five minutes|read the latest post from ovosblog|yes|stop"}, [], [
+        r'"in five minutes": said \["Your alarm is set',
+        r'"yes": said \["Here it is',
+        r'"stop": said \[[^\]]*another time',
     ]),
     ("panel_mobile.mjs", {}, [], [
         r"after tapping Settings: /panel/config",       # the panel's menu by touch
@@ -100,6 +103,11 @@ def main():
     logs.mkdir(parents=True, exist_ok=True)
     if not os.environ.get("CHROME"):
         sys.exit("set CHROME to a Chromium or Chrome binary")
+    # every probe starts from an empty browser profile, as on CI (a profile
+    # left by an earlier local run keeps its OVOS config and changes results)
+    import glob, shutil
+    for d in glob.glob("/tmp/emkay-chrome*"):
+        shutil.rmtree(d, ignore_errors=True)
     server = serve()
     failed = []
     try:

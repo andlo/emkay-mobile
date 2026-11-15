@@ -92,8 +92,10 @@ try {
   const button = `document.getElementById("restart-lang")`;
   log(`restart button: ${await js(`${button}.hidden ? "hidden" : ${button}.innerText`)}`);
   // the restart it offers: the next boot fetches the new language
-  await js(`${button}.click(); true`);
-  await sleep(4000);
+  await js(`window.__beforeRestart = 1; ${button}.click(); true`);
+  await sleep(20000);
+  // reloaded yet? (the marker is gone once the page reloaded)
+  log(`20 s after restart: reloaded ${await js(`window.__beforeRestart ? "no" : "yes"`)} | boot text: ${await js(`document.getElementById("boot-text")?.innerText`)}`);
   await until(`!!document.getElementById("start") && !document.getElementById("start").hidden`, 400, "OVOS boot after restart");
   log(`after restart: OVOS lang ${await py("from ovos_config import Configuration; Configuration().get('lang')")} | downloaded: ${await downloaded()} | start: ${await js(`document.getElementById("start").innerText`)}`);
   // a question in the new language: one answer, in that language
