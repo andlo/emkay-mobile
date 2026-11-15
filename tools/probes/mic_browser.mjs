@@ -75,6 +75,8 @@ try {
     new MutationObserver(() => { const t = document.getElementById("caption-text").textContent;
       if (window.__captions.at(-1) !== t) window.__captions.push(t); })
       .observe(document.getElementById("caption"), { subtree: true, childList: true, characterData: true });
+    window.__sounds = 0; const origSound = window.emkay.speaker.playSound.bind(window.emkay.speaker);
+    window.emkay.speaker.playSound = (d) => { window.__sounds++; return origSound(d); };
     const orig = window.emkay.speaker.enqueue.bind(window.emkay.speaker);
     window.emkay.speaker.enqueue = (data, meta) => { window.__said.push(meta.utterance); return orig(data, meta); };
     true`);
@@ -94,6 +96,12 @@ try {
   log(`second: heard in ${((Date.now() - t2) / 1000).toFixed(1)}s; captions: ${await js(`JSON.stringify(window.__captions)`)}`);
   await until(`window.__said.length > 0`, 60, "the second answer");
   log(`second said: ${await js(`JSON.stringify(window.__said)`)} (${((Date.now() - t2) / 1000).toFixed(1)}s after the tap)`);
+  // OVOS' sounds: the confirm-listening sound played before each recording,
+  // and a skill's play_sound (the volume change's "blop") plays too
+  const before = await js(`window.__sounds`);
+  await py("from emkay_mobile import boot\nfrom ovos_bus_client.message import Message\nboot.bus().emit(Message('mycroft.volume.set', {'percent': 0.6}))\n'ok'");
+  await sleep(2000);
+  log(`sounds: ${before} while listening, ${await js(`window.__sounds`) - before} after a volume change`);
 } catch (e) {
   log(`FAILED: ${e.message}`);
 } finally {

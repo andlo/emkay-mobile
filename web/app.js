@@ -71,7 +71,7 @@ worker.onmessage = ({ data }) => {
   switch (data.kind) {
     case "status": return bootStatus(data.key, data.progress, data.vars);
     case "gui": for (const s of guiSockets) s.deliver(data.payload); return;
-    case "audio": return speaker.enqueue(data.data, data.payload);
+    case "audio": return data.payload.sound ? speaker.playSound(data.data) : speaker.enqueue(data.data, data.payload);
     case "phal": return onPhal(JSON.parse(data.payload));
     case "bus": return onBus(JSON.parse(data.payload));
   }
@@ -135,6 +135,12 @@ async function start() {
   if (kiosk || phoneScreen.matches) enterKiosk();
   keepAwake();
   wake.start(bootInfo?.wake_word).catch((e) => { wake.state = `error: ${e.message || e}`; });
+  if (bootInfo?.confirm_listening && bootInfo.start_listening_sound) {
+    call("sound_bytes", { uri: bootInfo.start_listening_sound })
+      .then((bytes) => audioCtx.decodeAudioData(bytes.buffer))
+      .then((buf) => { mic.startSound = buf; })
+      .catch((e) => console.warn("[emkay] start listening sound", e));
+  }
   $("boot").hidden = true;
   for (const id of ["mic", "keyboard", "menu-button"]) $(id).hidden = false;
 }
@@ -233,6 +239,8 @@ const mic = {
     this.busy = true;
     $("mic").className = "mic listening";
     caption(t("mic.listening"), 0);
+    // OVOS' confirm-listening sound, before the recording (so it is not in it)
+    if (bootInfo?.confirm_listening && this.startSound) await speaker.playSound(this.startSound);
     call("record_begin");
     try {
       if (sttModule === BROWSER_STT && SpeechRecognitionAPI) {
@@ -249,7 +257,13 @@ const mic = {
         }
         return;
       }
-      const pcm = await record({ level: (v) => caption(t("mic.listening"), v) });
+      const l = bootInfo?.listener || {};
+      const pcm = await record({
+        level: (v) => caption(t("mic.listening"), v),
+        silenceMs: (l.silence_end ?? 0.7) * 1000,
+        maxSeconds: l.recording_timeout ?? 10,
+        noSpeechMs: (l.recording_timeout_with_silence ?? 3) * 1000,
+      });
       $("mic").className = "mic thinking";
       if (!pcm) {
         caption(t("mic.nothing"), null, 4000);
@@ -426,7 +440,7 @@ function caption(text, level = null, hideAfter = 0) {
  * @returns {Promise<Uint8Array|null>} 16 kHz mono 16-bit PCM, or null if
  *   nothing was said
  */
-async function record({ maxSeconds = 10, silenceMs = 1100, noSpeechMs = 6000, level } = {}) {
+async function record({ maxSeconds = 10, silenceMs = 700, noSpeechMs = 3000, level } = {}) {
   const source = audioCtx.createMediaStreamSource(await micStream());
   const proc = audioCtx.createScriptProcessor(4096, 1, 1);
   const chunks = [];
@@ -507,6 +521,22 @@ const speaker = {
     if (this.gain) this.gain.gain.value = level.muted ? 0 : level.volume;
   },
   enqueue(wav, meta) { this.queue.push({ wav, meta }); if (!this.playing) this.next(); },
+  /**
+   * A sound (ovos-audio's play_sound): played at once, over speech, through
+   * the same volume. Resolves when it has finished.
+   */
+  async playSound(data) {
+    if (!audioCtx) return;
+    try {
+      const buf = data instanceof AudioBuffer ? data : await audioCtx.decodeAudioData(data);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(this.gain || audioCtx.destination);
+      await new Promise((ok) => { src.onended = ok; src.start(); });
+    } catch (e) {
+      console.warn("[emkay] sound", e);
+    }
+  },
   async next() {
     const item = this.queue.shift();
     if (!item) { this.playing = false; return; }

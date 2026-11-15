@@ -362,6 +362,14 @@ def start(on_message=None, user_config=None) -> dict:
             "lang": Configuration().get("lang", "en-US"),
             "wake_word": Configuration().get("listener", {}).get("wake_word"),
             "stt_module": Configuration().get("stt", {}).get("module"),
+            # how the page listens, from OVOS' own listener settings
+            # (ovos-dinkum-listener's): end of speech, time limits, the
+            # confirm-listening sound
+            "listener": {k: Configuration().get("listener", {}).get(k) for k in
+                         ("silence_end", "recording_timeout", "recording_timeout_with_silence")},
+            "confirm_listening": Configuration().get("confirm_listening", True),
+            "start_listening_sound": Configuration().get("sounds", {}).get(
+                "start_listening", "snd/start_listening.wav"),
             "skipped_threads": list(browser.STARTED)}
 
 

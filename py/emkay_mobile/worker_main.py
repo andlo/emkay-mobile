@@ -150,6 +150,12 @@ def heard(pcm16, sample_rate=16000) -> str:
     return speech.heard(data, int(sample_rate))
 
 
+def sound_bytes(uri: str):
+    """A sound file's bytes for the page (the confirm-listening sound)."""
+    from pyodide.ffi import to_js
+    return to_js(speech.sound_bytes(uri))
+
+
 def heard_text(text: str) -> str:
     """Text the browser's own speech recognition heard (ovos-stt-plugin-browser):
     on to OVOS as any STT result goes (speech.heard after its STT step)."""

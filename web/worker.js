@@ -183,6 +183,7 @@ const commands = {
   record_begin: () => main.record_begin(),
   wakeword: ({ name }) => main.wakeword(name),
   heard_text: ({ text }) => main.heard_text(text),
+  sound_bytes: ({ uri }) => main.sound_bytes(uri),
   heard: ({ pcm, rate }) => main.heard(new Uint8Array(pcm), rate),
   playback_started: ({ ident, visemes }) => main.playback_started(ident, JSON.stringify(visemes || [])),
   playback_ended: ({ ident }) => main.playback_ended(ident),

@@ -288,12 +288,59 @@ def mic_muted() -> bool:
 _bus = None
 
 
+def resolve_sound(uri: str) -> str:
+    """A sound's file, found as ovos-audio finds it (_resolve_sound_uri):
+    "snd/..." from ovos-audio's own resources, else OVOS' resource lookup."""
+    if uri.startswith("snd/") or uri.startswith("snd\\"):
+        import ovos_audio
+        local = os.path.join(os.path.dirname(ovos_audio.__file__), "res", uri)
+        if os.path.isfile(local):
+            return local
+    from ovos_utils.file_utils import resolve_resource_file
+    found = resolve_resource_file(uri)
+    if not found or not os.path.exists(found):
+        raise FileNotFoundError(f"could not resolve sound uri: {uri}")
+    return found
+
+
+def sound_bytes(uri: str) -> bytes:
+    """The bytes of a sound (the page keeps the confirm-listening sound)."""
+    with open(resolve_sound(uri), "rb") as f:
+        return f.read()
+
+
+def on_play_sound(message):
+    """ovos-audio's instant sound (mycroft.audio.play_sound / ovos.audio.play_sound):
+    a sound file, or hex data, played at once - here by the page, over speech."""
+    import binascii
+    message = _as_message(message)
+    key = ("sound", message.data.get("uri"), message.context.get("ident"))
+    now = time.time()
+    if now - _recent.get(key, 0) < 0.5:   # the bus mirrors the two topic names
+        return
+    _recent[key] = now
+    try:
+        if message.data.get("binary_data"):
+            data = binascii.unhexlify(message.data["binary_data"])
+        else:
+            data = sound_bytes(message.data.get("uri") or "")
+    except Exception as e:
+        print(f"[emkay] play_sound: {e}")
+        return
+    if _post_audio is not None:
+        _post_audio(data, {"sound": True, "uri": message.data.get("uri")})
+    from . import boot
+    boot.bus().emit(message.response({}))
+
+
 def start(bus, post_audio):
     global _post_audio, _bus
     _post_audio = post_audio
     _bus = bus
     bus.on("speak", _once)
     bus.on("ovos.utterance.speak", _once)
+    bus.on("mycroft.audio.play_sound", on_play_sound)
+    bus.on("ovos.audio.play_sound", on_play_sound)
     # the listener's microphone controls (ovos-dinkum-listener's messages)
     bus.on("mycroft.mic.get_status", _mic_status)
     bus.on("mycroft.mic.mute", _mic_mute)
