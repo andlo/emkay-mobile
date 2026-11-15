@@ -531,36 +531,15 @@ $("menu-button").onclick = () => { $("menu").hidden = !$("menu").hidden; };
 $("menu-close").onclick = () => { $("menu").hidden = true; };
 $("menu-kiosk").onclick = () => { kiosk = true; enterKiosk(); $("menu").hidden = true; };
 
-/** Save the settings as a file on the phone (Downloads). */
-$("menu-export").onclick = async () => {
+/** About: who made Emkay and what it stands on; the build date from build.json. */
+$("menu-about").onclick = async () => {
+  $("menu").hidden = true;
+  $("about").hidden = false;
   try {
-    const zip = await call("export_settings");
-    const name = `${t("export.file")}-${new Date().toISOString().slice(0, 10)}.zip`;
-    const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(new Blob([zip], { type: "application/zip" })),
-      download: name,
-    });
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    $("menu-note").textContent = t("export.saved", { name });
-  } catch (e) {
-    $("menu-note").textContent = t("export.failed", { msg: e.message });
-  }
+    const built = (await (await fetch("build.json")).json()).built;
+    $("about-version").textContent = t("about.version", { date: new Date(built).toLocaleDateString() });
+  } catch { $("about-version").textContent = ""; }
 };
-
-/** Restore settings from a file saved earlier, then restart OVOS. */
-$("menu-import").onclick = () => $("import-file").click();
-$("import-file").onchange = async () => {
-  const file = $("import-file").files[0];
-  if (!file) return;
-  try {
-    const data = await file.arrayBuffer();
-    const manifest = await call("import_settings", { data }, [data]);
-    $("menu-note").textContent = t("import.done", { files: manifest.files, date: manifest.exported });
-    setTimeout(() => location.reload(), 1200);
-  } catch (e) {
-    $("menu-note").textContent = t("import.failed", { msg: e.message });
-  }
-};
+$("about-close").onclick = () => { $("about").hidden = true; };
 
 window.emkay = { call, mic, speaker };

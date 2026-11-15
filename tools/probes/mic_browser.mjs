@@ -34,7 +34,7 @@ await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pending = new Map();
 const workerLines = [];
-const INTERESTING = /stt|STT|transcri|heard|utterance|speak|Traceback|Error/i;
+const INTERESTING = /\[emkay\] (stt|tts)|Parsing utterance|match \(|record|Traceback|Error/i;
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); }
@@ -84,11 +84,21 @@ try {
   log(`heard in ${((Date.now() - t) / 1000).toFixed(1)}s; captions: ${await js(`JSON.stringify(window.__captions)`)}`);
   await until(`window.__said.length > 0`, 60, "an answer");
   log(`said: ${await js(`JSON.stringify(window.__said)`)} (${((Date.now() - t) / 1000).toFixed(1)}s after the tap)`);
+  // the same question again: the first one pays for loading models, this
+  // one shows the time an answer usually takes
+  await sleep(8000);
+  await js(`window.__captions = []; window.__said = []; true`);
+  const t2 = Date.now();
+  await js(`window.emkay.mic.listen(); true`);
+  await until(`!window.emkay.mic.busy`, 60, "the second recording");
+  log(`second: heard in ${((Date.now() - t2) / 1000).toFixed(1)}s; captions: ${await js(`JSON.stringify(window.__captions)`)}`);
+  await until(`window.__said.length > 0`, 60, "the second answer");
+  log(`second said: ${await js(`JSON.stringify(window.__said)`)} (${((Date.now() - t2) / 1000).toFixed(1)}s after the tap)`);
 } catch (e) {
   log(`FAILED: ${e.message}`);
 } finally {
   log("worker log:");
-  for (const l of workerLines.slice(-20)) console.log(`  ${l}`);
+  for (const l of workerLines.slice(-40)) console.log(`  ${l}`);
   ws.close();
   chrome.kill();
 }

@@ -192,17 +192,6 @@ const commands = {
   sync: () => syncfs(false),
   /** The page's answer to the PHAL plugin's location request. */
   phal_position: ({ lat, lon, error }) => main.phal_position(lat ?? null, lon ?? null, error ?? null),
-  /** The settings as a zip (Uint8Array), after flushing them to disk. */
-  export_settings: async () => {
-    await syncfs(false);
-    return main.export_settings().toJs();
-  },
-  /** Replace the settings with a zip; the page reloads afterwards. */
-  import_settings: async ({ data }) => {
-    const manifest = JSON.parse(main.import_settings(new Uint8Array(data)));
-    await syncfs(false);
-    return manifest;
-  },
   /** Run a line of Python and return its value as text (for debugging). */
   python: ({ code }) => String(py.runPython(code)),
 };

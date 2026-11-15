@@ -94,3 +94,10 @@ html.fullscreen .screen { left: 0; top: 0; border-radius: 0; }
 .caption-level { margin: 6px auto 0; width: 140px; height: 4px; border-radius: 2px; background: #223; overflow: hidden; }
 .caption-level[hidden] { display: none; }
 .caption-level div { height: 100%; width: 0; background: #22a7f0; transition: width .08s; }
+
+/* about (app.js) */
+.about-card { text-align: center; }
+.about-icon { width: 72px; height: 72px; margin: 4px auto 0; display: block; }
+.credits { text-align: left; padding-left: 18px; margin: 8px 0; font-size: 14px; line-height: 1.5; }
+.credits li { margin: 4px 0; }
+.about-card a { color: #22a7f0; }

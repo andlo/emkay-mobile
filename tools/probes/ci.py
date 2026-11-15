@@ -31,7 +31,7 @@ PROBES = [
     ("lang_browser.mjs", {"PHONE_LANG": "da-DK"}, [], [
         r"OVOS lang: da-DK",                    # the phone's language
         r"downloaded: \['intents-da-DK', 'm2v-da'\]",   # and only that one
-        r"menu: Save setup on the phone",       # texts follow the panel
+        r"menu: OpenVoiceOS settings",          # texts follow the panel
         r"restart button: Restart to use en-US",
         r"after restart: .*intents-en-US",
     ]),
@@ -43,6 +43,10 @@ PROBES = [
     ("tx_browser.mjs", {}, [], [
         r"enable: \['ovos-dialog-normalizer-plugin'\]",
         r"spoken: I've got (three|tre) apples",   # rewritten before TTS
+    ]),
+    ("backup_browser.mjs", {}, [], [
+        r"backup: 200 application/gzip attachment",   # the panel's Backup page
+        r"after restore: unit imperial",
     ]),
     ("phal_browser.mjs", {}, [], [
         r'internet_check: \[\{"internet_connected": true',

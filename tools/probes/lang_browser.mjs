@@ -34,7 +34,7 @@ await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pending = new Map();
 const workerLines = [];
-const INTERESTING = /\(pip\)|rescan|ATTEMPTING TO LOAD|loaded successfully|padaos compile|train|skill\.handler\.start|"speak"|utterance|Traceback|Error|ovos\.pip/i;
+const INTERESTING = /utterance|speak|match|lang|Traceback|Error/i;
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); }
@@ -96,11 +96,20 @@ try {
   await sleep(4000);
   await until(`!!document.getElementById("start") && !document.getElementById("start").hidden`, 400, "OVOS boot after restart");
   log(`after restart: OVOS lang ${await py("from ovos_config import Configuration; Configuration().get('lang')")} | downloaded: ${await downloaded()} | start: ${await js(`document.getElementById("start").innerText`)}`);
+  // a question in the new language: one answer, in that language
+  await js(`document.getElementById("start").click(); true`);
+  await sleep(2000);
+  log(`session lang: ${await py("from ovos_bus_client.session import SessionManager; SessionManager.default_session.lang")} | secondary: ${await py("from ovos_config import Configuration; str(Configuration().get('secondary_langs'))")}`);
+  await js(`window.__said = []; const orig = window.emkay.speaker.enqueue.bind(window.emkay.speaker);
+    window.emkay.speaker.enqueue = (data, meta) => { window.__said.push(meta.utterance); return orig(data, meta); }; true`);
+  await js(`window.emkay.call("say", {text: "what time is it"}); true`);
+  await sleep(25000);
+  log(`answers: ${await js(`JSON.stringify(window.__said)`)}`);
 } catch (e) {
   log(`FAILED: ${e.message}`);
 } finally {
   log("worker log:");
-  for (const l of workerLines.slice(-15)) console.log(`  ${l}`);
+  for (const l of workerLines.slice(-40)) console.log(`  ${l}`);
   ws.close();
   chrome.kill();
 }

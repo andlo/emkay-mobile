@@ -18,7 +18,7 @@ answers through the `js_post(kind, payload, data=None)` callable given to
 import json
 import time
 
-from . import boot, browser, gui, panel, phal, settings, speech
+from . import boot, browser, gui, panel, phal, speech
 
 _js_post = None   # set by start(): post(kind, payload[, data])
 
@@ -177,21 +177,6 @@ async def panel_request(method, path, query, headers_json, body):
     status, headers, data = await panel.request(method, path, query, headers_json, body)
     return to_js({"status": status, "headers": json.loads(headers), "body": to_js(data)},
                  dict_converter=js.Object.fromEntries)
-
-
-def export_settings():
-    """The settings folder as zip bytes (a JS Uint8Array), see settings.py."""
-    from pyodide.ffi import to_js
-    return to_js(settings.export_zip())
-
-
-def import_settings(data) -> str:
-    """Replace the settings with an export; returns its manifest as JSON.
-
-    The page reloads afterwards, so OVOS boots with the restored settings.
-    """
-    raw = data.to_bytes() if hasattr(data, "to_bytes") else bytes(data)
-    return json.dumps(settings.import_zip(raw))
 
 
 def skipped_threads() -> str:

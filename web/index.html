@@ -56,20 +56,44 @@
   <button id="keyboard" class="keyboard" data-i18n-aria="keyboard" hidden>⌨</button>
   <button id="menu-button" class="menu-button" data-i18n-aria="menu" hidden>⚙</button>
 
-  <!-- the menu: settings that stay on the phone, kiosk mode -->
+  <!-- the menu: OVOS' own settings (backups too: the panel's Backup page),
+       full screen, about -->
   <div id="menu" class="menu" hidden>
     <div class="menu-card">
       <h2>Emkay</h2>
       <p id="storage-state" class="small"></p>
-      <button id="menu-export" data-i18n="menu.export"></button>
-      <button id="menu-import" data-i18n="menu.import"></button>
-      <input id="import-file" type="file" accept=".zip,application/zip" hidden>
       <button id="menu-panel" data-i18n="menu.panel"></button>
       <button id="menu-kiosk" data-i18n="menu.kiosk"></button>
-      <p id="menu-note" class="small"></p>
+      <button id="menu-about" data-i18n="menu.about"></button>
       <p class="small"><span data-i18n="about"></span> ·
         <a href="https://github.com/emkay-voice/emkay" target="_blank" rel="noopener" data-i18n="source"></a></p>
       <button id="menu-close" class="secondary" data-i18n="close"></button>
+    </div>
+  </div>
+
+  <!-- about: who made it, and what it stands on -->
+  <div id="about" class="menu" hidden>
+    <div class="menu-card about-card">
+      <img src="icon.svg" class="about-icon" alt="">
+      <h2>Emkay</h2>
+      <p><span data-i18n="about.by"></span>
+        <a href="https://github.com/andlo" target="_blank" rel="noopener">Andreas Lorensen</a></p>
+      <p class="small" data-i18n="about.thanks"></p>
+      <ul class="credits">
+        <li><a href="https://openvoiceos.org" target="_blank" rel="noopener">OpenVoiceOS</a>
+          – <span data-i18n="about.ovos"></span></li>
+        <li><a href="https://github.com/MycroftAI" target="_blank" rel="noopener">Mycroft AI</a>
+          – <span data-i18n="about.mycroft"></span></li>
+        <li><a href="https://github.com/OscillateLabsLLC/ovos-visage" target="_blank" rel="noopener">ovos-visage</a>
+          (Mike, Oscillate Labs) – <span data-i18n="about.visage"></span></li>
+        <li><a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a>
+          – <span data-i18n="about.pyodide"></span></li>
+      </ul>
+      <p class="small" data-i18n="about.others"></p>
+      <p class="small"><span id="about-version"></span> ·
+        <a href="https://emkay.ai" target="_blank" rel="noopener">emkay.ai</a> ·
+        <a href="https://github.com/emkay-voice/emkay" target="_blank" rel="noopener" data-i18n="source"></a></p>
+      <button id="about-close" class="secondary" data-i18n="close"></button>
     </div>
   </div>
 
