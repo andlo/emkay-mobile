@@ -6,15 +6,16 @@ client. A browser cannot listen on a port, so the same app is built the way
 its own tests build it - `create_app(bus=..., connect_bus=False)`, with
 OVOS' in-process bus - and called directly as an ASGI app:
 
-    page/iframe --fetch--> sw.js (Service Worker) --BroadcastChannel-->
+    panel iframe --fetch--> sw.js (Service Worker) --MessageChannel-->
     app.js --postMessage--> worker.js --> request() below --> the panel
 
-Nothing in the panel is changed. Its own security model applies as on a
-device bound to loopback: the Host is 127.0.0.1, so pages are open and
-anything privileged (installing, device controls) needs the access token
-set on its Settings page; Origin/Sec-Fetch-Site are passed through as the
-Service Worker saw them, so its cross-site check still refuses a request
-another site sent.
+Nothing in the panel's pages or routes is changed; only its thread-based
+helpers run in place (_run_inline, _bus_calls_inline). Its own security
+model applies as on a device bound to loopback: the Host is 127.0.0.1, so
+pages are open and anything privileged (installing, device controls) needs the access token
+set on its Settings page; the Service Worker sets Sec-Fetch-Site from
+where a request really came from, so its cross-site check still refuses
+a request another site sent.
 """
 import json
 
@@ -39,11 +40,40 @@ def _run_inline():
     anyio.to_thread.run_sync = run_sync
 
 
+def _bus_calls_inline():
+    """The panel guards every bus call and every plugin call with a worker
+    thread and a deadline (ovos_webui.buswait.call, deadline.
+    run_with_deadline): start the thread, wait on an Event with a timeout,
+    give up if it is not done. With one thread the worker only runs after
+    the wait has already given up, so every bus question came back "no
+    answer". Here they run in place, with the same results and errors.
+    There is nothing a deadline could cancel in one thread, and FakeBus
+    answers synchronously, so nothing waits. Done before ovos_webui.service
+    is imported, since some modules import these functions by name.
+    """
+    from ovos_utils.log import LOG
+    from ovos_webui import buswait, deadline
+
+    def call(func, timeout=buswait.DEFAULT_TIMEOUT, default=None):
+        try:
+            return func()
+        except Exception as err:  # as buswait.call: report, answer default
+            LOG.warning(f"a message bus call failed: {err}")
+            return default
+
+    def run_with_deadline(func, timeout, what="the plugin"):
+        return func()   # errors propagate, as in the original
+
+    buswait.call = call
+    deadline.run_with_deadline = run_with_deadline
+
+
 def app():
     """The panel's ASGI app, built once on OVOS' bus."""
     global _app
     if _app is None:
         _run_inline()
+        _bus_calls_inline()
         from ovos_webui.service import create_app
         from . import boot
         _app = create_app(bus=boot.bus(), host=HOST, connect_bus=False)
