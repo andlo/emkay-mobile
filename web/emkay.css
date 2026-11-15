@@ -50,6 +50,9 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .menu-card button { font-size: 16px; padding: 14px; border-radius: 14px; border: 0;
   background: #22a7f0; color: #fff; }
 .menu-card button.secondary { background: #222; }
+/* a menu entry that leaves Emkay (the skill store): a button that is a link */
+.menu-card .menu-link { font-size: 16px; padding: 14px; border-radius: 14px; background: #22a7f0;
+  color: #fff; text-decoration: none; text-align: center; }
 .menu-card .small { margin: 0; font-size: 12px; color: #789; text-align: center; }
 .menu-card a { color: #8ab; }
 
