@@ -35,6 +35,7 @@ STARTED = []
 #: Thread bodies that never return (service loops). They are not run at all;
 #: what they poll for is either not needed in a browser or driven by the page.
 FOREVER_LOOPS = (
+    "tqdm._monitor.TMonitor.run",   # progress bar monitor (m2v's model load starts it)
     "ovos_core.skill_manager.SkillManager.run",
     "ovos_bus_client.util.scheduler.EventScheduler.run",
     "ovos_utils.events.EventScheduler.run",
@@ -237,6 +238,11 @@ def install():
         sys.path.insert(0, USER_SITE)
     threading.Thread.start = _thread_start
     threading.Thread.join = _thread_join
+    try:   # tqdm's own switch for its monitor thread (a loop that never ends here)
+        import tqdm
+        tqdm.tqdm.monitor_interval = 0
+    except ImportError:
+        pass
     threading.Timer.start = _timer_start
     threading.Timer.cancel = _timer_cancel
     _cf.ThreadPoolExecutor.submit = _submit
