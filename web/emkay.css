@@ -15,8 +15,14 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 @keyframes spin { to { transform: rotate(360deg); } }
 .bar { width: 220px; height: 4px; background: #222; border-radius: 2px; overflow: hidden; }
 .bar div { height: 100%; width: 0; background: #22a7f0; transition: width .2s; }
-#start { margin-top: 18px; font-size: 18px; padding: 16px 32px; border-radius: 40px; border: 0;
+#start, #first-setup { margin-top: 18px; font-size: 18px; padding: 16px 32px; border-radius: 40px; border: 0;
   background: #22a7f0; color: #fff; }
+/* first start: "Sæt op" is the main button, starting on the defaults the quiet one */
+.first { display: flex; flex-direction: column; align-items: center; max-width: 300px;
+  margin-top: 22px; text-align: center; }
+.first[hidden] { display: none; }
+.first p { font-size: 14px; line-height: 1.45; }
+#start.quiet { margin-top: 12px; background: transparent; color: #9cd3f5; border: 1px solid #22a7f0; }
 
 /* the whole screen is the talk button; this is only the hint in the corner */
 .mic { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);

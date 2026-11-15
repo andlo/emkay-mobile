@@ -117,6 +117,7 @@ let audioCtx = null;
  */
 async function start() {
   $("start").hidden = true;
+  $("first").hidden = true;
   audioCtx = new AudioContext();
   speaker.attach(audioCtx);
   await audioCtx.resume();
@@ -124,6 +125,29 @@ async function start() {
   keepAwake();
   $("boot").hidden = true;
   for (const id of ["mic", "keyboard", "menu-button"]) $(id).hidden = false;
+}
+
+const WELCOMED = "emkay-welcomed";
+
+/**
+ * The first time Emkay starts in this browser, offer the control panel's
+ * own setup wizard (/setup) next to starting on the defaults. Either
+ * choice is remembered; the wizard stays in the ⚙ menu.
+ */
+function offerSetup() {
+  let first = false;
+  try { first = !localStorage.getItem(WELCOMED); } catch {}
+  const remember = () => { try { localStorage.setItem(WELCOMED, "1"); } catch {} };
+  $("start").onclick = () => { remember(); start(); };
+  if (!first) return;
+  $("start").textContent = "Start med standard";
+  $("start").classList.add("quiet");
+  $("first").hidden = false;
+  $("first-setup").onclick = async () => {
+    remember();
+    await start();
+    openPanel("setup");
+  };
 }
 
 /** Full screen and portrait, like a device on the shelf. */
@@ -166,8 +190,8 @@ async function keepStorage() {
     ovosReady();
     await import("./visage/visage.js");
     bootStatus(`${info.skills.length} skills klar`, 1);
+    offerSetup();
     $("start").hidden = false;
-    $("start").onclick = start;
   } catch (e) {
     bootStatus(`Fejl: ${e.message}`);
     console.error(e);
@@ -420,17 +444,21 @@ if ("serviceWorker" in navigator) {
   };
 }
 
-/** Show the OpenVoiceOS settings over the face. */
-function openPanel() {
+/**
+ * Show the OpenVoiceOS settings over the face.
+ * @param {string} page  a panel page to open, e.g. "setup"; "" keeps the
+ *   page that was open last (the dashboard the first time)
+ */
+function openPanel(page = "") {
   $("menu").hidden = true;
   const frame = $("panel-frame");
-  if (!frame.getAttribute("src")) frame.src = "panel/";
+  if (page || !frame.getAttribute("src")) frame.src = `panel/${page}`;
   $("panel").hidden = false;
 }
 $("panel-close").onclick = () => { $("panel").hidden = true; };
 
 // ------------------------------------------------------------------ menu
-$("menu-panel").onclick = openPanel;
+$("menu-panel").onclick = () => openPanel();
 $("menu-button").onclick = () => { $("menu").hidden = !$("menu").hidden; };
 $("menu-close").onclick = () => { $("menu").hidden = true; };
 $("menu-kiosk").onclick = () => { kiosk = true; enterKiosk(); $("menu").hidden = true; };
