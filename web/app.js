@@ -360,6 +360,39 @@ $("type").onsubmit = (e) => {
 // The stock ovos-control-panel runs in the worker (py/emkay_mobile/panel.py).
 // sw.js catches the requests its pages make and hands each one here, with
 // a port for the answer; the worker's panel app produces the response.
+
+/**
+ * The panel's cookies. Once an access token is set, the panel signs a
+ * browser in with a cookie (ovos_webui_token). A response a Service Worker
+ * builds may not set cookies (the browser drops Set-Cookie), so this page
+ * keeps them, as a browser would, and sends them with each panel request.
+ * They live as long as this page (and OVOS) does; after a reload the panel
+ * asks for the token again.
+ */
+const panelCookies = new Map();
+
+/** The request's headers with the kept cookies. */
+function withCookies(headers) {
+  const out = headers.filter(([k]) => k.toLowerCase() !== "cookie");
+  if (panelCookies.size) out.push(["cookie", [...panelCookies].map(([k, v]) => `${k}=${v}`).join("; ")]);
+  return out;
+}
+
+/** Keep, replace or drop cookies from a response's Set-Cookie headers. */
+function keepCookies(headers) {
+  for (const [k, v] of headers) {
+    if (k.toLowerCase() !== "set-cookie") continue;
+    const [pair, ...attrs] = v.split(";");
+    const eq = pair.indexOf("=");
+    const name = pair.slice(0, eq).trim();
+    const value = pair.slice(eq + 1).trim().replace(/^"|"$/g, "");
+    const expired = attrs.some((a) => /^\s*max-age\s*=\s*(0|-\d+)\s*$/i.test(a))
+      || attrs.some((a) => { const m = a.match(/^\s*expires\s*=(.*)$/i); return m && Date.parse(m[1]) < Date.now(); });
+    if (!value || expired) panelCookies.delete(name);
+    else panelCookies.set(name, value);
+  }
+}
+
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch((e) => console.warn("[emkay] service worker", e));
   navigator.serviceWorker.onmessage = async (event) => {
@@ -368,7 +401,9 @@ if ("serviceWorker" in navigator) {
     if (!req || !port) return;
     try {
       await ready;   // OVOS (and so the panel) is up
+      req.headers = withCookies(req.headers);
       const res = await call("panel_request", req, req.body ? [req.body] : []);
+      keepCookies(res.headers);
       port.postMessage(res, [res.body.buffer]);
     } catch (e) {
       const body = new TextEncoder().encode(String(e));

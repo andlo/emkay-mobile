@@ -77,6 +77,22 @@ try {
     const body = await js(`document.getElementById("panel-frame").contentWindow.fetch("${api}").then((r) => r.text())`);
     log(`GET ${api}: ${body.slice(0, 400)}`);
   }
+  log(`panel accent colour: ${await js(`getComputedStyle(${doc}.documentElement).getPropertyValue("--accent")`)}`);
+
+  if (process.env.EMKAY_TOKEN_TEST) {
+    // the access-token round trip: set one, sign out, be refused, sign in
+    const w = `document.getElementById("panel-frame").contentWindow`;
+    const req = (method, path, body) => js(`${w}.fetch("${path}", {method: "${method}",
+      headers: {"content-type": "application/json"}${body ? `, body: JSON.stringify(${JSON.stringify(body)})` : ""}})
+      .then(async (r) => r.status + " " + (await r.text()).slice(0, 80))`);
+    log(`set token: ${await req("POST", "/api/auth/token", { new: "emkay-test-token" })}`);
+    log(`still signed in, GET /api/device/volume: ${await req("GET", "/api/device/volume")}`);
+    log(`sign out: ${await req("POST", "/api/logout")}`);
+    log(`signed out, GET /api/device/volume: ${await req("GET", "/api/device/volume")}`);
+    log(`sign in with a wrong token: ${await req("POST", "/api/login", { token: "wrong-token-123" })}`);
+    log(`sign in: ${await req("POST", "/api/login", { token: "emkay-test-token" })}`);
+    log(`signed in, GET /api/device/volume: ${await req("GET", "/api/device/volume")}`);
+  }
 
   const png = await send("Page.captureScreenshot", { format: "png" });
   fs.writeFileSync(shot, Buffer.from(png.result.data, "base64"));

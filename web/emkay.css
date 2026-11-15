@@ -58,7 +58,7 @@ html.fullscreen .device { width: var(--screen-w); height: var(--screen-h); }
 html.fullscreen .screen { left: 0; top: 0; border-radius: 0; }
 
 /* the OpenVoiceOS settings (ovos-control-panel) over the whole screen */
-.panel { position: fixed; inset: 0; z-index: 70; background: #fff; }
+.panel { position: fixed; inset: 0; z-index: 70; background: #05070a; }
 .panel[hidden] { display: none; }
 .panel iframe { width: 100%; height: 100%; border: 0; display: block; }
 .panel-close { position: fixed; right: 10px; top: max(8px, env(safe-area-inset-top)); z-index: 71;

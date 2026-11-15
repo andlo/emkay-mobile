@@ -93,8 +93,12 @@ forces a workaround:
   and called as ASGI inside the worker ([`panel.py`](py/emkay_mobile/panel.py));
   a Service Worker ([`sw.js`](web/sw.js)) is its network. It prefixes the
   panel's absolute links when the site lives below a path, sets
-  `Sec-Fetch-Site` honestly for the panel's cross-site check, and lets this
-  one site show it in a frame (it forbids all frames otherwise).
+  `Sec-Fetch-Site` honestly for the panel's cross-site check, lets this
+  one site show it in a frame (it forbids all frames otherwise), and gives
+  it Emkay's colours through its own CSS variables. A Service Worker's
+  responses cannot set cookies, so the Emkay page keeps the panel's sign-in
+  cookie for it ([`app.js`](web/app.js)). The panel is only reachable on
+  the phone itself: a browser tab cannot listen on the network.
 - **Config changes are followed over the bus** (`configuration.updated`),
   as the services on a device do; the file watcher thread is left out.
 - **On a phone** the screen fills the display; on a larger screen visage
