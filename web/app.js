@@ -764,6 +764,12 @@ function languageChanged(lang) {
  */
 function openPanel(page = "") {
   $("menu").hidden = true;
+  // the panel's own Simple view (only the everyday pages) to begin with, on
+  // a phone; its header toggle shows all pages and is remembered from then
+  // on (localStorage "ovos-simple" is the panel's own setting, same origin)
+  try {
+    if (localStorage.getItem("ovos-simple") === null) localStorage.setItem("ovos-simple", "1");
+  } catch {}
   const frame = $("panel-frame");
   if (page || !frame.getAttribute("src")) frame.src = `panel/${page}`;
   $("panel").hidden = false;
@@ -775,6 +781,32 @@ $("menu-panel").onclick = () => openPanel();
 $("menu-button").onclick = () => { $("menu").hidden = !$("menu").hidden; };
 $("menu-close").onclick = () => { $("menu").hidden = true; };
 $("menu-kiosk").onclick = () => { kiosk = true; enterKiosk(); $("menu").hidden = true; };
+
+// ------------------------------------------------------- install as an app
+// Chrome, Edge and Android offer installing a site with a manifest
+// (manifest.webmanifest: full screen, the face's icon) and fire
+// beforeinstallprompt; the menu then has "Install as app", which asks the
+// browser to show its own install dialog. iOS has no such event: Safari
+// installs from Share → "Add to Home Screen", so the menu says that. Once
+// Emkay runs as an installed app, neither shows.
+const installed = () => matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches
+  || navigator.standalone === true;
+let installPrompt = null;
+addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();          // no mini-infobar: the menu offers it
+  installPrompt = e;
+  $("menu-install").hidden = installed();
+});
+addEventListener("appinstalled", () => { installPrompt = null; $("menu-install").hidden = true; });
+$("menu-install").onclick = async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => {});
+  installPrompt = null;
+  $("menu-install").hidden = true;
+  $("menu").hidden = true;
+};
+if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !installed()) $("install-ios").hidden = false;
 
 /** About: who made Emkay and what it stands on; the build date from build.json. */
 $("menu-about").onclick = async () => {

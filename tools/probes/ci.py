@@ -74,6 +74,11 @@ PROBES = [
         r'"what is the capital of australia": said \[[^\]]*Canberra',
         r'"read my horoscope for leo": said \["[^"]*Leo',       # common reading
     ]),
+    ("installable_browser.mjs", {}, [], [
+        r"manifest errors: none",
+        r"installability errors: none",                     # "Install as app" can be offered
+        r"panel simple view: 1 \| nav items: [1-9] ",       # the panel opens in its Simple view
+    ]),
     ("phal_browser.mjs", {}, [], [
         r'internet_check: \[\{"internet_connected": true',
         r'camera\.get: .*"b64_frame"',
