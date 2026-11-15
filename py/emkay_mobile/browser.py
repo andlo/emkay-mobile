@@ -7,9 +7,10 @@ threads in a few places; each gets its own treatment, applied by `install()`:
   call at once and hand back an already-finished Future.
 * threading.Timer (timeouts, delayed speech, skill schedules): schedule the
   callback on the browser event loop with loop.call_later.
-* threading.Thread: the body runs later on the event loop. Service loops
-  that never return (the skill manager's 30 s rescan, the event scheduler)
-  are not started at all.
+* threading.Thread: the body runs later on the event loop, or at once when
+  something joins the thread before that (a join waits for the body).
+  Service loops that never return (the skill manager's 30 s rescan, the
+  event scheduler) are not started at all.
 * Event.wait / time.sleep: nothing else can run while the one thread waits,
   so a wait could only ever run out its timeout. Waits return at once and
   are noted in SKIPPED_WAITS, so a dependency on them can be found.
@@ -41,6 +42,9 @@ FOREVER_LOOPS = (
 
 #: (seconds asked, what, where) for every wait that was answered at once.
 SKIPPED_WAITS = []
+
+#: threading.Thread.join as Python has it, for threads this module did not start.
+_ORIGINAL_JOIN = threading.Thread.join
 
 #: Pure-Python stand-ins for native packages without a WebAssembly build.
 _SHIMS = os.path.join(os.path.dirname(__file__), "shims")
@@ -77,6 +81,9 @@ def _thread_start(self):
     loop = _loop()
 
     def body():
+        if self._emkay_ran:   # already run by a join()
+            return
+        self._emkay_ran = True
         try:
             self.run()
         except Exception as e:  # a failing worker must not stop the page
@@ -85,9 +92,24 @@ def _thread_start(self):
             self._emkay_done = True
 
     self._emkay_done = False
+    self._emkay_ran = False
+    self._emkay_body = body
     self.is_alive = lambda: not self._emkay_done
     if loop is not None:
         loop.call_soon(body)
+
+
+def _thread_join(self, timeout=None):
+    """Thread.join: the body has not run yet (it waits for the event loop),
+    and joining means waiting until it has, so it runs now. With a timeout
+    it still runs to the end: there is no other thread to leave it to.
+    Threads not started by _thread_start (none here) join as usual."""
+    body = getattr(self, "_emkay_body", None)
+    if body is None:
+        return _ORIGINAL_JOIN(self, timeout)
+    if timeout is not None:
+        SKIPPED_WAITS.append((timeout, f"join {_target_name(self)}", _where()))
+    body()
 
 
 def _timer_start(self):
@@ -214,6 +236,7 @@ def install():
     if USER_SITE not in sys.path:
         sys.path.insert(0, USER_SITE)
     threading.Thread.start = _thread_start
+    threading.Thread.join = _thread_join
     threading.Timer.start = _timer_start
     threading.Timer.cancel = _timer_cancel
     _cf.ThreadPoolExecutor.submit = _submit

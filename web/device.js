@@ -4,7 +4,8 @@
 // The plugin speaks OVOS' bus contracts; this side reads the browser's APIs
 // and reports changes, and carries out what the plugin asks for:
 //   reports  online/offline, sensor readings (battery, network, screen,
-//            motion, light), whether there is a camera, pictures
+//            motion, position, compass, light, storage, memory, CPU),
+//            whether there is a camera, pictures
 //   requests reload (reboot / restart services), off (shutdown),
 //            forget_welcome (factory reset), camera_check / _open / _close,
 //            picture
@@ -15,8 +16,17 @@ import { t } from "./i18n.js";
 let call = null;               // app.js' call() into the worker
 const event = (name, data) => call("phal_event", { event: name, data }).catch(() => {});
 
-/** One sensor reading, in ovos-PHAL-sensors' terms (see phal_device.py). */
+const lastSent = new Map();   // "device_name" -> last state sent
+
+/**
+ * One sensor reading, in ovos-PHAL-sensors' terms (see phal_device.py).
+ * Only a changed state is sent: motion and orientation events come many
+ * times a second, and the worker should hear about changes, not samples.
+ */
 function sensor(device, name, state, attributes = {}, binary = false) {
+  const key = `${device}_${name}`;
+  if (lastSent.get(key) === state) return;
+  lastSent.set(key, state);
   event("sensor", { device, name, state, attributes, binary });
 }
 
@@ -88,6 +98,61 @@ function watchMotion() {
     update(performance.now());
   });
   setInterval(() => moving !== null && update(performance.now()), 2000);
+}
+
+/**
+ * How the phone lies, from its orientation: "face_up" (flat, screen up),
+ * "face_down", "upright" (held or standing) or "tilted" - e.g. for a rule
+ * that mutes the assistant while the phone lies face down.
+ */
+export function position(beta, gamma) {
+  if (Math.abs(beta) > 155 && Math.abs(gamma) < 25) return "face_down";
+  if (Math.abs(beta) < 25 && Math.abs(gamma) < 25) return "face_up";
+  if (Math.abs(beta) > 55 && Math.abs(beta) < 125) return "upright";
+  return "tilted";
+}
+
+const POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+/** Position, and the compass direction where the browser knows north. */
+function watchOrientation() {
+  if (!("DeviceOrientationEvent" in self)) return;
+  addEventListener("deviceorientation", (e) => {
+    if (e.beta == null || e.gamma == null) return;
+    sensor("phone", "position", position(e.beta, e.gamma), { icon: "mdi:phone-rotate-landscape" });
+  });
+  // alpha is a compass heading only in the "absolute" event (Chrome on
+  // Android); Safari gives webkitCompassHeading on the ordinary one
+  const heading = (e) => {
+    const deg = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null);
+    if (deg == null) return;
+    sensor("compass", "direction", POINTS[Math.round(deg / 45) % 8], { icon: "mdi:compass" });
+  };
+  addEventListener("deviceorientationabsolute", heading);
+  addEventListener("deviceorientation", (e) => e.webkitCompassHeading != null && heading(e));
+}
+
+/** Storage the site uses and may use, every few minutes. */
+async function watchStorage() {
+  if (!navigator.storage?.estimate) return;
+  const report = async () => {
+    const { usage, quota } = await navigator.storage.estimate().catch(() => ({}));
+    if (usage == null) return;
+    sensor("storage", "used", Math.round(usage / 1e6),
+      { unit_of_measurement: "MB", device_class: "data_size", icon: "mdi:database" });
+    if (quota) sensor("storage", "available", Math.round(quota / 1e6),
+      { unit_of_measurement: "MB", device_class: "data_size", icon: "mdi:database-outline" });
+  };
+  report();
+  setInterval(report, 5 * 60e3);
+}
+
+/** What the browser tells about the device itself; read once. */
+function readDevice() {
+  if (navigator.deviceMemory) sensor("device", "memory", navigator.deviceMemory,
+    { unit_of_measurement: "GB", device_class: "data_size", icon: "mdi:memory" });
+  if (navigator.hardwareConcurrency) sensor("device", "cpu_cores", navigator.hardwareConcurrency,
+    { icon: "mdi:cpu-64-bit" });
 }
 
 /** Ambient light, where the browser has the Generic Sensor for it. */
@@ -180,5 +245,8 @@ export function startDevice(callWorker) {
   watchNetwork();
   watchScreen();
   watchMotion();
+  watchOrientation();
   watchLight();
+  watchStorage();
+  readDevice();
 }

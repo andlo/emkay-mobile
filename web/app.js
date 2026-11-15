@@ -130,7 +130,9 @@ async function start() {
   audioCtx = new AudioContext();
   speaker.attach(audioCtx);
   await audioCtx.resume();
-  if (kiosk) enterKiosk();
+  // a phone is the device itself: full screen from the first tap (browsers
+  // allow it only after one; the installed app opens full screen anyway)
+  if (kiosk || phoneScreen.matches) enterKiosk();
   keepAwake();
   $("boot").hidden = true;
   for (const id of ["mic", "keyboard", "menu-button"]) $(id).hidden = false;
@@ -227,13 +229,21 @@ const mic = {
     if (this.busy || this.muted || !audioCtx) return;
     this.busy = true;
     $("mic").className = "mic listening";
+    caption(t("mic.listening"), 0);
     call("record_begin");
     try {
-      const pcm = await record();
+      const pcm = await record({ level: (v) => caption(t("mic.listening"), v) });
       $("mic").className = "mic thinking";
-      if (pcm) await call("heard", { pcm: pcm.buffer, rate: 16000 }, [pcm.buffer]);
+      if (!pcm) {
+        caption(t("mic.nothing"), null, 4000);
+      } else {
+        caption(t("mic.thinking"));
+        const text = await call("heard", { pcm: pcm.buffer, rate: 16000 }, [pcm.buffer]);
+        caption(text ? `“${text}”` : t("mic.unclear"), null, text ? 6000 : 4000);
+      }
     } catch (e) {
       console.warn("[emkay] mic", e);
+      caption(t("mic.error", { msg: e.message || String(e) }), null, 6000);
     } finally {
       $("mic").className = this.muted ? "mic muted" : "mic";
       this.busy = false;
@@ -242,6 +252,24 @@ const mic = {
 };
 
 let stream = null;
+let captionTimer = null;
+
+/**
+ * The line under the face: what the microphone is doing and what it heard,
+ * so a question that gets no answer shows where it stopped.
+ * @param {string} text
+ * @param {number|null} level  0..1 for the level bar while listening
+ * @param {number} hideAfter   ms until the line goes, 0 = stays
+ */
+function caption(text, level = null, hideAfter = 0) {
+  const el = $("caption");
+  el.hidden = false;
+  $("caption-text").textContent = text;
+  $("caption-level").hidden = level === null;
+  if (level !== null) $("caption-level").firstChild.style.width = `${Math.round(Math.min(1, level) * 100)}%`;
+  clearTimeout(captionTimer);
+  if (hideAfter) captionTimer = setTimeout(() => (el.hidden = true), hideAfter);
+}
 
 /**
  * Record one utterance from the microphone.
@@ -250,14 +278,18 @@ let stream = null;
  * @returns {Promise<Uint8Array|null>} 16 kHz mono 16-bit PCM, or null if
  *   nothing was said
  */
-async function record({ maxSeconds = 10, silenceMs = 900, noSpeechMs = 5000 } = {}) {
+async function record({ maxSeconds = 10, silenceMs = 1100, noSpeechMs = 6000, level } = {}) {
   stream ??= await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
   });
   const source = audioCtx.createMediaStreamSource(stream);
   const proc = audioCtx.createScriptProcessor(4096, 1, 1);
   const chunks = [];
-  let spoke = false, lastLoud = performance.now(), floor = 0.01;
+  // Speech is what stands out from the room. The room is measured in the
+  // first 300 ms by its *quietest* blocks, so speaking right away does not
+  // raise the bar; phones turn the level down (noise suppression, gain
+  // control), so the bar itself is low.
+  let spoke = false, lastLoud = performance.now(), floor = Infinity;
   const t0 = performance.now();
   await new Promise((done) => {
     proc.onaudioprocess = (e) => {
@@ -267,8 +299,10 @@ async function record({ maxSeconds = 10, silenceMs = 900, noSpeechMs = 5000 } = 
       for (let i = 0; i < x.length; i++) sum += x[i] * x[i];
       const rms = Math.sqrt(sum / x.length);
       const now = performance.now();
-      if (now - t0 < 300) floor = Math.max(floor, rms * 1.5);  // room noise
-      if (rms > Math.max(0.02, floor * 2)) { spoke = true; lastLoud = now; }
+      if (now - t0 < 300) floor = Math.min(floor, rms);           // room noise
+      const bar = Math.max(0.006, Math.min(0.03, (floor === Infinity ? 0 : floor) * 3));
+      if (now - t0 >= 150 && rms > bar) { spoke = true; lastLoud = now; }
+      level?.(Math.sqrt(rms / 0.1));                                 // for the eye only
       if ((spoke && now - lastLoud > silenceMs) || (!spoke && now - t0 > noSpeechMs) || now - t0 > maxSeconds * 1000) done();
     };
     source.connect(proc);

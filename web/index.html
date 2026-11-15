@@ -47,6 +47,11 @@
     <p class="small"><span data-i18n="about"></span> · <a href="https://github.com/emkay-voice/emkay" data-i18n="source"></a></p>
   </div>
   <button id="mic" class="mic" data-i18n-aria="mic" hidden></button>
+  <!-- what the microphone is doing and what it heard (app.js, caption) -->
+  <div id="caption" class="caption" aria-live="polite" hidden>
+    <span id="caption-text"></span>
+    <div id="caption-level" class="caption-level" hidden><div></div></div>
+  </div>
   <form id="type" class="type" hidden><input id="type-text" data-i18n-placeholder="type" autocomplete="off"></form>
   <button id="keyboard" class="keyboard" data-i18n-aria="keyboard" hidden>⌨</button>
   <button id="menu-button" class="menu-button" data-i18n-aria="menu" hidden>⚙</button>

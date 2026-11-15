@@ -51,6 +51,8 @@ def start(js_post, user_config=None) -> str:
     gui.start(bus, lambda raw: _post("gui", raw))
     print(f"[emkay] gui up in {time.time() - t:.1f}s")
     speech.start(bus, lambda wav, meta: _post("audio", json.dumps(meta), wav))
+    from . import panel
+    panel.follow_sensors(bus)                          # before the first reading
     phal.start(bus, lambda raw: _post("phal", raw))   # the phone's "hardware"
     _report_status(bus)
     bus.on("message", _watch)

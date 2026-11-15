@@ -10,7 +10,8 @@
 #             CPython with those same wheels, so a phone loads the networks
 #             instead of training them for minutes
 # site        Pyodide + the OVOS bundle + the intent caches + one m2v model
-#             per language, assembled into a static site
+#             per language, assembled into a static site, then tested in a
+#             headless Chrome (tools/probes/ci.py) before it may deploy
 # deploy      GitHub Pages
 #
 # To add a language: add it to `matrix.lang` below. The site job takes the
@@ -136,6 +137,17 @@ jobs:
           python tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json
           EMKAY_M2V=m2v python tools/build_site.py wheelhouse plan.json intents/*
           du -sh build/site
+      # the site in a real headless Chrome before it goes out: first start
+      # and setup, languages, installing a skill, a dialog transformer, the
+      # browser PHAL plugin (tools/probes/ci.py); a failure stops the deploy
+      - name: Browser tests
+        run: CHROME="$(command -v google-chrome || command -v chromium)" python tools/probes/ci.py build/probe-logs
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-logs
+          path: build/probe-logs
+          retention-days: 7
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/site

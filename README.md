@@ -102,7 +102,9 @@ forces a workaround:
   - the phone's sensors as ovos-PHAL-sensors reports them
     (`ovos.phal.sensor`, shown on the control panel's Sensors page):
     battery and charging, network type and speed, screen on and
-    orientation, moving or still, ambient light – whichever the browser has;
+    orientation, moving or still, how the phone lies (face up, face down,
+    upright), compass direction, ambient light, storage, memory and CPU
+    cores – whichever the browser has, and only when a value changes;
   - the camera as ovos-PHAL-plugin-camera (`ovos.phal.camera.*`), except
     that `b64_frame` is a JPEG rather than OpenCV's raw pixel buffer.
   The page side is [`device.js`](web/device.js).
@@ -182,7 +184,13 @@ python3 tools/serve.py
 node tools/node_smoke.mjs wheelhouse plan.json "what time is it"
 ```
 
-`tools/probes/` holds measurement scripts for `tools/node_run.mjs`.
+`tools/probes/` holds measurement scripts for `tools/node_run.mjs` and the
+headless-browser tests (`*_browser.mjs`). `tools/probes/ci.py` serves the built
+site and runs the browser tests, as CI does before every deploy:
+
+```bash
+CHROME=/path/to/chrome python3 tools/probes/ci.py
+```
 
 ### Adding a language
 
