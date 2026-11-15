@@ -122,6 +122,17 @@ def add_phal_distribution(zf):
                 "[opm.phal]\novos-phal-plugin-browser = emkay_mobile.phal:BrowserPHAL\n")
     zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
     zf.writestr(f"{info}/RECORD", "")
+    # the browser's own speech recognition, an STT plugin like any other
+    # (emkay_mobile/stt_browser.py)
+    info = "ovos_stt_plugin_browser-0.1.0.dist-info"
+    zf.writestr(f"{info}/METADATA", "Metadata-Version: 2.1\n"
+                "Name: ovos-stt-plugin-browser\nVersion: 0.1.0\n"
+                "Summary: Emkay: the browser's own speech recognition (Web Speech API) as OVOS STT\n"
+                "Home-page: https://github.com/emkay-voice/emkay\nLicense: Apache-2.0\n")
+    zf.writestr(f"{info}/entry_points.txt",
+                "[opm.stt]\novos-stt-plugin-browser = emkay_mobile.stt_browser:BrowserSTT\n")
+    zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
+    zf.writestr(f"{info}/RECORD", "")
 
 
 def build_intents(cache_dirs):

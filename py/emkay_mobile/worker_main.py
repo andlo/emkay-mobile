@@ -109,7 +109,8 @@ def _watch(raw):
 def _post_lang():
     from ovos_config import Configuration
     _post("bus", json.dumps({"type": "emkay.lang",
-                             "data": {"lang": Configuration().get("lang", "en-US")}}))
+                             "data": {"lang": Configuration().get("lang", "en-US"),
+                                      "stt_module": Configuration().get("stt", {}).get("module")}}))
 
 
 # --- calls from the page -------------------------------------------------
@@ -147,6 +148,12 @@ def heard(pcm16, sample_rate=16000) -> str:
     """
     data = pcm16.to_bytes() if hasattr(pcm16, "to_bytes") else bytes(pcm16)
     return speech.heard(data, int(sample_rate))
+
+
+def heard_text(text: str) -> str:
+    """Text the browser's own speech recognition heard (ovos-stt-plugin-browser):
+    on to OVOS as any STT result goes (speech.heard after its STT step)."""
+    return speech.heard_text(text)
 
 
 def playback_started(ident: str, visemes_json: str = "[]"):

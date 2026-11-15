@@ -108,6 +108,16 @@ forces a workaround:
   - the camera as ovos-PHAL-plugin-camera (`ovos.phal.camera.*`), except
     that `b64_frame` is a JPEG rather than OpenCV's raw pixel buffer.
   The page side is [`device.js`](web/device.js).
+- **Speech to text** is OVOS' configured STT plugin, as on a device
+  (the public OVOS servers by default). One more plugin ships with the
+  site: **ovos-stt-plugin-browser**, the browser's own speech recognition
+  (Web Speech API – Google's in Chrome on Android, Apple's on an iPhone),
+  picked in the control panel like any other STT
+  ([`stt_browser.py`](py/emkay_mobile/stt_browser.py)). It handles languages
+  the public servers do not (Danish, for one) and shows the words as you
+  speak; the audio goes to Google or Apple. The browser listens itself, so
+  Emkay lets the microphone go meanwhile; where the browser has no speech
+  recognition (Firefox), `stt.fallback_module` transcribes the recording.
 - **The wake word** is OVOS' own `listener.wake_word` ("hey_mycroft" by
   default; "hey_jarvis" and "alexa" also work), heard by
   [openWakeWord](https://github.com/dscripka/openWakeWord) with its own

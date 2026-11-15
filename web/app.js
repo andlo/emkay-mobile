@@ -201,6 +201,8 @@ async function keepStorage() {
     console.log("[emkay] OVOS up", info);
     setLang(info.lang);   // from here on Emkay's texts follow OVOS' language
     bootInfo = info;
+    ovosLang = info.lang || ovosLang;
+    sttModule = info.stt_module;
     ovosReady();
     await import("./visage/visage.js");
     bootStatus("boot.skills", 1, { n: info.skills.length });
@@ -233,6 +235,20 @@ const mic = {
     caption(t("mic.listening"), 0);
     call("record_begin");
     try {
+      if (sttModule === BROWSER_STT && SpeechRecognitionAPI) {
+        // the browser's recognition wants the microphone to itself: an open
+        // stream of ours makes it fail ("audio-capture") on some devices
+        releaseMic();
+        const text = await browserSTT();
+        wake.attach().catch(() => {});
+        $("mic").className = "mic thinking";
+        if (!text) caption(t("mic.nothing"), null, 4000);
+        else {
+          caption(`“${text}”`, null, 6000);
+          await call("heard_text", { text });
+        }
+        return;
+      }
       const pcm = await record({ level: (v) => caption(t("mic.listening"), v) });
       $("mic").className = "mic thinking";
       if (!pcm) {
@@ -254,6 +270,52 @@ const mic = {
 
 let stream = null;
 let captionTimer = null;
+
+// ovos-stt-plugin-browser: the browser's own speech recognition, chosen as
+// OVOS' STT plugin (stt.module). Kept up to date from boot and config changes.
+const BROWSER_STT = "ovos-stt-plugin-browser";
+const SpeechRecognitionAPI = self.SpeechRecognition || self.webkitSpeechRecognition;
+let sttModule = null;
+let ovosLang = "en-US";
+
+/**
+ * One utterance with the browser's recognition, in OVOS' language. The
+ * words show in the caption as they come; resolves with the final text
+ * ("" when nothing was said). Times out after 12 s like a recording.
+ */
+function browserSTT() {
+  return new Promise((resolve) => {
+    const r = new SpeechRecognitionAPI();
+    r.lang = ovosLang;
+    r.interimResults = true;
+    r.continuous = false;
+    r.maxAlternatives = 1;
+    let final = "", done = false;
+    const finish = () => { if (!done) { done = true; clearTimeout(timer); resolve(final.trim()); } };
+    const timer = setTimeout(() => { try { r.stop(); } catch {} }, 12000);
+    r.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      caption(final + interim || t("mic.listening"), 0.3);
+    };
+    r.onerror = (e) => {
+      if (e.error !== "no-speech" && e.error !== "aborted") caption(t("mic.error", { msg: e.error }), null, 6000);
+    };
+    r.onend = finish;
+    try { r.start(); } catch (e) { caption(t("mic.error", { msg: e.message }), null, 6000); finish(); }
+  });
+}
+
+/** Let the microphone go (the browser's own recognition needs it); the
+ * next micStream() opens it again. */
+function releaseMic() {
+  wake.detach();
+  stream?.getTracks().forEach((track) => track.stop());
+  stream = null;
+}
 
 /**
  * The microphone, opened once (the first tap) and kept. Echo cancellation
@@ -286,7 +348,6 @@ const wake = {
     if (!(bootInfo?.wake_words || []).includes(name)) { this.state = `off: no model for ${name}`; return; }
     this.state = "loading";
     const model = `${name}_v0.1.onnx`;
-    const source = audioCtx.createMediaStreamSource(await micStream());
     this.worker = new Worker("wakeword.js", { type: "module" });
     this.worker.onmessage = ({ data }) => {
       if (data.error) { this.state = `error: ${data.error}`; console.warn("[emkay] wake word:", data.error); }
@@ -317,8 +378,19 @@ const wake = {
         }
       }
     };
-    source.connect(proc);
     proc.connect(audioCtx.destination);   // a ScriptProcessor runs only when connected; it outputs silence
+    this.proc = proc;
+    await this.attach();
+  },
+  /** Feed the microphone in (again, after the browser's recognition had it). */
+  async attach() {
+    if (!this.proc || this.source) return;
+    this.source = audioCtx.createMediaStreamSource(await micStream());
+    this.source.connect(this.proc);
+  },
+  detach() {
+    this.source?.disconnect();
+    this.source = null;
   },
   /** Listening for the wake word now? Not while recording, speaking, muted or hidden. */
   active() {
@@ -493,7 +565,11 @@ function locate() {
 function onBus(msg) {
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
   if (msg.type === "mycroft.mic.mute") mic.setMuted(true);
-  if (msg.type === "emkay.lang") languageChanged(msg.data.lang);   // in the panel
+  if (msg.type === "emkay.lang") {   // a config change, e.g. in the panel
+    languageChanged(msg.data.lang);
+    ovosLang = msg.data.lang || ovosLang;
+    sttModule = msg.data.stt_module ?? sttModule;
+  }
   if (msg.type === "mycroft.mic.unmute") mic.setMuted(false);
 }
 
@@ -615,4 +691,4 @@ $("menu-about").onclick = async () => {
 };
 $("about-close").onclick = () => { $("about").hidden = true; };
 
-window.emkay = { call, mic, speaker, wake };
+window.emkay = { call, mic, speaker, wake, stt: () => sttModule };

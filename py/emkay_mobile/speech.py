@@ -107,6 +107,25 @@ def heard(pcm16: bytes, sample_rate: int = 16000):
     return text
 
 
+def heard_text(text: str) -> str:
+    """The browser's speech recognition (ovos-stt-plugin-browser) heard `text`:
+    the rest of heard(), as after an STT plugin."""
+    if _mic_muted:
+        return ""
+    from . import boot
+    from ovos_bus_client.message import Message
+    lang = _config().get("lang", "en-US")
+    bus = boot.bus()
+    bus.emit(Message("recognizer_loop:record_end"))
+    text = (text or "").strip()
+    if not text:
+        bus.emit(Message("recognizer_loop:speech.recognition.unknown"))
+        return ""
+    print(f"[emkay] stt (browser): {text!r}")
+    boot.utterance(text, lang=lang)
+    return text
+
+
 # --- audio half ---------------------------------------------------------
 
 _VISEME_OF = [  # rough letter-to-mouth table, codes from ovos_utils visimes

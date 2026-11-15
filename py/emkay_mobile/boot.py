@@ -361,6 +361,7 @@ def start(on_message=None, user_config=None) -> dict:
     return {"seconds": round(time.time() - t0, 2), "skills": loaded,
             "lang": Configuration().get("lang", "en-US"),
             "wake_word": Configuration().get("listener", {}).get("wake_word"),
+            "stt_module": Configuration().get("stt", {}).get("module"),
             "skipped_threads": list(browser.STARTED)}
 
 
