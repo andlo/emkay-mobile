@@ -56,6 +56,9 @@ PROBES = [
         r"wake word engine ready",
         r'said: \["(It|Currently) ',                        # no tap: the wake word
     ]),
+    ("panel_mobile.mjs", {}, [], [
+        r"after tapping Settings: /panel/config",       # the panel's menu by touch
+    ]),
     ("phal_browser.mjs", {}, [], [
         r'internet_check: \[\{"internet_connected": true',
         r'camera\.get: .*"b64_frame"',
