@@ -207,6 +207,12 @@ def install():
     if _SHIMS not in sys.path:
         # after site-packages, so a real wheel always wins over a shim
         sys.path.append(_SHIMS)
+    # packages installed later (pip.py), like `pip install --user`: first on
+    # the path, so an upgrade wins over the copy that shipped with the site
+    from .pip import USER_SITE
+    os.makedirs(USER_SITE, exist_ok=True)
+    if USER_SITE not in sys.path:
+        sys.path.insert(0, USER_SITE)
     threading.Thread.start = _thread_start
     threading.Timer.start = _timer_start
     threading.Timer.cancel = _timer_cancel

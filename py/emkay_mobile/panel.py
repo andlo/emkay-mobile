@@ -10,7 +10,7 @@ OVOS' in-process bus - and called directly as an ASGI app:
     app.js --postMessage--> worker.js --> request() below --> the panel
 
 Nothing in the panel's pages or routes is changed; only its thread-based
-helpers run in place (_run_inline, _bus_calls_inline). Its own security
+helpers run in place (_run_inline, _bus_calls_inline, _one_installer). Its own security
 model applies as on a device bound to loopback: the Host is 127.0.0.1, so
 pages are open and anything privileged (installing, device controls) needs the access token
 set on its Settings page; the Service Worker sets Sec-Fetch-Site from
@@ -83,6 +83,39 @@ def _browser_capabilities():
         providers.append("ovos-phal-plugin-browser")
 
 
+def _one_installer():
+    """Fit the panel's install jobs to the one installer that runs here.
+
+    The panel is written for devices where several services may each run
+    an installer: after a failure from one it waits INCONCLUSIVE_SETTLE
+    (300 s) in case another succeeds, and a removal waits REMOVE_SETTLE
+    (15 s) for the others. Here ovos-core's installer is the only one, and
+    it answers before its reply could be waited for (pip.py runs in place),
+    so its answer is the whole answer: both waits are 0. With one thread a
+    wait is a busy loop that holds up everything else.
+
+    The job's thread is also started a moment later than asked, so the
+    response that created the job reaches the page first; a real thread
+    would run alongside that response instead of before it.
+    """
+    import asyncio
+    import threading
+    import types
+    from ovos_webui import installer
+
+    installer.INCONCLUSIVE_SETTLE = 0
+    installer.REMOVE_SETTLE = 0
+
+    class AfterResponse(threading.Thread):
+        def start(self):
+            asyncio.get_event_loop().call_later(0.2, threading.Thread.start, self)
+
+    later = types.ModuleType("threading")
+    later.__dict__.update(threading.__dict__)
+    later.Thread = AfterResponse
+    installer.threading = later
+
+
 def app():
     """The panel's ASGI app, built once on OVOS' bus."""
     global _app
@@ -90,6 +123,7 @@ def app():
         _run_inline()
         _bus_calls_inline()
         _browser_capabilities()
+        _one_installer()
         from ovos_webui.service import create_app
         from . import boot
         _app = create_app(bus=boot.bus(), host=HOST, connect_bus=False)

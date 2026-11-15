@@ -28,8 +28,12 @@
 const PREFIX = new URL("./panel/", self.registration.scope).pathname;
 /** The panel's own absolute paths, outside the prefix. */
 const ROOTS = ["/api/", "/static/", "/login", "/healthz"];
-/** How long a request may wait for the Emkay page (OVOS may be busy). */
-const TIMEOUT_MS = 60000;
+/**
+ * How long a request may wait for the Emkay page. OVOS runs in one thread,
+ * so while it trains a newly installed skill (minutes on a phone) the panel
+ * waits for its answer rather than getting an error.
+ */
+const TIMEOUT_MS = 300000;
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));

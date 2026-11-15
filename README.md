@@ -105,6 +105,16 @@ forces a workaround:
   not have (Wi-Fi, Mark 1 faceplate, sensors, desktop apps) are left out of
   its menu. The panel is only reachable on the phone itself: a browser tab
   cannot listen on the network.
+- **Installing skills** goes through ovos-core's own installer
+  (`ovos.pip.install`, also what the control panel's Plugins page uses);
+  only the one place it starts pip is replaced
+  ([`pip.py`](py/emkay_mobile/pip.py)), since a browser cannot run
+  processes. It resolves against OVOS' alpha constraints, takes pure-Python
+  wheels from PyPI and unpacks them into `~/.local/lib/python3.14/site-packages`
+  (IndexedDB, so they survive a reload). SkillManager then loads the new
+  skill at once, as on a device. Packages that ship with the site cannot be
+  removed, and a skill whose service only answers on `http://` or without
+  CORS will install but cannot reach it from the browser.
 - **Config changes are followed over the bus** (`configuration.updated`),
   as the services on a device do; the file watcher thread is left out.
 - **On a phone** the screen fills the display; on a larger screen visage

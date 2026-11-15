@@ -26,6 +26,15 @@ M2V_DIR = os.path.expanduser("~/.local/share/emkay-mobile/m2v")
 #: until ovos-audio and ovos-dinkum-listener report ready, which never happens.
 UNAVAILABLE_SKILLS = ("ovos-skill-boot-finished.openvoiceos",)
 
+#: Version of the one-time defaults below; each step is written once, so a
+#: phone set up by an older build gets only the steps it has not had yet.
+DEFAULTS_VERSION = 2
+
+#: OVOS' own alpha-channel constraints, for what is installed later (the
+#: site itself is built from the alpha channel).
+ALPHA_CONSTRAINTS = ("https://raw.githubusercontent.com/OpenVoiceOS/ovos-releases/"
+                     "refs/heads/main/constraints-alpha.txt")
+
 #: The user layer of mycroft.conf, as on a device (~/.config/mycroft).
 CONF_PATH = os.path.expanduser("~/.config/mycroft/mycroft.conf")
 
@@ -108,21 +117,32 @@ def _unused_pipelines(user_blacklist) -> list:
     return keep + unused
 
 
-def _browser_defaults(first_boot: bool) -> dict:
+def _browser_defaults(done: int) -> dict:
     """The few settings that differ from a device, as a user-layer patch.
 
-    On the first boot the blacklist is written once, so the setup page can
-    change it later. The m2v model folders and the unused pipeline plugins
-    are written on every boot, since they follow whatever the site shipped
-    and the pipeline the user chose.
+    `done` is the defaults version this phone already has (0 on a first
+    boot). Each one-time step is written once, so the setup page can change
+    it later:
+      1. skills that cannot run here are blacklisted
+      2. ovos-core's installer is enabled, on the alpha channel, and the
+         setup page's release channel is alpha to match: installing skills
+         and plugins from the setup page is what a device can do (see
+         pip.py), and the site itself is built from the alphas
+    The m2v model folders and the unused pipeline plugins are written on
+    every boot, since they follow whatever the site shipped and the
+    pipeline the user chose.
     """
     from ovos_config import Configuration
-    out = {"emkay_mobile_defaults": 1}
-    if first_boot:
+    out = {"emkay_mobile_defaults": DEFAULTS_VERSION}
+    if done < 1:
         cfg = Configuration()
         blacklisted = list(cfg.get("skills", {}).get("blacklisted_skills", []))
         blacklisted += [s for s in UNAVAILABLE_SKILLS if s not in blacklisted]
-        out["skills"] = {"blacklisted_skills": blacklisted}
+        out.setdefault("skills", {})["blacklisted_skills"] = blacklisted
+    if done < 2:
+        out.setdefault("skills", {})["installer"] = {
+            "allow_pip": True, "allow_alphas": True, "constraints": ALPHA_CONSTRAINTS}
+        out["webui"] = {"release_channel": "alpha"}
     # The location now comes from the browser PHAL plugin, in the assistant
     # layer like ipgeo's (phal.py). Builds of 2026-11-14 wrote the browser's
     # time zone into the user layer instead, where it would hide that; such
@@ -189,6 +209,18 @@ def _drive_scheduler(scheduler, every: float = 0.5):
     loop.call_later(every, tick)
 
 
+def _browser_installer():
+    """ovos-core's installer (SkillsStore) with pip.run for its subprocess.
+
+    SkillsStore._run_pip is the one place the installer starts a process
+    (pip or uv). Everything else it does stays as it is.
+    """
+    from ovos_core.skill_installer import SkillsStore
+    from . import pip
+    SkillsStore._run_pip = staticmethod(pip.run)
+    SkillsStore.UV = None   # the command line it builds is then plain pip's
+
+
 def start(on_message=None, user_config=None) -> dict:
     """Load every installed skill on a fresh bus.
 
@@ -208,8 +240,8 @@ def start(on_message=None, user_config=None) -> dict:
     from ovos_utils.fakebus import FakeBus
     from ovos_bus_client.message import Message
 
-    first_boot = not read_user_config().get("emkay_mobile_defaults")
-    write_user_config(_browser_defaults(first_boot))
+    done = int(read_user_config().get("emkay_mobile_defaults") or 0)
+    write_user_config(_browser_defaults(done))
     Configuration.reload()
     if sys.platform == "emscripten":
         browser.adapt_ovos()
@@ -219,14 +251,18 @@ def start(on_message=None, user_config=None) -> dict:
     if on_message is not None:
         _bus.on("message", on_message)
     _follow_config_changes(_bus)
+    if sys.platform == "emscripten":
+        _browser_installer()
     _manager = SkillManager(_bus,
                             enable_file_watcher=False,   # nothing edits files behind OVOS here
-                            enable_installer=False,      # skills come with the site
+                            enable_installer=True,       # ovos.pip.install, see pip.py
                             enable_event_scheduler=True,
                             enable_skill_api=True,
                             enable_intent_service=True)
     if _manager.event_scheduler is not None and sys.platform == "emscripten":
         _drive_scheduler(_manager.event_scheduler)
+    # after an install or removal, SkillManager itself loads, reloads or
+    # unloads skills (its handlers for ovos.pip.install.complete etc.)
     # SkillManager.run() minus its 30 s rescan loop (a service loop, see
     # browser.FOREVER_LOOPS): load the skills, then announce readiness.
     _manager._load_new_skills()
