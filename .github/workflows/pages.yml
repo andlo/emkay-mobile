@@ -1,4 +1,4 @@
-# Build Emkay Mobile from the OVOS alpha channel and publish it on GitHub Pages.
+# Build Emkay from the OVOS alpha channel and publish it on GitHub Pages.
 #
 #   wheelhouse ──┬── intents (en-US) ──┐
 #                ├── intents (da-DK) ──┼── site ── deploy

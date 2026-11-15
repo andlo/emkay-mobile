@@ -337,7 +337,7 @@ def utterance(text: str, lang: str = None, session=None):
     sess = session or SessionManager.get_default_session()
     _bus.emit(Message("recognizer_loop:utterance",
                       {"utterances": [text], "lang": lang},
-                      {"session": sess.serialize(), "source": "emkay-mobile",
+                      {"session": sess.serialize(), "source": "emkay",
                        "destination": "skills"}))
 
 

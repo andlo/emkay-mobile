@@ -1,7 +1,8 @@
-# Emkay Mobile
+# Emkay
 
-A stock [OpenVoiceOS](https://openvoiceos.org) running **in your phone's browser** –
-no app store, no sideloading – with the Mycroft Mark II Kickstarter face
+A stock [OpenVoiceOS](https://openvoiceos.org) running **in a browser** – on a
+phone, a tablet, a TV or a Raspberry Pi in kiosk mode; no app store, no
+sideloading, nothing to install – with the Mycroft Mark II Kickstarter face
 ([ovos-visage](https://github.com/OscillateLabsLLC/ovos-visage)) as the screen.
 
 "Emkay" is "MK" said out loud, a nod to Mycroft's Mark I and Mark II.
@@ -13,7 +14,8 @@ no app store, no sideloading – with the Mycroft Mark II Kickstarter face
 > server, sound and the face's mouth. The stock ovos-control-panel opens
 > from the ⚙ menu.
 >
-> Site: <https://andlo.github.io/emkay-mobile/> (built by GitHub Actions).
+> Open it: <https://app.emkay.ai/> (built by GitHub Actions). Project page:
+> <https://emkay.ai/>.
 
 ## What it is
 

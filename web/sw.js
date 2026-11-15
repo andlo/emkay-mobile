@@ -1,4 +1,4 @@
-// Emkay Mobile – Service Worker: serves the stock ovos-control-panel.
+// Emkay – Service Worker: serves the stock ovos-control-panel.
 //
 // On a device the panel is a web server on a port. A browser cannot listen
 // on a port, so the panel runs inside the worker (py/emkay_mobile/panel.py)
@@ -12,7 +12,7 @@
 // are done here:
 //   * Its pages use absolute paths ("/controls", "/static/app.js",
 //     location.href = "/login"). The site may live below a path (GitHub
-//     Pages: /emkay-mobile/), so links and redirects in what it sends get
+//     Pages: /emkay/), so links and redirects in what it sends get
 //     the panel's prefix (./panel/), and requests under that prefix get it
 //     removed again. fetch()es to its root paths (/api/, /static/) come
 //     here anyway, since the iframe is one of this worker's pages.
@@ -147,7 +147,7 @@ function prefixPaths(text, html) {
  * of its pages (its CSP allows inline scripts), puts the prefix on a
  * root-absolute link just before the browser follows it.
  */
-const LINK_FIX = `<script>/* emkay-mobile: keep links inside ${PREFIX} (see sw.js) */
+const LINK_FIX = `<script>/* emkay: keep links inside ${PREFIX} (see sw.js) */
 addEventListener("click", (e) => {
   const a = e.target.closest && e.target.closest("a[href]");
   const h = a && a.getAttribute("href");

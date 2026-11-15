@@ -7,7 +7,7 @@ which a browser may clear (low storage, "clear site data"). Exporting it as a
 zip file puts a copy on the phone itself; importing one puts it back, also
 on another phone.
 
-The zip holds the folder as is, plus `emkay-mobile.json` describing it, so a
+The zip holds the folder as is, plus `emkay.json` describing it, so a
 file made by something else is refused instead of half-applied.
 """
 import io
@@ -21,7 +21,9 @@ import zipfile
 CONFIG_DIR = os.path.expanduser("~/.config")
 
 #: Marker file inside every export.
-MANIFEST = "emkay-mobile.json"
+MANIFEST = "emkay.json"
+#: what exports made before the rename to Emkay call it; still read
+OLD_MANIFESTS = ("emkay-mobile.json",)
 
 #: Never exported: regenerated on boot, or large and not settings.
 SKIP_DIRS = {"__pycache__"}
@@ -40,7 +42,7 @@ def export_zip() -> bytes:
                 files += 1
         zf.writestr(MANIFEST, json.dumps({
             "format": 1,
-            "what": "Emkay Mobile settings (~/.config)",
+            "what": "Emkay settings (~/.config)",
             "exported": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "files": files,
         }, indent=1))
@@ -50,7 +52,7 @@ def export_zip() -> bytes:
 def import_zip(data: bytes) -> dict:
     """Replace the config folder with the one in an export.
 
-    Raises ValueError for a file that is not an Emkay Mobile export, or that
+    Raises ValueError for a file that is not an Emkay export, or that
     tries to write outside the folder. The old folder is moved aside first
     and put back if extracting fails, so a bad file never leaves it half
     replaced.
@@ -59,13 +61,14 @@ def import_zip(data: bytes) -> dict:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as e:
         raise ValueError("not a zip file") from e
-    if MANIFEST not in zf.namelist():
-        raise ValueError("not an Emkay Mobile settings file")
+    manifest_name = next((n for n in (MANIFEST, *OLD_MANIFESTS) if n in zf.namelist()), None)
+    if manifest_name is None:
+        raise ValueError("not an Emkay settings file")
     for name in zf.namelist():
         target = os.path.realpath(os.path.join(CONFIG_DIR, name))
         if not target.startswith(os.path.realpath(CONFIG_DIR) + os.sep):
             raise ValueError(f"refusing path outside the config folder: {name}")
-    manifest = json.loads(zf.read(MANIFEST))
+    manifest = json.loads(zf.read(manifest_name))
 
     backup = CONFIG_DIR + ".before-import"
     shutil.rmtree(backup, ignore_errors=True)
@@ -76,7 +79,7 @@ def import_zip(data: bytes) -> dict:
         shutil.move(os.path.join(CONFIG_DIR, entry), os.path.join(backup, entry))
     try:
         for name in zf.namelist():
-            if name != MANIFEST:
+            if name != manifest_name:
                 zf.extract(name, CONFIG_DIR)
     except Exception:
         for entry in os.listdir(CONFIG_DIR):

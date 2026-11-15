@@ -90,7 +90,7 @@ try {
   log(`setup url: ${await js(`${w}.location.href`)}`);
   log("setup text:\n" + await js(`${doc}.querySelector("main").innerText`));
   const shot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-  (await import("fs")).writeFileSync("/home/andlo/WORK/emkay-mobile/setup_shot.png", Buffer.from(shot.result.data, "base64"));
+  (await import("fs")).writeFileSync("setup_shot.png", Buffer.from(shot.result.data, "base64"));
 } catch (e) {
   log(`FAILED: ${e.message}`);
 } finally {

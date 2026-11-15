@@ -1,4 +1,4 @@
-// Emkay Mobile – the page side: screen, microphone and speaker.
+// Emkay – the page side: screen, microphone and speaker.
 //
 // OVOS itself runs in worker.js. ovos-visage draws the screen, unchanged:
 // it thinks it talks to its own server over WebSocket("/ws"), and gets the

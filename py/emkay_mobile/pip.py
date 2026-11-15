@@ -289,7 +289,7 @@ def _unpack(whl, log):
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(whl.read(item))
     if info_dir:
-        Path(USER_SITE, info_dir, "INSTALLER").write_text("emkay-mobile\n")
+        Path(USER_SITE, info_dir, "INSTALLER").write_text("emkay\n")
 
 
 # --- uninstalling ---------------------------------------------------------

@@ -78,7 +78,7 @@ def start(bus, post):
     _client = BrowserGuiClient(ns, post)
     GUIWebsocketHandler.clients.append(_client)
     from ovos_bus_client.message import Message
-    bus.emit(Message("mycroft.gui.connected", {"gui_id": "emkay-mobile", "framework": "html"}))
+    bus.emit(Message("mycroft.gui.connected", {"gui_id": "emkay", "framework": "html"}))
     GUIWebsocketHandler.synchronize(_client)
     return _client
 

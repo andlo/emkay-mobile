@@ -1,4 +1,4 @@
-// Boot emkay-mobile's OVOS core in Pyodide under Node and talk to it.
+// Boot Emkay's OVOS core in Pyodide under Node and talk to it.
 // node tools/node_smoke.mjs <wheel_dir> <plan.json> [utterance ...]
 // EMKAY_CACHE=<dir>  pre-trained intent cache (tools/build_intent_cache.py) to load
 import { loadPyodide } from "pyodide";

@@ -39,7 +39,7 @@ class Process:
         return namedtuple("pmem", "rss vms")(0, 0)
 
     def name(self):
-        return "emkay-mobile"
+        return "emkay"
 
 
 def pids():

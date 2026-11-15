@@ -1,4 +1,4 @@
-// Emkay Mobile – the OVOS side of the page.
+// Emkay – the OVOS side of the page.
 //
 // Pyodide runs in this (module) Web Worker, so a busy Python (a slow skill,
 // a padaos compile) never freezes the face. The page sends commands and gets

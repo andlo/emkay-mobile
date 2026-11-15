@@ -113,8 +113,8 @@ def add_phal_distribution(zf):
     info = "ovos_phal_plugin_browser-0.1.0.dist-info"
     zf.writestr(f"{info}/METADATA", "Metadata-Version: 2.1\n"
                 "Name: ovos-phal-plugin-browser\nVersion: 0.1.0\n"
-                "Summary: Emkay Mobile: the browser tab as OVOS hardware (volume, location)\n"
-                "Home-page: https://github.com/andlo/emkay-mobile\nLicense: Apache-2.0\n")
+                "Summary: Emkay: the browser tab as OVOS hardware (volume, location)\n"
+                "Home-page: https://github.com/emkay-voice/emkay\nLicense: Apache-2.0\n")
     zf.writestr(f"{info}/entry_points.txt",
                 "[opm.phal]\novos-phal-plugin-browser = emkay_mobile.phal:BrowserPHAL\n")
     zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
