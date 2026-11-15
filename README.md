@@ -115,6 +115,12 @@ forces a workaround:
   skill at once, as on a device. Packages that ship with the site cannot be
   removed, and a skill whose service only answers on `http://` or without
   CORS will install but cannot reach it from the browser.
+- **Speaking** is ovos-audio's speak handler without its playback queue
+  ([`speech.py`](py/emkay_mobile/speech.py)): ovos-audio's own dialog
+  transformer service, the configured TTS, ovos-audio's TTS transformer
+  service on the WAV, then the page plays it. Transformers are set up in
+  `mycroft.conf` (`dialog_transformers`, `tts_transformers`) or the control
+  panel and, as on a device, load when the audio side starts.
 - **Language:** OVOS' default language is the phone's, when the site ships
   pre-trained intents for it (today en-US and da-DK), else OVOS' own
   en-US. It is written to the assistant layer, as ipgeo does with the

@@ -11,6 +11,10 @@ ovos-tts-plugin-server
 # skills-requirements.txt.j2 (profile "ovos"): essential, internet and audio skills
 ovos-core[skills-essential,skills-internet,skills-audio]
 
+# audio-requirements.txt.j2: ovos-audio, for its dialog and TTS transformer
+# services only (speech.py); playback is the page's
+ovos-audio
+
 # GUI (installer feature "gui"): ovos-gui + homescreen (see browser-nodeps.txt).
 # ovos-gui is held at the last 1.5 alpha: 1.6.0a1 moved clients to adapter
 # plugins and the legacy websocket adapter ovos-visage speaks is not on PyPI yet.

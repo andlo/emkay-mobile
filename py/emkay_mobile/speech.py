@@ -4,8 +4,11 @@ ovos-dinkum-listener: the page records an utterance (the browser owns the
 microphone) and hands over 16 kHz mono PCM; the configured STT plugin turns it
 into text, which goes on the bus as recognizer_loop:utterance.
 
-ovos-audio: on "speak", the configured TTS plugin makes a WAV, which the page
-plays (the browser owns the speaker). The page reports when playback starts
+ovos-audio: on "speak", the dialog transformers may rewrite the sentence,
+the configured TTS plugin makes a WAV and the TTS transformers may change it;
+the page plays it (the browser owns the speaker). The transformers are
+ovos-audio's own services (ovos_audio.transformers), run where ovos-audio
+runs them. The page reports when playback starts
 and ends, and this side emits the same bus events ovos-audio does, so the
 GUI face listens, talks and rests like on a device.
 
@@ -22,6 +25,8 @@ _stt = None
 _tts = None
 _post_audio = None   # callable(wav_bytes, meta_dict) into the page
 _pending = {}        # ident -> speak message, while the page plays it
+_dialog_tx = None    # ovos-audio's DialogTransformersService
+_tts_tx = None       # ovos-audio's TTSTransformersService
 
 
 def _config():
@@ -45,10 +50,32 @@ def tts():
     return _tts
 
 
+def transformers():
+    """ovos-audio's two transformer stages, loaded once as ovos-audio does.
+
+    Like on a device they read `dialog_transformers` and `tts_transformers`
+    from mycroft.conf when the audio service starts; a newly installed or
+    enabled transformer is used after a restart (here: a reload of the page).
+    """
+    global _dialog_tx, _tts_tx
+    if _dialog_tx is None:
+        from ovos_audio.transformers import DialogTransformersService, TTSTransformersService
+        from . import boot
+        _dialog_tx = DialogTransformersService(boot.bus())
+        _tts_tx = TTSTransformersService(boot.bus())
+    return _dialog_tx, _tts_tx
+
+
 def reload():
     """Drop the plugins so the next use reads mycroft.conf again."""
-    global _stt, _tts
+    global _stt, _tts, _dialog_tx, _tts_tx
     _stt = _tts = None
+    for service in (_dialog_tx, _tts_tx):
+        try:
+            service and service.shutdown()
+        except Exception:
+            pass
+    _dialog_tx = _tts_tx = None
 
 
 # --- listener half ------------------------------------------------------
@@ -122,17 +149,42 @@ def _wav_seconds(data: bytes) -> float:
 
 
 def on_speak(message):
-    """ovos-audio's speak handler, minus the playback queue."""
+    """ovos-audio's speak handler, minus the playback queue.
+
+    In ovos-audio's order: dialog transformers (service.py, handle_speak:
+    skipped for skills in their blacklist and for speech with no skill),
+    TTS, then the TTS transformers on the WAV file (playback.py, _play).
+    """
     utterance = message.data.get("utterance", "")
     if not utterance or _post_audio is None:
         return
+    message.context = message.context or {}
     lang = message.data.get("lang") or _config().get("lang", "en-US")
     ident = message.context.get("ident") or f"{time.time():.6f}"
     t = time.time()
     try:
+        from ovos_bus_client.session import SessionManager
+        dialog_tx, tts_tx = transformers()
+        skill_id = message.data.get("meta", {}).get("skill") or message.context.get("skill_id")
+        if skill_id and skill_id not in dialog_tx.blacklisted_skills:
+            changed, message.context = dialog_tx.transform(
+                dialog=utterance, context=message.context, sess=SessionManager.get(message))
+            if changed != utterance:
+                print(f"[emkay] dialog transformed to: {changed}")
+                utterance = changed
+    except Exception as e:   # as in ovos-audio: a transformer never stops speech
+        print(f"[emkay] dialog transformers failed: {e!r}")
+    try:
         fd, path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
         path, phonemes = tts().get_tts(utterance, path, lang=lang)
+        try:
+            out, message.context = tts_tx.transform(path, message.context)
+            if out and out != path:
+                os.unlink(path)
+                path = out.replace("file://", "")
+        except Exception as e:
+            print(f"[emkay] tts transformers failed: {e!r}")
         with open(path, "rb") as f:
             data = f.read()
         os.unlink(path)
