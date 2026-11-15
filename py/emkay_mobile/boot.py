@@ -28,7 +28,7 @@ UNAVAILABLE_SKILLS = ("ovos-skill-boot-finished.openvoiceos",)
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 3
+DEFAULTS_VERSION = 4
 
 #: OVOS' own alpha-channel constraints, for what is installed later (the
 #: site itself is built from the alpha channel).
@@ -150,7 +150,8 @@ def _browser_defaults(done: int) -> dict:
          setup page's release channel is alpha to match: installing skills
          and plugins from the setup page is what a device can do (see
          pip.py), and the site itself is built from the alphas
-      3. padatious without padaos (its regex compile takes ~30 s here)
+      (3. was padatious without padaos; that made padatious' networks
+         answer exact phrases wrongly, so 4 puts padaos back)
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -166,18 +167,20 @@ def _browser_defaults(done: int) -> dict:
         out.setdefault("skills", {})["installer"] = {
             "allow_pip": True, "allow_alphas": True, "constraints": ALPHA_CONSTRAINTS}
         out["webui"] = {"release_channel": "alpha"}
-    if done < 3:
-        # padatious' padaos (its regex short cut for exact phrases) compiles
-        # one regex over every intent and entity: ~30 s in WebAssembly, right
-        # after "ready", so the first question waited for it. ovos-padatious'
-        # own disable_padaos setting leaves the matching to padatious' neural
-        # networks, which ship pre-trained with the site (issue #4).
-        out.setdefault("intents", {})["ovos-padatious-pipeline-plugin"] = {"disable_padaos": True}
     # The location now comes from the browser PHAL plugin, in the assistant
     # layer like ipgeo's (phal.py). Builds of 2026-11-14 wrote the browser's
     # time zone into the user layer instead, where it would hide that; such
     # an entry, and only that, is dropped again.
     user = read_user_config()
+    # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
+    # it padatious matched "what time is it" to the timer skill. v4 takes
+    # back exactly that setting, so ovos-padatious works as on a device.
+    pad = user.get("intents", {}).get("ovos-padatious-pipeline-plugin", {})
+    if done < 4 and pad.get("disable_padaos") is True:
+        del pad["disable_padaos"]
+        if not pad:
+            del user["intents"]["ovos-padatious-pipeline-plugin"]
+        _write_whole_user_config(user)
     loc = user.get("location")
     if isinstance(loc, dict) and list(loc) == ["timezone"] and \
             loc["timezone"].get("code") == loc["timezone"].get("name"):

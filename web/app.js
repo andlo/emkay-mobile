@@ -135,6 +135,7 @@ async function start() {
   if (kiosk || phoneScreen.matches) enterKiosk();
   keepAwake();
   wake.start(bootInfo?.wake_word).catch((e) => { wake.state = `error: ${e.message || e}`; });
+  warmingWatch();
   if (bootInfo?.confirm_listening && bootInfo.start_listening_sound) {
     call("sound_bytes", { uri: bootInfo.start_listening_sound })
       .then((bytes) => audioCtx.decodeAudioData(bytes.buffer))
@@ -284,6 +285,28 @@ const mic = {
 
 let stream = null;
 let captionTimer = null;
+
+/**
+ * Right after start OVOS still prepares its intent matching in the
+ * background (padatious' padaos compiles its regexes: half a minute or more
+ * in WebAssembly). A question asked meanwhile is answered when that is
+ * done; until then the caption says "Warming up…", so silence is not
+ * mistaken for not listening. The worker is pinged for the first minutes;
+ * a slow answer means it is still busy.
+ */
+async function warmingWatch(seconds = 150) {
+  const end = performance.now() + seconds * 1000;
+  let shown = false;
+  while (performance.now() < end) {
+    const slow = setTimeout(() => {
+      if (!mic.busy && $("caption").hidden) { caption(t("warming")); shown = true; }
+    }, 700);
+    await call("python", { code: "1" }).catch(() => {});
+    clearTimeout(slow);
+    if (shown && !mic.busy) { caption(t("warming"), null, 1); shown = false; }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
 
 // ovos-stt-plugin-browser: the browser's own speech recognition, chosen as
 // OVOS' STT plugin (stt.module). Kept up to date from boot and config changes.
