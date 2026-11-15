@@ -12,6 +12,8 @@
 // What is downloaded, and from where, is described by build.json, which
 // tools/build_site.py writes next to this file.
 
+import { matchLang } from "./i18n.js";
+
 let py = null;    // the Pyodide instance
 let main = null;  // the Python module emkay_mobile.worker_main
 const build = fetch("build.json", { cache: "no-cache" }).then((r) => r.json());
@@ -61,8 +63,32 @@ function syncfs(populate) {
 }
 
 /**
- * Start Python, unpack OpenVoiceOS and boot it. Downloads that are already
- * on this device (intent cache, m2v models with the same hash) are skipped.
+ * The languages OVOS will boot in, of those the site has pre-trained
+ * intents for: its `lang` and `secondary_langs` as ovos-config merges them
+ * (the user layer mycroft.conf over the assistant layer runtime.conf),
+ * else the phone's language as boot._phone_language picks it, else en-US.
+ * Read from the files before Python runs, so only these are downloaded.
+ */
+function bootLanguages(siteLangs) {
+  const read = (name) => {
+    try { return JSON.parse(py.FS.readFile(`/home/pyodide/.config/mycroft/${name}`, { encoding: "utf8" })); }
+    catch { return {}; }
+  };
+  const user = read("mycroft.conf");
+  const assistant = read("runtime.conf");
+  const phone = (self.navigator.languages || [self.navigator.language])
+    .map((l) => matchLang(l, siteLangs)).find(Boolean);
+  const lang = matchLang(user.lang ?? assistant.lang, siteLangs) ?? phone
+    ?? matchLang("en-US", siteLangs) ?? siteLangs[0];
+  const extra = (user.secondary_langs ?? assistant.secondary_langs ?? [])
+    .map((l) => matchLang(l, siteLangs)).filter(Boolean);
+  return [...new Set([lang, ...extra])].filter(Boolean);
+}
+
+/**
+ * Start Python, unpack OpenVoiceOS and boot it. Only the intent caches and
+ * m2v models of the languages OVOS boots in are fetched (bootLanguages);
+ * downloads already on this device (same hash) are skipped.
  */
 async function boot({ userConfig }) {
   const b = await build;
@@ -90,14 +116,16 @@ async function boot({ userConfig }) {
   const stamp = `${home}/.local/share/emkay-mobile/downloads.json`;
   let have = {};
   try { have = JSON.parse(py.FS.readFile(stamp, { encoding: "utf8" })); } catch {}
+  const langs = bootLanguages(Object.keys(b.intent_cache || {}));
+  const bases = new Set(langs.map((l) => l.split("-")[0].toLowerCase()));
   for (const [lang, entry] of Object.entries(b.intent_cache || {})) {
-    if (have[`intents-${lang}`] === entry.hash) continue;
+    if (!langs.includes(lang) || have[`intents-${lang}`] === entry.hash) continue;
     const zip = await fetchBytes(entry.url, "boot.intents", { lang });
     py.FS.writeFile(`/tmp/intents-${lang}.zip`, zip);
     have[`intents-${lang}`] = entry.hash;
   }
   for (const [lang, entry] of Object.entries(b.m2v_models || {})) {
-    if (have[`m2v-${lang}`] === entry.hash) continue;
+    if (!bases.has(lang) || have[`m2v-${lang}`] === entry.hash) continue;
     const zip = await fetchBytes(entry.url, "boot.m2v", { lang });
     py.FS.writeFile(`/tmp/m2v-${lang}.zip`, zip);
     have[`m2v-${lang}`] = entry.hash;
@@ -134,6 +162,8 @@ importlib.invalidate_caches()
   status("boot.start");
   main = py.pyimport("emkay_mobile.worker_main");
   const info = JSON.parse(main.start(post, userConfig ? py.toPy(userConfig) : null));
+  info.site_langs = Object.keys(b.intent_cache || {});
+  info.intent_langs = langs;   // what this boot has intents for (app.js)
   status("boot.ready", 1);
   // Python's deferred work (padatious' training pass) runs from here on,
   // whenever this worker is idle. Keep the disk in step with what skills

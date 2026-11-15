@@ -87,6 +87,15 @@ try {
   log(`panel sets lang ${other}: ${r}`);
   await sleep(3000);
   log(`now: OVOS lang ${await py("from ovos_config import Configuration; Configuration().get('lang')")} | menu: ${await js(`[...document.querySelectorAll("#menu button")].map(b => b.innerText).join(" / ")`)} | html lang=${await js(`document.documentElement.lang`)}`);
+  const downloaded = () => py("import json, os; sorted(json.load(open(os.path.expanduser('~/.local/share/emkay-mobile/downloads.json'))))");
+  log(`downloaded: ${await downloaded()}`);
+  const button = `document.getElementById("restart-lang")`;
+  log(`restart button: ${await js(`${button}.hidden ? "hidden" : ${button}.innerText`)}`);
+  // the restart it offers: the next boot fetches the new language
+  await js(`${button}.click(); true`);
+  await sleep(4000);
+  await until(`!!document.getElementById("start") && !document.getElementById("start").hidden`, 400, "OVOS boot after restart");
+  log(`after restart: OVOS lang ${await py("from ovos_config import Configuration; Configuration().get('lang')")} | downloaded: ${await downloaded()} | start: ${await js(`document.getElementById("start").innerText`)}`);
 } catch (e) {
   log(`FAILED: ${e.message}`);
 } finally {

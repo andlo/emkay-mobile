@@ -7,7 +7,7 @@
 // URL options: ?kiosk  full screen + portrait lock on start (the installed
 // app opens with it, see manifest.webmanifest).
 
-import { t, apply, setLang, onLangChange } from "./i18n.js";
+import { t, apply, setLang, onLangChange, matchLang } from "./i18n.js";
 import { onRequest as deviceRequest, startDevice } from "./device.js";
 
 const $ = (id) => document.getElementById(id);
@@ -197,6 +197,7 @@ async function keepStorage() {
     const info = await call("boot", { userConfig: null });
     console.log("[emkay] OVOS up", info);
     setLang(info.lang);   // from here on Emkay's texts follow OVOS' language
+    bootInfo = info;
     ovosReady();
     await import("./visage/visage.js");
     bootStatus("boot.skills", 1, { n: info.skills.length });
@@ -385,7 +386,7 @@ function locate() {
 function onBus(msg) {
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
   if (msg.type === "mycroft.mic.mute") mic.setMuted(true);
-  if (msg.type === "emkay.lang") setLang(msg.data.lang);   // changed in the panel
+  if (msg.type === "emkay.lang") languageChanged(msg.data.lang);   // in the panel
   if (msg.type === "mycroft.mic.unmute") mic.setMuted(false);
 }
 
@@ -455,6 +456,26 @@ if ("serviceWorker" in navigator) {
       port.postMessage({ status: 502, headers: [["content-type", "text/plain"]], body }, [body.buffer]);
     }
   };
+}
+
+let bootInfo = null;   // what boot() returned
+
+/**
+ * OVOS' language changed (the control panel). Emkay's texts follow at once.
+ * The pre-trained intents for a language are fetched when OVOS starts, as
+ * a device loads a new language when its services restart; so if this
+ * boot has none for the new one, a button offers that restart.
+ */
+function languageChanged(lang) {
+  setLang(lang);
+  const want = matchLang(lang, bootInfo?.site_langs || []);
+  const missing = Boolean(want) && !(bootInfo?.intent_langs || []).includes(want);
+  const el = $("restart-lang");
+  el.hidden = !missing;
+  if (missing) {
+    el.textContent = t("restart.lang", { lang: want });
+    el.onclick = async () => { await call("sync").catch(() => {}); location.reload(); };
+  }
 }
 
 /**

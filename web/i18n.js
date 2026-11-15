@@ -48,6 +48,7 @@ export const TEXTS = {
     "import.done": "Restored ({files} files from {date}). Restarting…",
     "import.failed": "Could not restore: {msg}",
     "off": "Turned off – tap to start",
+    "restart.lang": "Restart to use {lang}",
   },
   da: {
     "boot.loading": "Henter…",
@@ -86,8 +87,23 @@ export const TEXTS = {
     "import.done": "Hentet ({files} filer fra {date}). Genstarter…",
     "import.failed": "Kunne ikke hente: {msg}",
     "off": "Slukket – tryk for at starte",
+    "restart.lang": "Genstart for at bruge {lang}",
   },
 };
+
+/**
+ * The site language for `code`: the one in `langs` (e.g. the languages the
+ * site has pre-trained intents for, "da-DK") that is `code` exactly, else
+ * the first with the same base language ("da"); null when there is none.
+ * The same rule as boot._phone_language.
+ */
+export function matchLang(code, langs) {
+  const c = String(code || "").toLowerCase().replace("_", "-");
+  if (!c) return null;
+  return langs.find((l) => l.toLowerCase() === c)
+    ?? langs.find((l) => l.split("-")[0].toLowerCase() === c.split("-")[0])
+    ?? null;
+}
 
 /** The text language for a language code ("da-DK", "da", "en-us" …). */
 export function pick(code) {
