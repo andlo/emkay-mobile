@@ -10,7 +10,7 @@ const url = process.argv[2] || "http://127.0.0.1:8080/";
 const port = 9344;
 const chrome = spawn(process.env.CHROME, [
   "--headless=new", `--remote-debugging-port=${port}`, "--user-data-dir=/tmp/emkay-chrome-py",
-  "--window-size=390,844", "--no-first-run", `--lang=${process.env.PHONE_LANG || "en-US"}`, "about:blank"], { stdio: "ignore" });
+  "--window-size=390,844", "--autoplay-policy=no-user-gesture-required", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--no-first-run", `--lang=${process.env.PHONE_LANG || "en-US"}`, "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const t0 = Date.now();
 const log = (m) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
@@ -56,7 +56,13 @@ try {
   if (process.env.SLEEP_MS) await sleep(Number(process.env.SLEEP_MS));
   if (process.env.JS) {   // JS=expression: evaluated in the page (awaited), e.g. window.emkay.call("sync")
     const t = Date.now();
-    log(`JS: ${await Promise.race([js(process.env.JS).then(String), sleep(30000).then(() => "STILL WAITING after 30 s")])} (${Date.now() - t} ms)`);
+    log(`JS: ${await Promise.race([js(process.env.JS).then(String), sleep(Number(process.env.JS_MS || 30000)).then(() => "STILL WAITING")])} (${Date.now() - t} ms)`);
+  }
+  if (process.env.SHOT) {   // SHOT=file.png: a screenshot of the page
+    const { writeFileSync } = await import("fs");
+    const r = await send("Page.captureScreenshot", { format: "png" });
+    writeFileSync(process.env.SHOT, Buffer.from(r.result.data, "base64"));
+    log(`screenshot: ${process.env.SHOT}`);
   }
   for (const code of (process.env.PY || "1").split("\n---\n")) {
     log(`>>> ${code.split("\n").at(-1).slice(0, 100)}`);

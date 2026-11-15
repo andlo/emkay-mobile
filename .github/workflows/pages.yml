@@ -9,8 +9,9 @@
 # intents     one job per language: padatious is pre-trained on a normal
 #             CPython with those same wheels, so a phone loads the networks
 #             instead of training them for minutes. The result is kept in
-#             the Actions cache, keyed by the exact wheels and the training
-#             script: a push that changes neither (most do) reuses it.
+#             the Actions cache, keyed by the skills, padatious and the skill
+#             loader wheels and the training script: a push that changes
+#             none of them (most) reuses it.
 #             "Run workflow" with retrain ticked trains anyway.
 # site        Pyodide + the OVOS bundle + the intent caches + one m2v model
 #             per language, assembled into a static site, then tested in a
@@ -90,12 +91,15 @@ jobs:
         with:
           name: wheelhouse
           path: wheelhouse
-      # the same wheels (names carry the versions), the same training script
-      # and the same requirements give the same networks
+      # the same skills, the same padatious and the same skill loader (wheel
+      # names carry the versions), the same training script and the same
+      # requirements give the same networks. Only those wheels count: OVOS
+      # publishes alphas of its other packages many times a day, and they do
+      # not change what padatious learns.
       - name: Cache key
         id: key
         run: |
-          w=$(ls wheelhouse | sort | sha256sum | cut -c1-16)
+          w=$(ls wheelhouse | grep -iE '^(ovos_skill|ovos_padatious|padaos|ovos_workshop|skill_)' | sort | sha256sum | cut -c1-16)
           t=$(cat tools/build_intent_cache.py requirements/*.txt | sha256sum | cut -c1-12)
           echo "key=intents-${{ matrix.lang }}-$w-$t" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v4

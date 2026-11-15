@@ -55,7 +55,7 @@ PROBES = [
     ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/hey_mycroft_what_time.wav"), "ANSWERS": "2"}, [], [
         r"wake word engine ready",
         r'said: \["(It|Currently)',                        # no tap: the wake word
-        r"answer 2; mic: mic, wake listening",                # and back waiting for the next one
+        r"answer 2; mic: mic[^,]*, wake listening",                # and back waiting for the next one
     ]),
     # a skill asking back (get_response) gets the answer: Python really waits (JSPI, #20)
     ("noanswer_browser.mjs", {"QUESTIONS": "set an alarm|in five minutes|read the latest post from ovosblog|yes|stop"}, [], [
@@ -115,9 +115,10 @@ def main():
     server = serve()
     failed = []
     try:
-        for probe, env, args, expect in PROBES:
+        for n, (probe, env, args, expect) in enumerate(PROBES, 1):
             t = time.time()
-            log = logs / probe.replace(".mjs", ".log")
+            # numbered: a probe that runs twice (other questions) keeps both logs
+            log = logs / f"{n:02d}-{probe.replace('.mjs', '.log')}"
             with open(log, "w") as out:
                 subprocess.run(["node", str(REPO / "tools/probes" / probe), *(args or [URL])],
                                env={**os.environ, **env}, stdout=out, stderr=subprocess.STDOUT,
