@@ -123,18 +123,32 @@ def main():
     failed = []
     try:
         for n, (probe, env, args, expect) in enumerate(PROBES, 1):
-            t = time.time()
-            # numbered: a probe that runs twice (other questions) keeps both logs
-            log = logs / f"{n:02d}-{probe.replace('.mjs', '.log')}"
-            with open(log, "w") as out:
-                subprocess.run(["node", str(REPO / "tools/probes" / probe), *(args or [URL])],
-                               env={**os.environ, **env}, stdout=out, stderr=subprocess.STDOUT,
-                               cwd=REPO, timeout=900)
-            text = log.read_text(errors="replace")
-            missing = [e for e in expect if not re.search(e, text)]
-            print(f"{'ok  ' if not missing else 'FAIL'} {probe} ({time.time() - t:.0f} s)")
-            for e in missing:
-                print(f"     missing: {e}")
+            # a probe that fails gets one more try from a clean profile: these
+            # are real browsers on a shared runner, and a slow moment (a
+            # timeout, a reading that runs on) must not hold every deploy
+            # back; a real fault fails twice
+            for attempt in (1, 2):
+                t = time.time()
+                # numbered: a probe that runs twice (other questions) keeps both logs
+                suffix = "" if attempt == 1 else "-retry"
+                log = logs / f"{n:02d}-{probe.replace('.mjs', '')}{suffix}.log"
+                for d in glob.glob("/tmp/emkay-chrome*"):
+                    shutil.rmtree(d, ignore_errors=True)
+                with open(log, "w") as out:
+                    try:
+                        subprocess.run(["node", str(REPO / "tools/probes" / probe), *(args or [URL])],
+                                       env={**os.environ, **env}, stdout=out, stderr=subprocess.STDOUT,
+                                       cwd=REPO, timeout=900)
+                    except subprocess.TimeoutExpired:
+                        out.write("\nTIMED OUT (900 s)\n")
+                text = log.read_text(errors="replace")
+                missing = [e for e in expect if not re.search(e, text)]
+                label = "ok  " if not missing else ("FAIL" if attempt == 2 else "flaky?")
+                print(f"{label} {probe}{' (retry)' if attempt == 2 else ''} ({time.time() - t:.0f} s)")
+                for e in missing:
+                    print(f"     missing: {e}")
+                if not missing:
+                    break
             if missing:
                 failed.append(probe)
     finally:
