@@ -71,6 +71,7 @@ worker.onmessage = ({ data }) => {
   switch (data.kind) {
     case "status": return bootStatus(data.key, data.progress, data.vars);
     case "gui": for (const s of guiSockets) s.deliver(data.payload); return;
+    case "core": for (const f of coreListeners) f(data.payload); return;
     case "audio": return data.payload.sound ? speaker.playSound(data.data) : speaker.enqueue(data.data, data.payload);
     case "phal": return onPhal(JSON.parse(data.payload));
     case "bus": return onBus(JSON.parse(data.payload));
@@ -101,6 +102,48 @@ class GuiSocket {
   send(raw) { call("gui_message", { raw }); }
   close() { guiSockets.delete(this); this.readyState = 3; }
 }
+// ------------------------------------------ the new visage (?visage=new)
+/**
+ * ovos-gui-visage, the Flutter port (issue #22), runs in a frame
+ * (visage2/index.html). Its websockets are web/visage2-shim.js in that
+ * frame, which talks to OVOS through this: `core` gets every bus message
+ * (worker_main.core_open), `gui` the same GUI stream as the old visage.
+ */
+const NEW_VISAGE = new URLSearchParams(location.search).get("visage") === "new";
+const coreListeners = new Set();
+const guiListeners = new Map();   // listener -> its guiSockets entry
+window.emkayVisage2 = {
+  ready,
+  call,
+  subscribe(route, fn) {
+    if (route === "core") return void coreListeners.add(fn);
+    const entry = { deliver: fn };
+    guiListeners.set(fn, entry);
+    guiSockets.add(entry);
+  },
+  unsubscribe(route, fn) {
+    coreListeners.delete(fn);
+    guiSockets.delete(guiListeners.get(fn));
+    guiListeners.delete(fn);
+  },
+};
+
+/**
+ * Put the new visage's frame in place of the old visage. It fills the
+ * window itself (Flutter lays out for any size), so it replaces the whole
+ * Mark II device frame, under Emkay's own layer (boot, menu, mic).
+ */
+function showNewVisage() {
+  const frame = document.createElement("iframe");
+  frame.id = "visage2";
+  frame.className = "visage2";
+  frame.src = "visage2/index.html";
+  frame.title = "OVOS Visage";
+  frame.allow = "autoplay";
+  $("device").hidden = true;
+  document.body.prepend(frame);
+}
+
 const NativeWebSocket = window.WebSocket;
 window.WebSocket = new Proxy(NativeWebSocket, {
   construct(target, args) {
@@ -225,7 +268,8 @@ async function keepStorage() {
     ovosLang = info.lang || ovosLang;
     sttModule = info.stt_module;
     ovosReady();
-    await import("./visage/visage.js");
+    if (NEW_VISAGE) showNewVisage();
+    else await import("./visage/visage.js");
     bootStatus("boot.skills", 1, { n: info.skills.length });
     offerSetup();
     startDevice(call);   // the phone's sensors and connectivity, for PHAL
@@ -755,8 +799,14 @@ function keepCookies(headers) {
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch((e) => console.warn("[emkay] service worker", e));
   navigator.serviceWorker.onmessage = async (event) => {
-    const req = event.data?.panelRequest;
     const port = event.ports[0];
+    const resPath = event.data?.resRequest;   // the new visage's res/, res-abs/
+    if (resPath && port) {
+      await ready;
+      const bytes = await call("res_file", { path: resPath }).catch(() => null);
+      return port.postMessage(bytes ? { body: bytes } : {}, bytes ? [bytes.buffer] : []);
+    }
+    const req = event.data?.panelRequest;
     if (!req || !port) return;
     try {
       await ready;   // OVOS (and so the panel) is up

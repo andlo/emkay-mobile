@@ -48,8 +48,37 @@ function panelPath(url) {
   return null;
 }
 
+/**
+ * The new visage (web/visage2/, ?visage=new) fetches GUI resources from
+ * res/ (ovos-gui's cache) and res-abs/ (absolute paths), which its nginx
+ * sidecar serves from OVOS' disk on a device. Here they come from the
+ * worker's file system (worker_main.res_file).
+ */
+const VISAGE2 = new URL("./visage2/", self.registration.scope).pathname;
+const RES_TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  svg: "image/svg+xml", webp: "image/webp", json: "application/json", mp3: "audio/mpeg",
+  wav: "audio/wav", ogg: "audio/ogg", html: "text/html", txt: "text/plain" };
+
+async function serveRes(path) {
+  const page = await emkayPage();
+  if (!page) return new Response("", { status: 503 });
+  const reply = await new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => resolve({}), 30000);
+    channel.port1.onmessage = ({ data }) => { clearTimeout(timer); resolve(data); };
+    page.postMessage({ resRequest: decodeURIComponent(path) }, [channel.port2]);
+  });
+  if (!reply.body) return new Response("", { status: 404 });
+  const ext = path.split(".").pop().toLowerCase();
+  return new Response(reply.body, { headers: { "content-type": RES_TYPES[ext] || "application/octet-stream" } });
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+  if (url.origin === self.location.origin && url.pathname.startsWith(VISAGE2)) {
+    const rest = url.pathname.slice(VISAGE2.length);
+    if (rest.startsWith("res/") || rest.startsWith("res-abs/")) return event.respondWith(serveRes(rest));
+  }
   const path = panelPath(url);
   if (path !== null) event.respondWith(serve(event, path, url));
 });

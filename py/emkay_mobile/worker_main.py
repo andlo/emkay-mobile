@@ -96,6 +96,8 @@ def _watch(raw):
     except Exception:
         return
     t = msg.get("type") if isinstance(msg, dict) else None
+    if _core_open:   # the new visage's core bus socket gets everything
+        _post("core", raw if isinstance(raw, str) else raw.serialize())
     if t in _STATE_TOPICS:
         _post("bus", json.dumps({"type": t, "data": msg.get("data", {})}))
     elif t in ("configuration.updated", "configuration.patch", "configuration.patch.clear"):
@@ -123,6 +125,56 @@ def gui_snapshot() -> str:
 def gui_message(raw: str):
     """A GUI-protocol message from the screen (focus, page events)."""
     gui.client().from_page(raw)
+
+
+# --- the new visage (ovos-gui-visage, Flutter web build) -----------------
+#
+# It opens two websockets on a device: the core messagebus and ovos-gui's
+# legacy GUI socket (web/visage2.js stands in for both). The GUI socket is
+# the same stream the old visage gets (gui.py's BrowserGuiClient); the bus
+# socket is every bus message, both ways, while it is open.
+
+_core_open = False
+
+
+def core_open(is_open: bool = True):
+    """The new visage's bus socket opened (or closed)."""
+    global _core_open
+    _core_open = bool(is_open)
+
+
+def core_send(raw: str):
+    """A message the new visage put on the bus, emitted as any bus client's is."""
+    from ovos_bus_client.message import Message
+    from .browser import hand_over
+    msg = Message.deserialize(raw)
+    hand_over(lambda: boot.bus().emit(msg))
+
+
+def gui_sync():
+    """A GUI socket (re)connected: replay ovos-gui's state to it, as
+    GUIWebsocketHandler.open() does for a new connection."""
+    from ovos_gui.bus import GUIWebsocketHandler
+    GUIWebsocketHandler.synchronize(gui.client())
+
+
+def res_file(path: str):
+    """A file for the new visage's res/ (ovos-gui's cache, `cache=True`) or
+    res-abs/ (an absolute path) route; None if there is no such file."""
+    import os
+    from pyodide.ffi import to_js
+    if path.startswith("res/"):
+        from ovos_gui.constants import GUI_CACHE_PATH
+        full = os.path.join(GUI_CACHE_PATH, path[4:])
+    elif path.startswith("res-abs/"):
+        full = "/" + path[8:].lstrip("/")
+    else:
+        return None
+    full = os.path.normpath(full)
+    if not os.path.isfile(full):
+        return None
+    with open(full, "rb") as f:
+        return to_js(f.read())
 
 
 def say(text: str):

@@ -167,6 +167,10 @@ jobs:
           python tools/fetch_m2v_models.py m2v $langs
       - name: Fetch the wake word models (openWakeWord)
         run: python tools/fetch_wakeword_models.py oww
+      # ovos-gui-visage's Flutter web build, from its pinned Docker image
+      # (issue #22); shown with ?visage=new until it is the default
+      - name: Fetch the new visage (web build)
+        run: python tools/fetch_visage2.py
       - name: Build the site
         run: |
           python tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json

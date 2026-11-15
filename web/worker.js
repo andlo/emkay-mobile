@@ -189,6 +189,11 @@ const commands = {
   boot,
   gui_snapshot: () => main.gui_snapshot(),
   gui_message: ({ raw }) => promising(main.gui_message, raw),
+  // the new visage (web/visage2.js): its bus socket, GUI resync, res/ files
+  core_open: ({ open }) => main.core_open(open),
+  core_send: ({ raw }) => promising(main.core_send, raw),
+  gui_sync: () => promising(main.gui_sync),
+  res_file: ({ path }) => main.res_file(path) ?? null,   // a Uint8Array or null
   say: ({ text }) => promising(main.say, text),
   record_begin: () => promising(main.record_begin),
   wakeword: ({ name }) => promising(main.wakeword, name),
