@@ -52,9 +52,13 @@ PROBES = [
         r'captions: \["Listening…","One moment…","“What time is it\?”"',   # tap, STT
         r'second said: \["(It|Currently) ',                 # and an answer
     ]),
-    ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/hey_mycroft_what_time.wav")}, [], [
+    ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/hey_mycroft_what_time.wav"), "ANSWERS": "2"}, [], [
         r"wake word engine ready",
         r'said: \["(It|Currently) ',                        # no tap: the wake word
+        r"answer 2; mic: mic, wake listening",                # and back waiting for the next one
+    ]),
+    ("busy_browser.mjs", {"QUESTION": "set an alarm", "WATCH_MS": "20000"}, [], [
+        r"asked a question; a browser cannot wait",           # get_response does not hang (#20)
     ]),
     ("panel_mobile.mjs", {}, [], [
         r"after tapping Settings: /panel/config",       # the panel's menu by touch

@@ -34,7 +34,7 @@ await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pending = new Map();
 const workerLines = [];
-const INTERESTING = /wakeword|\[emkay\] (stt|tts)|Parsing utterance|match \(|Traceback|Error/i;
+const INTERESTING = /\[stack\]|asked a question|get_response|wakeword|\[emkay\] (stt|tts)|Parsing utterance|match \(|Traceback|Error/i;
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); }
@@ -68,6 +68,15 @@ try {
   await send("Page.enable");
   await send("Page.navigate", { url });
   await until(`!!document.getElementById("start") && !document.getElementById("start").hidden`, 400, "OVOS boot");
+  // STACKS=1: where Python is, every 5 s while it runs (to see what a busy worker does)
+  if (process.env.STACKS) await py(`import sys, time, traceback
+_t = [time.time()]
+def _prof(frame, event, arg):
+    if time.time() - _t[0] > 5:
+        _t[0] = time.time()
+        print("[stack] " + " <- ".join(f"{fs.name}@{fs.filename.split('/')[-1]}:{fs.lineno}" for fs in reversed(traceback.extract_stack(frame)[-14:])))
+sys.setprofile(_prof)
+"ok"`);
   await js(`window.__captions = []; window.__said = [];
     new MutationObserver(() => { const t = document.getElementById("caption-text").textContent;
       if (window.__captions.at(-1) !== t) window.__captions.push(t); })
@@ -78,7 +87,13 @@ try {
   const t = Date.now();
   await until(`document.getElementById("mic").classList.contains("wake")`, 60, "the wake word engine");
   log(`wake word engine ready in ${((Date.now() - t) / 1000).toFixed(1)}s`);
-  await until(`window.__said.length > 0`, 120, "an answer without a tap");
+  // ANSWERS=2: the fake microphone loops the file, so a second "hey mycroft"
+  // follows; Emkay must be back waiting for it after the first answer
+  const answers = Number(process.env.ANSWERS || 1);
+  for (let n = 1; n <= answers; n++) {
+    await until(`window.__said.length >= ${n}`, Number(process.env.WAIT_S || 120), `answer ${n} without a tap`);
+    log(`answer ${n}; mic: ${await js(`document.getElementById("mic").className + ", wake " + window.emkay.wake.state`)}`);
+  }
   log(`captions: ${await js(`JSON.stringify(window.__captions)`)}`);
   log(`said: ${await js(`JSON.stringify(window.__said)`)} (${((Date.now() - t) / 1000).toFixed(1)}s after start)`);
 } catch (e) {
@@ -87,7 +102,7 @@ try {
   log(`wake word state: ${await js(`window.emkay.wake.state + ", chunks " + window.emkay.wake.chunks + ", best score " + window.emkay.wake.best`)}`);
 } finally {
   log("worker log:");
-  for (const l of workerLines.slice(-25)) console.log(`  ${l}`);
+  for (const l of workerLines.slice(-Number(process.env.LINES || 25))) console.log(`  ${l}`);
   ws.close();
   chrome.kill();
 }

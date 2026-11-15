@@ -297,11 +297,39 @@ def _scheduler_requests_sent(self):
     self._send_scheduler_requests()
 
 
+QUESTIONS_NOT_WAITED = []   # (skill_id, dialog) get_response could not wait for (issue #20)
+
+
+def _get_response(self, dialog="", data=None, validator=None, on_fail=None,
+                  num_retries=-1, message=None, wait=True):
+    """OVOSSkill.get_response without waiting for the answer.
+
+    On a device the skill's handler waits in its thread while the listener,
+    STT and ovos-core deliver the next utterance on other threads. Here there
+    is one thread, and the handler holding it is the one waiting: the reply
+    can never be heard, and the wait (time.sleep returns at once) spins until
+    its deadline and re-prompts, again and again - "mycroft.mic.listen" each
+    time, the listening sound in a loop, the worker busy for minutes.
+
+    So the question is still asked (the dialog is spoken, as OVOS would) but
+    no answer is waited for: it returns None, which is what get_response
+    returns when the user says nothing, and every skill handles that (an
+    ask_yesno gets None too). The listening that would follow is not started:
+    what the user then says goes to ovos-core as a new question.
+    """
+    if dialog:
+        self.speak_dialog(dialog, data or {}, wait=False)
+    QUESTIONS_NOT_WAITED.append((self.skill_id, dialog))
+    print(f"[emkay] {self.skill_id} asked a question; a browser cannot wait for the answer (issue #20)")
+    return None
+
+
 def adapt_ovos():
     """Changes to OVOS itself for a single-threaded WebAssembly host.
 
     Called by boot.start() once the OVOS packages are importable. Each change
-    keeps every answer the same; it only moves work to where it can run.
+    keeps every answer the same (but get_response, see below); it only
+    moves work to where it can run.
 
     * padatious: after each training pass, PadatiousPipeline._warm_prefilters
       compiles one combined regex per padaos intent "so the first query in
@@ -312,6 +340,10 @@ def adapt_ovos():
       milliseconds per query. It is left out.
     * ovos-workshop: scheduler requests go out from the event loop instead of
       from a thread that waits on a queue forever (_send_to_scheduler above).
+    * ovos-workshop: get_response asks its question but does not wait for
+      the answer, which only this same thread could deliver (_get_response
+      above). This one does change answers: follow-up questions get "no
+      answer" instead of hanging the assistant.
     """
     try:
         from ovos_padatious.opm import PadatiousPipeline
@@ -325,3 +357,4 @@ def adapt_ovos():
     OVOSSkill._send_to_scheduler = _send_to_scheduler
     OVOSSkill._send_scheduler_requests = _send_scheduler_requests
     OVOSSkill._scheduler_requests_sent = _scheduler_requests_sent
+    OVOSSkill.get_response = _get_response
