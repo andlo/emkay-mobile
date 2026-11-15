@@ -2,6 +2,7 @@
 
   build/site/
     index.html, app.js, worker.js, ...   web/ as is
+    texts.json                           Emkay's own texts, from locale/<lang>/*.dialog
     bundle-<hash>.zip                    every pure-Python package OVOS needs
                                          (from the wheelhouse), emkay_mobile
                                          and ovos_visage, unpacked into
@@ -137,11 +138,27 @@ def build_intents(cache_dirs):
     return out
 
 
+def locale_texts() -> dict:
+    """Emkay's own texts: {lang: {key: text}} from locale/<lang>/<key>.dialog.
+
+    The same layout and format as an OVOS skill's dialogs (one file per
+    text, {placeholders}), so translation tools for skills read them too.
+    The first line of a file is the text.
+    """
+    out = {}
+    for d in sorted((REPO / "locale").iterdir()):
+        if d.is_dir():
+            out[d.name] = {f.name[:-len(".dialog")]: f.read_text(encoding="utf-8").splitlines()[0].strip()
+                           for f in sorted(d.glob("*.dialog"))}
+    return out
+
+
 def main():
     wheelhouse, plan_path, *cache_dirs = sys.argv[1:]
     plan = json.load(open(plan_path))
     shutil.rmtree(OUT, ignore_errors=True)
     shutil.copytree(REPO / "web", OUT)
+    (OUT / "texts.json").write_text(json.dumps(locale_texts(), ensure_ascii=False))
 
     bundle = build_bundle(Path(wheelhouse), plan)
     bundle_name = f"bundle-{short_hash(bundle)}.zip"

@@ -2,6 +2,10 @@
 // Emkay ships. Everything OVOS says or shows comes from OVOS itself; these
 // are only the few words around it.
 //
+// The texts live in locale/<lang>/<key>.dialog, the layout and format of an
+// OVOS skill's dialogs, so OVOS' translation tooling can read them; the
+// build gathers them into texts.json. To add a language, add its folder.
+//
 // Which language: the phone's (navigator.languages) until OVOS is up, then
 // OVOS' own `lang` - which is the phone's language too unless the user chose
 // another one in the control panel (boot.py, _phone_language). A language
@@ -10,105 +14,23 @@
 // In index.html an element is translated by data-i18n="key" (its text),
 // data-i18n-aria="key" (aria-label) or data-i18n-placeholder="key".
 
-export const TEXTS = {
-  en: {
-    "boot.loading": "Loading…",
-    "boot.python": "Starting Python…",
-    "boot.packages": "Fetching Python packages…",
-    "boot.ovos": "Fetching OpenVoiceOS…",
-    "boot.intents": "Fetching pre-trained intents ({lang})…",
-    "boot.m2v": "Fetching language model ({lang})…",
-    "boot.unpack": "Unpacking…",
-    "boot.start": "Starting OpenVoiceOS…",
-    "boot.ready": "Ready",
-    "boot.skills": "{n} skills ready",
-    "boot.error": "Error: {msg}",
-    "start": "Tap to start",
-    "start.defaults": "Start with defaults",
-    "first.text": "Without setup Emkay runs on the defaults: your phone's language " +
-      "(or English) and OpenVoiceOS' public servers for speech. Everything can be " +
-      "changed later under ⚙.",
-    "first.setup": "Set up",
-    "about": "OpenVoiceOS in your browser",
-    "source": "source code",
-    "mic": "Talk",
-    "type": "Type to Emkay…",
-    "keyboard": "Type",
-    "menu": "Menu",
-    "menu.export": "Save setup on the phone",
-    "menu.import": "Restore setup from a file",
-    "menu.panel": "OpenVoiceOS settings",
-    "menu.kiosk": "Full screen",
-    "close": "Close",
-    "storage.kept": "Kept on the phone",
-    "storage.loose": "The browser may clear this – save a copy",
-    "export.file": "emkay-settings",
-    "export.saved": "Saved as {name}",
-    "export.failed": "Could not save: {msg}",
-    "import.done": "Restored ({files} files from {date}). Restarting…",
-    "import.failed": "Could not restore: {msg}",
-    "off": "Turned off – tap to start",
-    "restart.lang": "Restart to use {lang}",
-  },
-  da: {
-    "boot.loading": "Henter…",
-    "boot.python": "Starter Python…",
-    "boot.packages": "Henter Python-pakker…",
-    "boot.ovos": "Henter OpenVoiceOS…",
-    "boot.intents": "Henter forudtrænede intents ({lang})…",
-    "boot.m2v": "Henter sprogmodel ({lang})…",
-    "boot.unpack": "Pakker ud…",
-    "boot.start": "Starter OpenVoiceOS…",
-    "boot.ready": "Klar",
-    "boot.skills": "{n} skills klar",
-    "boot.error": "Fejl: {msg}",
-    "start": "Tryk for at starte",
-    "start.defaults": "Start med standard",
-    "first.text": "Uden opsætning kører Emkay med standardindstillinger: telefonens " +
-      "sprog (eller engelsk) og OpenVoiceOS' offentlige servere til tale. Alt kan " +
-      "ændres senere under ⚙.",
-    "first.setup": "Sæt op",
-    "about": "OpenVoiceOS i din browser",
-    "source": "kildekode",
-    "mic": "Tal",
-    "type": "Skriv til Emkay…",
-    "keyboard": "Skriv",
-    "menu": "Menu",
-    "menu.export": "Gem opsætning på telefonen",
-    "menu.import": "Hent opsætning fra en fil",
-    "menu.panel": "OpenVoiceOS-indstillinger",
-    "menu.kiosk": "Fuld skærm",
-    "close": "Luk",
-    "storage.kept": "Gemt varigt på telefonen",
-    "storage.loose": "Kan ryddes af browseren – gem en kopi",
-    "export.file": "emkay-indstillinger",
-    "export.saved": "Gemt som {name}",
-    "export.failed": "Kunne ikke gemme: {msg}",
-    "import.done": "Hentet ({files} filer fra {date}). Genstarter…",
-    "import.failed": "Kunne ikke hente: {msg}",
-    "off": "Slukket – tryk for at starte",
-    "restart.lang": "Genstart for at bruge {lang}",
-  },
-};
+import { matchLang } from "./langs.js";
+export { matchLang };
 
 /**
- * The site language for `code`: the one in `langs` (e.g. the languages the
- * site has pre-trained intents for, "da-DK") that is `code` exactly, else
- * the first with the same base language ("da"); null when there is none.
- * The same rule as boot._phone_language.
+ * {lang: {key: text}}, built from locale/<lang>/<key>.dialog (OVOS' own
+ * locale layout, see tools/build_site.py). Empty outside the site (Node).
  */
-export function matchLang(code, langs) {
-  const c = String(code || "").toLowerCase().replace("_", "-");
-  if (!c) return null;
-  return langs.find((l) => l.toLowerCase() === c)
-    ?? langs.find((l) => l.split("-")[0].toLowerCase() === c.split("-")[0])
-    ?? null;
-}
+export const TEXTS = await fetch(new URL("texts.json", import.meta.url))
+  .then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+TEXTS["en-us"] ??= {};
+const LANGS = Object.keys(TEXTS);
 
-/** The text language for a language code ("da-DK", "da", "en-us" …). */
+
+/** The text language for a language code ("da-DK", "pt-br", "es-CO" …):
+ * the same one, else one with the same base language, else en-us. */
 export function pick(code) {
-  const base = String(code || "").toLowerCase().split(/[-_]/)[0];
-  return TEXTS[base] ? base : "en";
+  return matchLang(code, LANGS) || "en-us";
 }
 
 let current = pick((globalThis.navigator?.languages || [])[0] || globalThis.navigator?.language);
@@ -130,7 +52,7 @@ export function onLangChange(f) { listeners.add(f); }
 
 /** The text for `key`, with {name} placeholders filled from `vars`. */
 export function t(key, vars = {}) {
-  const s = TEXTS[current][key] ?? TEXTS.en[key] ?? key;
+  const s = TEXTS[current]?.[key] ?? TEXTS["en-us"][key] ?? key;
   return s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 }
 

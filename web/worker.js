@@ -12,7 +12,7 @@
 // What is downloaded, and from where, is described by build.json, which
 // tools/build_site.py writes next to this file.
 
-import { matchLang } from "./i18n.js";
+import { matchLang } from "./langs.js";
 
 let py = null;    // the Pyodide instance
 let main = null;  // the Python module emkay_mobile.worker_main

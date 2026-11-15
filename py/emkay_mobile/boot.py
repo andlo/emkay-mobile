@@ -87,6 +87,28 @@ def _m2v_models() -> dict:
             if os.path.isfile(os.path.join(M2V_DIR, lang, "model.safetensors"))}
 
 
+def _m2v_without_model() -> list:
+    """The m2v pipeline, when OVOS' language has no m2v model on the site.
+
+    OpenVoiceOS publishes per-language m2v intent models for some languages
+    (tools/fetch_m2v_models.py); for any other language ovos-m2v-pipeline
+    falls back to its 141 MB multilingual model, which is not trained on
+    that language either and is far too much for a phone. Then the pipeline
+    sits this boot out (the other pipelines still match), and comes back
+    on its own once the language has a model again: _unused_pipelines never
+    keeps a pipeline that is in use.
+    """
+    from ovos_config import Configuration
+    cfg = Configuration()
+    langs = [cfg.get("lang", "en-US")] + list(cfg.get("secondary_langs") or [])
+    have = _m2v_models()
+    if all(str(l).split("-")[0].lower() in have for l in langs):
+        return []
+    from ovos_plugin_manager.pipeline import OVOSPipelineFactory
+    return [p for p in OVOSPipelineFactory.get_installed_pipeline_ids()
+            if p == "ovos-m2v-pipeline"]
+
+
 def _unused_pipelines(user_blacklist) -> list:
     """intents.blacklisted_pipelines with every installed pipeline plugin the
     active pipeline does not use.
@@ -154,7 +176,7 @@ def _browser_defaults(done: int) -> dict:
         del user["location"]
         _write_whole_user_config(user)
     user_bl = read_user_config().get("intents", {}).get("blacklisted_pipelines", [])
-    out["intents"] = {"blacklisted_pipelines": _unused_pipelines(user_bl)}
+    out["intents"] = {"blacklisted_pipelines": _unused_pipelines(user_bl) + _m2v_without_model()}
     models = _m2v_models()
     if models:
         # ovos-m2v-pipeline's documented per-language "models" map, pointed at
@@ -271,8 +293,9 @@ def start(on_message=None, user_config=None) -> dict:
     from ovos_bus_client.message import Message
 
     done = int(read_user_config().get("emkay_mobile_defaults") or 0)
+    _phone_language()        # first: the defaults below depend on the language
+    Configuration.reload()
     write_user_config(_browser_defaults(done))
-    _phone_language()
     Configuration.reload()
     if sys.platform == "emscripten":
         browser.adapt_ovos()

@@ -136,12 +136,18 @@ forces a workaround:
   service on the WAV, then the page plays it. Transformers are set up in
   `mycroft.conf` (`dialog_transformers`, `tts_transformers`) or the control
   panel and, as on a device, load when the audio side starts.
-- **Language:** OVOS' default language is the phone's, when the site ships
-  pre-trained intents for it (today en-US and da-DK), else OVOS' own
-  en-US. It is written to the assistant layer, as ipgeo does with the
-  location, so a language chosen in the control panel always wins. Emkay's
-  own few words (start screen, menu, [`i18n.js`](web/i18n.js)) follow OVOS'
-  language, and the phone's until OVOS is up.
+- **Language:** the site ships the OVOS languages with 80 % or more of the
+  skills translated (en-US, da-DK, de-DE, fr-FR, it-IT, es-ES, gl-ES, ca-ES,
+  eu-ES, pt-PT, pt-BR, nl-NL). OVOS' default language is the phone's, when
+  it is one of them, else OVOS' own en-US. It is written to the assistant
+  layer, as ipgeo does with the location, so a language chosen in the
+  control panel always wins. A phone downloads only the pre-trained intents
+  and m2v model of the language OVOS boots in; a newly chosen language is
+  fetched with a restart, which Emkay offers. Languages OpenVoiceOS has no
+  m2v model for (fr, it) run without the m2v pipeline. Emkay's own few
+  words (start screen, menu) follow OVOS' language, and the phone's until
+  OVOS is up; they are in [`locale/`](locale), one `.dialog` file per text
+  as in an OVOS skill.
 - **First start** offers the control panel's own setup wizard next to
   starting on the defaults. Its recommendations are limited to plugins that
   run in a browser, and its wake word step is hidden for now.
@@ -178,8 +184,18 @@ node tools/node_smoke.mjs wheelhouse plan.json "what time is it"
 
 ### Adding a language
 
-Add it to `matrix.lang` in [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
-CI pre-trains padatious for it and fetches its m2v model.
+1. Add it to `matrix.lang` in [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
+   CI pre-trains padatious for it and fetches its m2v model, if OpenVoiceOS
+   publishes one (`tools/fetch_m2v_models.py`).
+2. Translate Emkay's own texts: copy [`locale/en-us/`](locale/en-us) to
+   `locale/<lang>/` (lower case, e.g. `pt-br`) and translate each `.dialog`
+   file, keeping the `{placeholders}`. The build gathers them into
+   `texts.json` for [`i18n.js`](web/i18n.js); a language without its own
+   folder falls back to one with the same base language, then English.
+
+The texts are laid out like a skill's dialogs so that OVOS' translation
+tooling (ovos-localize) can take them over once Emkay lives under
+OpenVoiceOS.
 
 ## License
 

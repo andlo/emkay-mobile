@@ -10,6 +10,9 @@ what OpenVoiceOS publishes:
   xx  OpenVoiceOS/ovos-m2v-intents-multilingual, folder xx  (per-language
                                                copies of the default model)
 
+A language without a model there is skipped (boot.py then leaves the m2v
+pipeline out while OVOS runs in it).
+
 Usage: python3 tools/fetch_m2v_models.py OUT_DIR lang [lang ...]
 """
 import shutil
@@ -30,7 +33,10 @@ def fetch(lang, out: Path):
     snap = Path(snapshot_download(repo, allow_patterns=[f"{folder}/{f}" for f in FILES]))
     src = snap / folder
     if not (src / "model.safetensors").exists():
-        sys.exit(f"{repo} has no {folder}/ model for {lang}")
+        # not every language has one (e.g. fr, it): the site then ships none,
+        # and boot._m2v_without_model leaves the m2v pipeline out for it
+        print(f"{lang}: {repo} has no {folder}/ model - skipped")
+        return
     dst = out / primary
     shutil.rmtree(dst, ignore_errors=True)
     dst.mkdir(parents=True)

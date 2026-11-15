@@ -67,7 +67,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lang: [en-US, da-DK]
+        # the OVOS languages with 80 % or more of the skills translated
+        # (openvoiceos.github.io/ovos-localize, stats); Emkay's own texts for
+        # each are in locale/
+        lang: [en-US, da-DK, de-DE, fr-FR, it-IT, es-ES, gl-ES, ca-ES, eu-ES,
+               pt-PT, pt-BR, nl-NL]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
