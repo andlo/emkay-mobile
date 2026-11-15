@@ -66,6 +66,12 @@ PROBES = [
     ("noanswer_browser.mjs", {}, [], [
         r'"what time is it": said \["(It|Currently) [^|]*\| captions \[\]',   # answered: no "couldn't help"
     ]),
+    ("noanswer_browser.mjs", {"QUESTIONS": "what is 17 times 23|convert 10 miles to kilometers|what is the capital of australia|read my horoscope for leo"}, [], [
+        r'"what is 17 times 23": said \[[^\]]*391',            # the skills Emkay adds
+        r'"convert 10 miles to kilometers": said \[[^\]]*16\.09',
+        r'"what is the capital of australia": said \[[^\]]*Canberra',
+        r'"read my horoscope for leo": said \["[^"]*Leo',       # common reading
+    ]),
     ("phal_browser.mjs", {}, [], [
         r'internet_check: \[\{"internet_connected": true',
         r'camera\.get: .*"b64_frame"',

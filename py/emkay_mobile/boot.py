@@ -28,7 +28,7 @@ UNAVAILABLE_SKILLS = ("ovos-skill-boot-finished.openvoiceos",)
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 5
+DEFAULTS_VERSION = 6
 
 #: OVOS' own alpha-channel constraints, for what is installed later (the
 #: site itself is built from the alpha channel).
@@ -109,7 +109,7 @@ def _m2v_without_model() -> list:
             if p == "ovos-m2v-pipeline"]
 
 
-def _unused_pipelines(user_blacklist) -> list:
+def _unused_pipelines(user_blacklist, pipeline=None) -> list:
     """intents.blacklisted_pipelines with every installed pipeline plugin the
     active pipeline does not use.
 
@@ -121,6 +121,7 @@ def _unused_pipelines(user_blacklist) -> list:
     the boot. ovos-core's own `intents.blacklisted_pipelines` setting opts
     them out. Recomputed every boot with ovos-core's own matching rule, so a
     plugin put back into `intents.pipeline` (setup page) is loaded again.
+    `pipeline`: the pipeline this boot's patch sets, when it sets one.
     """
     from ovos_config import Configuration
     from ovos_plugin_manager.pipeline import OVOSPipelineFactory
@@ -128,7 +129,9 @@ def _unused_pipelines(user_blacklist) -> list:
         from ovos_core.intent_services.service import _PIPELINE_MIGRATION_MAP as legacy
     except ImportError:
         legacy = {}
-    active = [legacy.get(m, m) for m in Configuration().get("intents", {}).get("pipeline", [])]
+    if pipeline is None:
+        pipeline = Configuration().get("intents", {}).get("pipeline", [])
+    active = [legacy.get(m, m) for m in pipeline]
 
     def used(plugin_id):
         return any(m == plugin_id or m.startswith(f"{plugin_id}-") for m in active)
@@ -153,6 +156,9 @@ def _browser_defaults(done: int) -> dict:
       (3. was padatious without padaos; that made padatious' networks
          answer exact phrases wrongly, so 4 puts padaos back)
       5. the public TTS servers in one order, so the voice stays the same
+      6. ovos-common-reading-pipeline-plugin (now on the site) goes into
+         the pipeline where its README says: -high right after stop, -low
+         before common query and the fallbacks
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -179,6 +185,10 @@ def _browser_defaults(done: int) -> dict:
         # list keeps one order, with the second server as the fallback.
         out.setdefault("tts", {})["ovos-tts-plugin-server"] = {
             "host": ["https://tts.openvoiceos.pt", "https://tts.smartgic.io/piper"]}
+    if done < 6:
+        pipeline = _with_common_reading(Configuration().get("intents", {}).get("pipeline", []))
+        if pipeline:
+            out.setdefault("intents", {})["pipeline"] = pipeline
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes
@@ -195,13 +205,34 @@ def _browser_defaults(done: int) -> dict:
         del user["location"]
         _write_whole_user_config(user)
     user_bl = read_user_config().get("intents", {}).get("blacklisted_pipelines", [])
-    out.setdefault("intents", {})["blacklisted_pipelines"] = _unused_pipelines(user_bl) + _m2v_without_model()
+    out.setdefault("intents", {})["blacklisted_pipelines"] = \
+        _unused_pipelines(user_bl, out["intents"].get("pipeline")) + _m2v_without_model()
     models = _m2v_models()
     if models:
         # ovos-m2v-pipeline's documented per-language "models" map, pointed at
         # the copies the site ships (its Hub default is 141 MB for every
         # language, too much for a phone)
         out["intents"]["ovos_m2v_pipeline"] = {"models": models}
+    return out
+
+
+def _with_common_reading(pipeline: list) -> list:
+    """`pipeline` with ovos-common-reading-pipeline-plugin's two stages added,
+    as its README asks: "-high" right after the stop matcher, "-low" after
+    padatious/adapt, before common query and the fallbacks. [] when nothing
+    is to change (already there, plugin missing, or no pipeline to edit)."""
+    from ovos_plugin_manager.pipeline import OVOSPipelineFactory
+    if "ovos-common-reading-pipeline-plugin" not in OVOSPipelineFactory.get_installed_pipeline_ids():
+        return []
+    if not pipeline or any(p.startswith("ovos-common-reading-pipeline-plugin") for p in pipeline):
+        return []
+    out = list(pipeline)
+    stop = [i for i, p in enumerate(out) if p in ("stop_high", "ovos-stop-pipeline-plugin-high")]
+    out.insert(stop[0] + 1 if stop else 0, "ovos-common-reading-pipeline-plugin-high")
+    later = ("common_qa", "ovos-common-query-pipeline-plugin", "fallback_medium",
+             "ovos-fallback-pipeline-plugin-medium", "fallback_low", "ovos-fallback-pipeline-plugin-low")
+    low = [i for i, p in enumerate(out) if p in later]
+    out.insert(low[0] if low else len(out), "ovos-common-reading-pipeline-plugin-low")
     return out
 
 

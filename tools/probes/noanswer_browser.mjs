@@ -88,7 +88,10 @@ try {
     log(`"${text}": said ${await js(`JSON.stringify(window.__said)`)} | captions ${await js(`JSON.stringify(window.__captions)`)} | sounds ${await js(`window.__sounds`)}`);
   };
   await ask("what time is it");
-  for (const q of ["search duckduckgo for the history of copenhagen", "ask wolfram alpha what is the mass of the moon", "who is the president of mongolia"]) await ask(q);
+  // QUESTIONS="a|b|c" asks those instead (any typed questions, e.g. new skills)
+  const more = process.env.QUESTIONS ? process.env.QUESTIONS.split("|")
+    : ["search duckduckgo for the history of copenhagen", "ask wolfram alpha what is the mass of the moon", "who is the president of mongolia"];
+  for (const q of more) await ask(q);
 } catch (e) {
   log(`FAILED: ${e.message}`);
 } finally {

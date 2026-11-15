@@ -184,6 +184,15 @@ forces a workaround:
   draws the whole Mark II around it.
 - **Left out:** `ovos-skill-boot-finished` (waits for an audio service and a
   listener that do not exist here).
+- **Added to the "ovos" skill profile:** skills that answer without a server
+  (calculator, convert, geography, geometry, NATO alphabet, Morse code), and
+  reading aloud: `ovos-common-reading-pipeline-plugin` with the providers
+  whose sources a browser may read (the OpenVoiceOS blog, horoscopes). A
+  browser can only fetch from sites that allow it (CORS), and public
+  servers fail more often than a device notices. The pipeline plugin is put
+  into OVOS' pipeline where its README says, once; the setup page can move it.
+- **Questions back** (`get_response`: "for when?", yes/no) are asked but not
+  waited for, see [#20](https://github.com/emkay-voice/emkay/issues/20).
 
 ## Developing
 

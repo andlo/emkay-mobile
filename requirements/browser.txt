@@ -20,6 +20,23 @@ ovos-audio
 # plugins and the legacy websocket adapter ovos-visage speaks is not on PyPI yet.
 ovos-gui==1.5.4a1
 
+# Emkay's own additions to the "ovos" profile. A phone's browser cannot rely
+# on servers as a device can (public STT/TTS/translate servers fail, and many
+# sites do not allow a browser to read them, CORS), so skills that answer
+# offline come as standard:
+ovos-skill-calculator
+ovos-skill-convert
+ovos-skill-geography
+ovos-skill-geometry
+ovos-skill-nato-alphabet
+ovos-skill-morse-code
+# reading aloud (ovos-common-reading-pipeline-plugin) and the providers whose
+# sources a browser may read (they send CORS headers). The fairy tale
+# providers (andersenstories.com, grimmstories.com) do not, so they wait.
+ovos-common-reading-pipeline-plugin
+ovos-skill-ovosblog
+ovos-skill-horoscope-readings
+
 # the setup page: the stock OpenVoiceOS control panel
 ovos-control-panel
 
