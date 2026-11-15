@@ -34,7 +34,7 @@ await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pending = new Map();
 const workerLines = [];
-const INTERESTING = /match \(|fallback|speak|Traceback|Error/i;
+const INTERESTING = new RegExp(process.env.GREP || "match \\(|fallback|speak|Traceback|Error", "i");
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); }
@@ -96,7 +96,7 @@ try {
   log(`FAILED: ${e.message}`);
 } finally {
   log("worker log:");
-  for (const l of workerLines.slice(-30)) console.log(`  ${l}`);
+  for (const l of workerLines.slice(-Number(process.env.LINES || 30))) console.log(`  ${l}`);
   ws.close();
   chrome.kill();
 }

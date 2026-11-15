@@ -31,7 +31,7 @@ PROBES = [
     ("lang_browser.mjs", {"PHONE_LANG": "da-DK"}, [], [
         r"OVOS lang: da-DK",                    # the phone's language
         r"downloaded: \['intents-da-DK', 'm2v-da'\]",   # and only that one
-        r"menu: OpenVoiceOS settings",          # texts follow the panel
+        r"menu: Settings /",                     # texts follow the panel
         r"restart button: Restart to use en-US",
         r"after restart: .*intents-en-US",
     ]),

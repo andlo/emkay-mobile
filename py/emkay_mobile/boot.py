@@ -406,12 +406,14 @@ def start(on_message=None, user_config=None) -> dict:
     _phone_language()        # first: the defaults below depend on the language
     _phone_timezone()        # before skills load: some read it once (alerts)
     Configuration.reload()
-    # the default session keeps its own copy of the location from when it
-    # was made (before the step above); make it again, as phal.py does
-    from ovos_bus_client.session import SessionManager
-    SessionManager.reset_default_session()
     write_user_config(_browser_defaults(done))
     Configuration.reload()
+    # the default session keeps its own copy of the configuration from when
+    # it was made (location and time zone, but also the intent pipeline and
+    # its blacklist), and it was made before the steps above: make it again
+    # from what they wrote, as phal.py does for a new location
+    from ovos_bus_client.session import SessionManager
+    SessionManager.reset_default_session()
     if sys.platform == "emscripten":
         browser.adapt_ovos()
 
