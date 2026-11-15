@@ -821,14 +821,29 @@ $("menu-install").onclick = async () => {
 };
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !installed()) $("install-ios").hidden = false;
 
-/** About: who made Emkay and what it stands on; the build date from build.json. */
+// --------------------------------------------------------------- version
+/**
+ * What this site is, to refer to in a bug report: Emkay's version, the CI
+ * build number and the commit (build.json, tools/build_site.py). Shown
+ * under the boot screen's progress bar and in About.
+ */
+const release = fetch("build.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({}));
+const releaseLine = (b) => b.version ? `Emkay ${b.version} · build ${b.build} · ${b.commit}` : "";
+release.then((b) => { $("boot-version").textContent = releaseLine(b); });
+
+/** About: who made Emkay and what it stands on; version, build and date. */
 $("menu-about").onclick = async () => {
   $("menu").hidden = true;
   $("about").hidden = false;
-  try {
-    const built = (await (await fetch("build.json")).json()).built;
-    $("about-version").textContent = t("about.version", { date: new Date(built).toLocaleDateString() });
-  } catch { $("about-version").textContent = ""; }
+  const b = await release;
+  const link = $("about-release");
+  link.textContent = releaseLine(b);
+  // the release notes of the version; a local build points at its commit
+  link.href = b.build === "local" || !b.version
+    ? `https://github.com/emkay-voice/emkay/commit/${b.commit || ""}`
+    : `https://github.com/emkay-voice/emkay/releases/tag/v${b.version}`;
+  $("about-version").textContent = b.built
+    ? t("about.version", { date: new Date(b.built).toLocaleDateString() }) : "";
 };
 $("about-close").onclick = () => { $("about").hidden = true; };
 

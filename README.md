@@ -201,6 +201,15 @@ forces a workaround:
   waits return at once, and a question back is asked but not waited
   for ([#20](https://github.com/emkay-voice/emkay/issues/20)).
 
+## Versions and releases
+
+app.emkay.ai is always the newest build of `main`. The boot screen and
+*About Emkay* show which one: `Emkay 0.1.0 · build 123 · abc1234` (the
+[VERSION](VERSION) file, the CI run, the commit), so a report can name it.
+A release names a tested point: set VERSION, tag `vX.Y.Z` and push; the
+release workflow makes the GitHub release with the commits since the last
+tag as notes.
+
 ## Developing
 
 ```bash

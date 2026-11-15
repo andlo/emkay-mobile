@@ -188,6 +188,24 @@ def add_wake_word(out: Path) -> list:
     return sorted(f.name.rsplit("_v", 1)[0] for f in (out / "oww").glob("*_v*.onnx"))
 
 
+def release_info() -> dict:
+    """What this site is, to refer to: Emkay's version (the VERSION file),
+    the CI build number and the commit it was built from ("local" and the
+    working tree's commit when built by hand)."""
+    import os
+    import subprocess
+    version = (REPO / "VERSION").read_text().strip()
+    commit = os.environ.get("GITHUB_SHA", "")
+    if not commit:
+        try:
+            commit = subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"],
+                                    capture_output=True, text=True).stdout.strip()
+        except OSError:
+            commit = ""
+    return {"version": version, "build": os.environ.get("GITHUB_RUN_NUMBER", "local"),
+            "commit": commit[:7]}
+
+
 def main():
     wheelhouse, plan_path, *cache_dirs = sys.argv[1:]
     plan = json.load(open(plan_path))
@@ -226,6 +244,7 @@ def main():
 
     versions = sorted(n.split("-")[0] + "==" + n.split("-")[1] for n in plan["pure"])
     build = {
+        **release_info(),
         "built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "pyodide_version": PYODIDE_VERSION,
         "pyodide_index": "pyodide/",

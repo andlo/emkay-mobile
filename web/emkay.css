@@ -104,3 +104,6 @@ html.fullscreen .screen { left: 0; top: 0; border-radius: 0; }
 
 /* the wake word is listened for (app.js, wake): a quiet ring on the mic dot */
 .mic.wake { box-shadow: 0 0 0 3px #22a7f033; }
+
+/* version, build and commit under the boot progress bar (app.js) */
+.boot-version { opacity: 0.5; margin-top: 0.75em; font-variant-numeric: tabular-nums; }

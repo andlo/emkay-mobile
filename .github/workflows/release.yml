@@ -1,0 +1,42 @@
+# A release: push a tag vX.Y.Z (matching the VERSION file) and this makes
+# the GitHub release, with the commits since the previous tag as its notes.
+# What is live on app.emkay.ai is always the newest build of main; a release
+# names a tested point on it, so a bug report can say "0.2.0, build 123".
+#
+#   echo 0.2.0 > VERSION && git commit -am "Emkay 0.2.0" && git tag v0.2.0 && git push --follow-tags
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The tag matches VERSION
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          test "$v" = "$(cat VERSION)" || { echo "tag $GITHUB_REF_NAME, VERSION $(cat VERSION)"; exit 1; }
+      - name: Notes from the commits since the previous tag
+        run: |
+          prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          range="${prev:+$prev..}${GITHUB_REF_NAME}"
+          {
+            echo "Emkay ${GITHUB_REF_NAME#v} - OpenVoiceOS in the browser, live on https://app.emkay.ai"
+            echo
+            echo "## Changes${prev:+ since $prev}"
+            echo
+            git log --no-merges --pretty='- %s (%h)' "$range"
+          } > notes.md
+          cat notes.md
+      - name: Make the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Emkay ${GITHUB_REF_NAME#v}" --notes-file notes.md --prerelease

@@ -38,6 +38,7 @@
     <h1>Emkay</h1>
     <p id="boot-text">Loading…</p>
     <div class="bar"><div id="boot-bar"></div></div>
+    <p id="boot-version" class="small boot-version"></p>
     <!-- first start only: set up now, or start on the defaults -->
     <div id="first" class="first" hidden>
       <p data-i18n="first.text"></p>
@@ -92,7 +93,8 @@
           – <span data-i18n="about.pyodide"></span></li>
       </ul>
       <p class="small" data-i18n="about.others"></p>
-      <p class="small"><span id="about-version"></span> ·
+      <p class="small"><a id="about-release" target="_blank" rel="noopener"></a> ·
+        <span id="about-version"></span> ·
         <a href="https://emkay.ai" target="_blank" rel="noopener">emkay.ai</a> ·
         <a href="https://github.com/emkay-voice/emkay" target="_blank" rel="noopener" data-i18n="source"></a></p>
       <button id="about-close" class="secondary" data-i18n="close"></button>
