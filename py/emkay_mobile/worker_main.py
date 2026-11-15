@@ -96,6 +96,18 @@ def _watch(raw):
     t = msg.get("type") if isinstance(msg, dict) else None
     if t in _STATE_TOPICS:
         _post("bus", json.dumps({"type": t, "data": msg.get("data", {})}))
+    elif t in ("configuration.updated", "configuration.patch", "configuration.patch.clear"):
+        # the page's own texts follow OVOS' language (web/i18n.js); read it
+        # once ovos-config's handler has applied the change (the control
+        # panel sends configuration.patch, a PHAL plugin .updated)
+        import asyncio
+        asyncio.get_event_loop().call_soon(_post_lang)
+
+
+def _post_lang():
+    from ovos_config import Configuration
+    _post("bus", json.dumps({"type": "emkay.lang",
+                             "data": {"lang": Configuration().get("lang", "en-US")}}))
 
 
 # --- calls from the page -------------------------------------------------

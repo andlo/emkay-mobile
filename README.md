@@ -115,6 +115,15 @@ forces a workaround:
   skill at once, as on a device. Packages that ship with the site cannot be
   removed, and a skill whose service only answers on `http://` or without
   CORS will install but cannot reach it from the browser.
+- **Language:** OVOS' default language is the phone's, when the site ships
+  pre-trained intents for it (today en-US and da-DK), else OVOS' own
+  en-US. It is written to the assistant layer, as ipgeo does with the
+  location, so a language chosen in the control panel always wins. Emkay's
+  own few words (start screen, menu, [`i18n.js`](web/i18n.js)) follow OVOS'
+  language, and the phone's until OVOS is up.
+- **First start** offers the control panel's own setup wizard next to
+  starting on the defaults. Its recommendations are limited to plugins that
+  run in a browser, and its wake word step is hidden for now.
 - **Config changes are followed over the bus** (`configuration.updated`),
   as the services on a device do; the file watcher thread is left out.
 - **On a phone** the screen fills the display; on a larger screen visage

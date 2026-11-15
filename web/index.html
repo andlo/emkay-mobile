@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="da">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -36,43 +36,42 @@
   <div id="boot" class="boot">
     <div class="boot-face" aria-hidden="true"><span></span><span></span></div>
     <h1>Emkay</h1>
-    <p id="boot-text">Henter…</p>
+    <p id="boot-text">Loading…</p>
     <div class="bar"><div id="boot-bar"></div></div>
     <!-- first start only: set up now, or start on the defaults -->
     <div id="first" class="first" hidden>
-      <p>Uden opsætning kører Emkay med standardindstillinger: engelsk og
-        OpenVoiceOS' offentlige servere til tale. Alt kan ændres senere under ⚙.</p>
-      <button id="first-setup">Sæt op</button>
+      <p data-i18n="first.text"></p>
+      <button id="first-setup" data-i18n="first.setup"></button>
     </div>
-    <button id="start" hidden>Tryk for at starte</button>
-    <p class="small">OpenVoiceOS i din browser · <a href="https://github.com/andlo/emkay-mobile">kildekode</a></p>
+    <button id="start" data-i18n="start" hidden></button>
+    <p class="small"><span data-i18n="about"></span> · <a href="https://github.com/andlo/emkay-mobile" data-i18n="source"></a></p>
   </div>
-  <button id="mic" class="mic" aria-label="Tal" hidden></button>
-  <form id="type" class="type" hidden><input id="type-text" placeholder="Skriv til Emkay…" autocomplete="off"></form>
-  <button id="keyboard" class="keyboard" aria-label="Skriv" hidden>⌨</button>
-  <button id="menu-button" class="menu-button" aria-label="Menu" hidden>⚙</button>
+  <button id="mic" class="mic" data-i18n-aria="mic" hidden></button>
+  <form id="type" class="type" hidden><input id="type-text" data-i18n-placeholder="type" autocomplete="off"></form>
+  <button id="keyboard" class="keyboard" data-i18n-aria="keyboard" hidden>⌨</button>
+  <button id="menu-button" class="menu-button" data-i18n-aria="menu" hidden>⚙</button>
 
   <!-- the menu: settings that stay on the phone, kiosk mode -->
   <div id="menu" class="menu" hidden>
     <div class="menu-card">
       <h2>Emkay</h2>
       <p id="storage-state" class="small"></p>
-      <button id="menu-export">Gem opsætning på telefonen</button>
-      <button id="menu-import">Hent opsætning fra en fil</button>
+      <button id="menu-export" data-i18n="menu.export"></button>
+      <button id="menu-import" data-i18n="menu.import"></button>
       <input id="import-file" type="file" accept=".zip,application/zip" hidden>
-      <button id="menu-panel">OpenVoiceOS-indstillinger</button>
-      <button id="menu-kiosk">Fuld skærm</button>
+      <button id="menu-panel" data-i18n="menu.panel"></button>
+      <button id="menu-kiosk" data-i18n="menu.kiosk"></button>
       <p id="menu-note" class="small"></p>
-      <p class="small">OpenVoiceOS i din browser ·
-        <a href="https://github.com/andlo/emkay-mobile" target="_blank" rel="noopener">kildekode</a></p>
-      <button id="menu-close" class="secondary">Luk</button>
+      <p class="small"><span data-i18n="about"></span> ·
+        <a href="https://github.com/andlo/emkay-mobile" target="_blank" rel="noopener" data-i18n="source"></a></p>
+      <button id="menu-close" class="secondary" data-i18n="close"></button>
     </div>
   </div>
 
   <!-- the stock ovos-control-panel, served by the worker (sw.js, panel.py) -->
   <div id="panel" class="panel" hidden>
     <iframe id="panel-frame" title="OpenVoiceOS settings"></iframe>
-    <button id="panel-close" class="panel-close" aria-label="Luk">×</button>
+    <button id="panel-close" class="panel-close" data-i18n-aria="close">×</button>
   </div>
 
   <script type="module" src="app.js"></script>

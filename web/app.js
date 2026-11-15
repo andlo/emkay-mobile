@@ -7,7 +7,12 @@
 // URL options: ?kiosk  full screen + portrait lock on start (the installed
 // app opens with it, see manifest.webmanifest).
 
+import { t, apply, setLang, onLangChange } from "./i18n.js";
+
 const $ = (id) => document.getElementById(id);
+apply();                    // the phone's language until OVOS is up
+$("boot-text").textContent = t("boot.loading");   // bootStatus' own line from here on
+onLangChange(() => { apply(); bootStatus(lastStatus.key, undefined, lastStatus.vars); });
 const params = new URLSearchParams(location.search);
 let kiosk = params.has("kiosk");
 
@@ -63,7 +68,7 @@ worker.onmessage = ({ data }) => {
     return data.error ? w.reject(new Error(data.error)) : w.resolve(data.result);
   }
   switch (data.kind) {
-    case "status": return bootStatus(data.text, data.progress);
+    case "status": return bootStatus(data.key, data.progress, data.vars);
     case "gui": for (const s of guiSockets) s.deliver(data.payload); return;
     case "audio": return speaker.enqueue(data.data, data.payload);
     case "phal": return onPhal(JSON.parse(data.payload));
@@ -103,9 +108,12 @@ window.WebSocket = new Proxy(NativeWebSocket, {
 });
 
 // ------------------------------------------------------------------ boot
-/** Show boot progress on the start screen. */
-function bootStatus(text, progress) {
-  $("boot-text").textContent = text;
+let lastStatus = { key: "boot.loading" };
+
+/** Show boot progress on the start screen; `key` is a text in i18n.js. */
+function bootStatus(key, progress, vars) {
+  lastStatus = { key, vars };
+  $("boot-text").textContent = t(key, vars);
   if (progress !== undefined) $("boot-bar").style.width = `${Math.round(progress * 100)}%`;
 }
 
@@ -140,7 +148,8 @@ function offerSetup() {
   const remember = () => { try { localStorage.setItem(WELCOMED, "1"); } catch {} };
   $("start").onclick = () => { remember(); start(); };
   if (!first) return;
-  $("start").textContent = "Start med standard";
+  $("start").dataset.i18n = "start.defaults";
+  apply();
   $("start").classList.add("quiet");
   $("first").hidden = false;
   $("first-setup").onclick = async () => {
@@ -174,9 +183,8 @@ async function keepAwake() {
 async function keepStorage() {
   try {
     const kept = (await navigator.storage?.persisted?.()) || (await navigator.storage?.persist?.());
-    $("storage-state").textContent = kept
-      ? "Gemt varigt på telefonen"
-      : "Kan ryddes af browseren – gem en kopi";
+    $("storage-state").dataset.i18n = kept ? "storage.kept" : "storage.loose";
+    apply();
   } catch {
     $("storage-state").textContent = "";
   }
@@ -187,13 +195,14 @@ async function keepStorage() {
     keepStorage();
     const info = await call("boot", { userConfig: null });
     console.log("[emkay] OVOS up", info);
+    setLang(info.lang);   // from here on Emkay's texts follow OVOS' language
     ovosReady();
     await import("./visage/visage.js");
-    bootStatus(`${info.skills.length} skills klar`, 1);
+    bootStatus("boot.skills", 1, { n: info.skills.length });
     offerSetup();
     $("start").hidden = false;
   } catch (e) {
-    bootStatus(`Fejl: ${e.message}`);
+    bootStatus("boot.error", undefined, { msg: e.message });
     console.error(e);
   }
 })();
@@ -373,6 +382,7 @@ function locate() {
 function onBus(msg) {
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
   if (msg.type === "mycroft.mic.mute") mic.setMuted(true);
+  if (msg.type === "emkay.lang") setLang(msg.data.lang);   // changed in the panel
   if (msg.type === "mycroft.mic.unmute") mic.setMuted(false);
 }
 
@@ -467,16 +477,16 @@ $("menu-kiosk").onclick = () => { kiosk = true; enterKiosk(); $("menu").hidden =
 $("menu-export").onclick = async () => {
   try {
     const zip = await call("export_settings");
-    const name = `emkay-indstillinger-${new Date().toISOString().slice(0, 10)}.zip`;
+    const name = `${t("export.file")}-${new Date().toISOString().slice(0, 10)}.zip`;
     const a = Object.assign(document.createElement("a"), {
       href: URL.createObjectURL(new Blob([zip], { type: "application/zip" })),
       download: name,
     });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    $("menu-note").textContent = `Gemt som ${name}`;
+    $("menu-note").textContent = t("export.saved", { name });
   } catch (e) {
-    $("menu-note").textContent = `Kunne ikke gemme: ${e.message}`;
+    $("menu-note").textContent = t("export.failed", { msg: e.message });
   }
 };
 
@@ -488,10 +498,10 @@ $("import-file").onchange = async () => {
   try {
     const data = await file.arrayBuffer();
     const manifest = await call("import_settings", { data }, [data]);
-    $("menu-note").textContent = `Hentet (${manifest.files} filer fra ${manifest.exported}). Genstarter…`;
+    $("menu-note").textContent = t("import.done", { files: manifest.files, date: manifest.exported });
     setTimeout(() => location.reload(), 1200);
   } catch (e) {
-    $("menu-note").textContent = `Kunne ikke hente: ${e.message}`;
+    $("menu-note").textContent = t("import.failed", { msg: e.message });
   }
 };
 

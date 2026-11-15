@@ -164,6 +164,36 @@ def _browser_defaults(done: int) -> dict:
     return out
 
 
+def _phone_language():
+    """OVOS' default language: the phone's, when the site ships its intents.
+
+    The page passes the phone's languages (navigator.languages) and the
+    languages the site has pre-trained intents for (EMKAY_PHONE_LANGS,
+    EMKAY_SITE_LANGS, worker.js). The first phone language the site has -
+    exactly, else by its base ("da" for "da-DK") - goes into the assistant
+    layer, as ipgeo does with the location: below the user layer, so a
+    language chosen in the control panel always wins, and followed again on
+    every boot. With none of them, OVOS' own default (en-US) stays.
+    """
+    from ovos_config.models import AssistantConfig
+    site = [l for l in os.environ.get("EMKAY_SITE_LANGS", "").split(",") if l]
+    phone = [l for l in os.environ.get("EMKAY_PHONE_LANGS", "").split(",") if l]
+    pick = None
+    for wanted in phone:
+        exact = [l for l in site if l.lower() == wanted.lower()]
+        base = [l for l in site if l.split("-")[0].lower() == wanted.split("-")[0].lower()]
+        if exact or base:
+            pick = (exact or base)[0]
+            break
+    layer = AssistantConfig()
+    if pick and layer.get("lang") != pick:
+        layer["lang"] = pick
+        layer.store()
+    elif not pick and "lang" in layer:
+        del layer["lang"]
+        layer.store()
+
+
 def _follow_config_changes(bus):
     """Reload the merged mycroft.conf when a service announces a change.
 
@@ -242,6 +272,7 @@ def start(on_message=None, user_config=None) -> dict:
 
     done = int(read_user_config().get("emkay_mobile_defaults") or 0)
     write_user_config(_browser_defaults(done))
+    _phone_language()
     Configuration.reload()
     if sys.platform == "emscripten":
         browser.adapt_ovos()
@@ -270,6 +301,7 @@ def start(on_message=None, user_config=None) -> dict:
     _manager.status.set_ready()
     loaded = sorted(_manager.plugin_skills.keys())
     return {"seconds": round(time.time() - t0, 2), "skills": loaded,
+            "lang": Configuration().get("lang", "en-US"),
             "skipped_threads": list(browser.STARTED)}
 
 

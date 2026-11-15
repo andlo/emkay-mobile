@@ -17,8 +17,8 @@ let main = null;  // the Python module emkay_mobile.worker_main
 const build = fetch("build.json", { cache: "no-cache" }).then((r) => r.json());
 
 /** Tell the page how the boot is going (shown on the start screen). */
-function status(text, progress) {
-  self.postMessage({ kind: "status", text, progress });
+function status(key, progress, vars) {
+  self.postMessage({ kind: "status", key, vars, progress });   // texts: i18n.js
 }
 
 /**
@@ -35,7 +35,7 @@ function post(kind, payload, data) {
 }
 
 /** Fetch a file as bytes, reporting progress under `label`. */
-async function fetchBytes(url, label) {
+async function fetchBytes(url, label, vars) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
   const total = Number(r.headers.get("content-length")) || 0;
@@ -47,7 +47,7 @@ async function fetchBytes(url, label) {
     if (done) break;
     chunks.push(value);
     got += value.length;
-    if (total) status(label, got / total);
+    if (total) status(label, got / total, vars);
   }
   const out = new Uint8Array(got);
   let o = 0;
@@ -66,7 +66,7 @@ function syncfs(populate) {
  */
 async function boot({ userConfig }) {
   const b = await build;
-  status("Starter Python…");
+  status("boot.python");
   const index = new URL(b.pyodide_index, self.location).href;  // served with the site
   const { loadPyodide } = await import(`${index}pyodide.mjs`);   // Pyodide 314: module workers only
   py = await loadPyodide({ indexURL: index });
@@ -80,10 +80,10 @@ async function boot({ userConfig }) {
   }
   await syncfs(true);
 
-  status("Henter Python-pakker…");
+  status("boot.packages");
   await py.loadPackage(b.pyodide_packages, { messageCallback: () => {} });
 
-  const bundle = await fetchBytes(b.bundle, "Henter OpenVoiceOS…");
+  const bundle = await fetchBytes(b.bundle, "boot.ovos");
   py.FS.writeFile("/tmp/bundle.zip", bundle);
 
   // which downloads this device already has, by hash
@@ -92,18 +92,18 @@ async function boot({ userConfig }) {
   try { have = JSON.parse(py.FS.readFile(stamp, { encoding: "utf8" })); } catch {}
   for (const [lang, entry] of Object.entries(b.intent_cache || {})) {
     if (have[`intents-${lang}`] === entry.hash) continue;
-    const zip = await fetchBytes(entry.url, `Henter forudtrænede intents (${lang})…`);
+    const zip = await fetchBytes(entry.url, "boot.intents", { lang });
     py.FS.writeFile(`/tmp/intents-${lang}.zip`, zip);
     have[`intents-${lang}`] = entry.hash;
   }
   for (const [lang, entry] of Object.entries(b.m2v_models || {})) {
     if (have[`m2v-${lang}`] === entry.hash) continue;
-    const zip = await fetchBytes(entry.url, `Henter sprogmodel (${lang})…`);
+    const zip = await fetchBytes(entry.url, "boot.m2v", { lang });
     py.FS.writeFile(`/tmp/m2v-${lang}.zip`, zip);
     have[`m2v-${lang}`] = entry.hash;
   }
 
-  status("Pakker ud…");
+  status("boot.unpack");
   py.globals.set("DOWNLOADS", JSON.stringify(have));
   await py.runPythonAsync(`
 import glob, os, site, zipfile, importlib
@@ -125,11 +125,16 @@ importlib.invalidate_caches()
 `);
   // the browser knows its time zone; the timezonefinder stand-in reports it
   py.runPython(`import os; os.environ["EMKAY_TZ"] = ${JSON.stringify(Intl.DateTimeFormat().resolvedOptions().timeZone)}`);
+  // OVOS' default language is the phone's when the site has intents for it
+  // (boot._phone_language); these are the phone's languages and the site's
+  py.globals.set("PHONE_LANGS", (self.navigator.languages || [self.navigator.language]).join(","));
+  py.globals.set("SITE_LANGS", Object.keys(b.intent_cache || {}).join(","));
+  py.runPython(`import os; os.environ["EMKAY_PHONE_LANGS"] = PHONE_LANGS; os.environ["EMKAY_SITE_LANGS"] = SITE_LANGS`);
 
-  status("Starter OpenVoiceOS…");
+  status("boot.start");
   main = py.pyimport("emkay_mobile.worker_main");
   const info = JSON.parse(main.start(post, userConfig ? py.toPy(userConfig) : null));
-  status("Klar", 1);
+  status("boot.ready", 1);
   // Python's deferred work (padatious' training pass) runs from here on,
   // whenever this worker is idle. Keep the disk in step with what skills
   // and the setup page write.
