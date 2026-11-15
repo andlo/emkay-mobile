@@ -28,7 +28,7 @@ UNAVAILABLE_SKILLS = ("ovos-skill-boot-finished.openvoiceos",)
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 4
+DEFAULTS_VERSION = 5
 
 #: OVOS' own alpha-channel constraints, for what is installed later (the
 #: site itself is built from the alpha channel).
@@ -152,6 +152,7 @@ def _browser_defaults(done: int) -> dict:
          pip.py), and the site itself is built from the alphas
       (3. was padatious without padaos; that made padatious' networks
          answer exact phrases wrongly, so 4 puts padaos back)
+      5. the public TTS servers in one order, so the voice stays the same
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -171,6 +172,13 @@ def _browser_defaults(done: int) -> dict:
     # layer like ipgeo's (phal.py). Builds of 2026-11-14 wrote the browser's
     # time zone into the user layer instead, where it would hide that; such
     # an entry, and only that, is dropped again.
+    if done < 5:
+        # ovos-tts-plugin-server shuffles its public servers for every
+        # sentence, and they have different default voices: a man, then a
+        # woman, maybe with another accent (#7). The plugin's own "host"
+        # list keeps one order, with the second server as the fallback.
+        out.setdefault("tts", {})["ovos-tts-plugin-server"] = {
+            "host": ["https://tts.openvoiceos.pt", "https://tts.smartgic.io/piper"]}
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes
