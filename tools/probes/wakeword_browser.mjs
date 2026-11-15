@@ -86,7 +86,7 @@ sys.setprofile(_prof)
     document.getElementById("start").click(); true`);
   const t = Date.now();
   await until(`document.getElementById("mic").classList.contains("wake")`, 60, "the wake word engine");
-  log(`wake word engine ready in ${((Date.now() - t) / 1000).toFixed(1)}s`);
+  log(`wake word engine ready in ${((Date.now() - t) / 1000).toFixed(1)}s: ${await js("window.emkay.wake.engineName")}`);
   // ANSWERS=2: the fake microphone loops the file, so a second "hey mycroft"
   // follows; Emkay must be back waiting for it after the first answer
   const answers = Number(process.env.ANSWERS || 1);

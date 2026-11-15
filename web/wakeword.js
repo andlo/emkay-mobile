@@ -1,6 +1,15 @@
-// Wake word detection in the browser: openWakeWord's own models and its
-// streaming pipeline, run with onnxruntime-web (a Web Worker of its own, so
-// listening never holds up the page or OVOS).
+// Wake word detection in the browser, in a Web Worker of its own (listening
+// never holds up the page or OVOS), with the engine OVOS' config names for
+// the wake word (hotwords.<name>.module), as ovos-dinkum-listener would load
+// that plugin:
+//
+// * ovos-ww-plugin-precise-onnx (OVOS' default for "hey mycroft"): Mycroft
+//   Precise models with precise-onnx-js (TigreGotico's port of that
+//   plugin's inference: the same MFCCs, ThresholdDecoder and TriggerDetector,
+//   so `sensitivity` and `trigger_level` mean what they mean on a device).
+//   PreciseEngine below.
+// * ovos-ww-plugin-openwakeword: openWakeWord's own models and streaming
+//   pipeline (class WakeWord), run with onnxruntime-web:
 //
 // For every 80 ms of 16 kHz audio (1280 samples), as openwakeword.utils and
 // openwakeword.model do it:
@@ -17,9 +26,10 @@
 // pre-trained models CC BY-NC-SA 4.0), fetched at build time
 // (tools/fetch_wakeword_models.py).
 //
-// As a worker it takes {cmd: "start", model, threshold} and then
+// As a worker it takes {cmd: "start", engine: "precise"|"oww", model,
+// threshold (oww), sensitivity and trigger_level (precise)} and then
 // {cmd: "audio", pcm: Int16Array of 1280 samples}, and posts {ready},
-// {detected, score} and {error}. The WakeWord class is exported for tests.
+// {detected, score} and {error}. The engine classes are exported for tests.
 
 const CHUNK = 1280;            // samples per step, 80 ms at 16 kHz
 const MEL_CONTEXT = 480;       // samples before the chunk the mel model needs
@@ -97,6 +107,60 @@ export class WakeWord {
   }
 }
 
+// ------------------------------------------------------------- Precise
+/**
+ * ovos-ww-plugin-precise-onnx in the browser: precise-onnx-js (vendored in
+ * oww/precise/, see tools/fetch_wakeword_models.py), fed Precise's 2048-
+ * sample chunks. Its TriggerDetector does what the plugin's does: a chunk
+ * counts when the calibrated score is above 1 - sensitivity, a detection
+ * needs more than trigger_level such chunks in a row, and after one it
+ * stays deaf for a moment.
+ */
+export class PreciseEngine {
+  constructor(ort, base, model, sensitivity = 0.5, triggerLevel = 3) {
+    Object.assign(this, { ort, base, model, sensitivity, triggerLevel });
+    this.pending = new Float32Array(0);
+  }
+
+  async load() {
+    // precise-onnx-js is written as plain scripts (CommonJS or <script>
+    // globals); run them as such and take what they define
+    const lib = async (name, names) => {
+      const src = await (await fetch(`${this.base}${name}`)).text();
+      // eslint-disable-next-line no-new-func
+      return new Function(`${src}\nreturn { ${names.join(", ")} };`)();
+    };
+    const { mfccSpec } = await lib("mfcc.js", ["mfccSpec"]);
+    globalThis.mfccSpec = mfccSpec;
+    globalThis.ort = this.ort;
+    const { PreciseOnnxWakeWord } = await lib("wakeword.js", ["PreciseOnnxWakeWord"]);
+    const session = await this.ort.InferenceSession.create(this.model, { executionProviders: ["wasm"] });
+    this.ww = new PreciseOnnxWakeWord(session, session.inputNames[0], this.sensitivity, this.triggerLevel);
+    this.threshold = 0.5;   // detections are 1, misses their score (below)
+  }
+
+  reset() {
+    this.ww?.clear();
+    this.pending = new Float32Array(0);
+  }
+
+  /** 1280 Int16 samples in; 1 when the wake word was heard, else the last score. */
+  async step(pcm) {
+    const more = new Float32Array(this.pending.length + pcm.length);
+    more.set(this.pending);
+    for (let i = 0; i < pcm.length; i++) more[this.pending.length + i] = pcm[i] / 32768;
+    this.pending = more;
+    let heard = false, score = 0;
+    while (this.pending.length >= 2048) {
+      const chunk = this.pending.slice(0, 2048);
+      this.pending = this.pending.slice(2048);
+      score = await this.ww.update(chunk);
+      if (this.ww.triggerDetector.update(score)) heard = true;
+    }
+    return heard ? 1 : Math.min(score, 0.49);
+  }
+}
+
 // ------------------------------------------------------------- the worker
 if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) {
   let engine = null;
@@ -107,7 +171,10 @@ if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScop
         const ort = await import(new URL("ort/ort.wasm.bundle.min.mjs", import.meta.url).href);
         ort.env.wasm.wasmPaths = new URL("ort/", import.meta.url).href;
         ort.env.wasm.numThreads = 1;   // the page is not cross-origin isolated
-        const loading = new WakeWord(ort, new URL("oww/", import.meta.url).href, data.model, data.threshold ?? 0.5);
+        const loading = data.engine === "precise"
+          ? new PreciseEngine(ort, new URL("oww/precise/", import.meta.url).href,
+            new URL(data.model, import.meta.url).href, data.sensitivity ?? 0.5, data.trigger_level ?? 3)
+          : new WakeWord(ort, new URL("oww/", import.meta.url).href, data.model, data.threshold ?? 0.5);
         await loading.load();
         engine = loading;   // audio that came while loading is dropped, not run alongside
         self.postMessage({ ready: true });

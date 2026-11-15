@@ -119,18 +119,27 @@ forces a workaround:
   Emkay lets the microphone go meanwhile; where the browser has no speech
   recognition (Firefox), `stt.fallback_module` transcribes the recording.
 - **The wake word** is OVOS' own `listener.wake_word` ("hey_mycroft" by
-  default; "hey_jarvis" and "alexa" also work), heard by
-  [openWakeWord](https://github.com/dscripka/openWakeWord) with its own
-  models and streaming pipeline, ported to the browser
-  ([`wakeword.js`](web/wakeword.js), onnxruntime-web, a Web Worker of its
-  own). The microphone stays open while Emkay is on screen – a phone or
+  default), heard with the plugin OVOS' config names for it
+  (`hotwords.<name>.module`), as ovos-dinkum-listener would load it, in a
+  Web Worker of its own ([`wakeword.js`](web/wakeword.js), onnxruntime-web):
+  - `ovos-ww-plugin-precise-onnx`, OVOS' default for "hey mycroft": the
+    Mycroft Precise model from
+    [precise-lite-models](https://github.com/OpenVoiceOS/precise-lite-models),
+    run with [precise-onnx-js](https://github.com/TigreGotico/precise-onnx-js)
+    (a port of that plugin's inference: the same features, calibration and
+    trigger detector, so `sensitivity` and `trigger_level` work as on a
+    device; Apache-2.0)
+  - `ovos-ww-plugin-openwakeword`: [openWakeWord](https://github.com/dscripka/openWakeWord)'s
+    own models and streaming pipeline ("hey_jarvis", "alexa", or
+    "hey_mycroft" when configured; code Apache-2.0, pre-trained models
+    CC BY-NC-SA 4.0, non-commercial)
+
+  The microphone stays open while Emkay is on screen – a phone or
   tablet used as an assistant is usually on its charger – and listening
   pauses while Emkay records, speaks or is muted. Hearing it does what
   ovos-dinkum-listener does (`recognizer_loop:wakeword`, then listen).
   Tapping the screen still works. The browser's noise suppression and
   automatic gain are off (they distort speech); echo cancellation is on.
-  openWakeWord's code is Apache-2.0, its pre-trained models CC BY-NC-SA 4.0
-  (non-commercial).
 - **The listener's microphone controls** (`mycroft.mic.get_status`, `mute`,
   `unmute`) are answered as ovos-dinkum-listener does; a muted mic does not
   listen.

@@ -445,6 +445,11 @@ def start(on_message=None, user_config=None) -> dict:
     return {"seconds": round(time.time() - t0, 2), "skills": loaded,
             "lang": Configuration().get("lang", "en-US"),
             "wake_word": Configuration().get("listener", {}).get("wake_word"),
+            # the wake word's own settings (hotwords.<name>: module, model,
+            # sensitivity, trigger_level), as ovos-dinkum-listener loads its
+            # plugin from them; the page runs the same engine (wakeword.js)
+            "hotword": Configuration().get("hotwords", {}).get(
+                Configuration().get("listener", {}).get("wake_word") or "", {}),
             "stt_module": Configuration().get("stt", {}).get("module"),
             # how the page listens, from OVOS' own listener settings
             # (ovos-dinkum-listener's): end of speech, time limits, the

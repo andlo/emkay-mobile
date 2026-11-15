@@ -431,11 +431,31 @@ const wake = {
   state: "off",   // for diagnostics: off (and why), loading, listening, error: ...
   chunks: 0,      // 80 ms chunks passed on, and the best score seen (diagnostics)
   best: 0,
+  /**
+   * The engine for OVOS' wake word, from its own settings (hotwords.<name>),
+   * as ovos-dinkum-listener picks the plugin: Precise for
+   * ovos-ww-plugin-precise-onnx (OVOS' default for "hey mycroft") when the
+   * site has its model; openWakeWord for ovos-ww-plugin-openwakeword, or
+   * when the site has an openWakeWord model of that name and no Precise one.
+   */
+  engine(name) {
+    const hw = bootInfo?.hotword || {};
+    const precise = (bootInfo?.precise_models || {})[hw.model];
+    if (hw.module === "ovos-ww-plugin-precise-onnx" && precise) {
+      return { engine: "precise", model: precise, sensitivity: hw.sensitivity ?? 0.5,
+        trigger_level: hw.trigger_level ?? 3 };
+    }
+    if ((bootInfo?.wake_words || []).includes(name)) {
+      return { engine: "oww", model: `${name}_v0.1.onnx`, threshold: hw.threshold ?? 0.5 };
+    }
+    return null;
+  },
   async start(name) {
     if (!name) { this.state = "off: no listener.wake_word"; return; }
-    if (!(bootInfo?.wake_words || []).includes(name)) { this.state = `off: no model for ${name}`; return; }
+    const engine = this.engine(name);
+    if (!engine) { this.state = `off: no model for ${name}`; return; }
     this.state = "loading";
-    const model = `${name}_v0.1.onnx`;
+    this.engineName = engine.engine;
     this.worker = new Worker("wakeword.js", { type: "module" });
     this.worker.onmessage = ({ data }) => {
       if (data.error) { this.state = `error: ${data.error}`; console.warn("[emkay] wake word:", data.error); }
@@ -443,7 +463,7 @@ const wake = {
       if (data.score) this.best = Math.max(this.best, data.score);
       if (data.detected && this.active()) this.heard(name);
     };
-    this.worker.postMessage({ cmd: "start", model });
+    this.worker.postMessage({ cmd: "start", ...engine });
     // to 16 kHz Int16 by averaging (as toPcm16), 1280 samples at a time
     const ratio = audioCtx.sampleRate / 16000;
     const chunk = new Int16Array(1280);

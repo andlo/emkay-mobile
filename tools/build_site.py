@@ -172,7 +172,8 @@ ORT_FILES = ["ort.wasm.bundle.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-
 
 
 def add_wake_word(out: Path) -> list:
-    """onnxruntime-web into ort/ and the openWakeWord models into oww/.
+    """onnxruntime-web into ort/ and the wake word models into oww/
+    (openWakeWord's; Precise's and precise-onnx-js in oww/precise/).
 
     Returns the wake words the site can hear (by OVOS name, e.g.
     "hey_mycroft"); empty, and no wake word on the page, without
@@ -186,6 +187,16 @@ def add_wake_word(out: Path) -> list:
         shutil.copy(REPO / "node_modules/onnxruntime-web/dist" / name, out / "ort" / name)
     shutil.copytree(src, out / "oww")
     return sorted(f.name.rsplit("_v", 1)[0] for f in (out / "oww").glob("*_v*.onnx"))
+
+
+def precise_models(out: Path) -> dict:
+    """The Precise models the site ships (oww/precise/, from
+    tools/fetch_wakeword_models.py): the model URL OVOS' config names ->
+    the copy's path on the site."""
+    f = out / "oww" / "precise" / "models.json"
+    if not f.exists():
+        return {}
+    return {url: f"oww/precise/{local}" for url, local in json.loads(f.read_text()).items()}
 
 
 def release_info() -> dict:
@@ -239,6 +250,7 @@ def main():
                                "source": (d / "SOURCE").read_text().strip()}
 
     wake_words = add_wake_word(OUT)
+    precise = precise_models(OUT)
 
     packages, pyodide_bytes = vendor_pyodide(plan["pyodide"] + ["micropip"])
 
@@ -255,6 +267,7 @@ def main():
         "intent_cache": intents,
         "m2v_models": m2v,
         "wake_words": wake_words,
+        "precise_models": precise,
         "shimmed": plan["shimmed"],
         "dropped": plan["dropped"],
         "versions": versions,

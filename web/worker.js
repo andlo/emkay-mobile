@@ -164,6 +164,7 @@ importlib.invalidate_caches()
   const info = JSON.parse(main.start(post, userConfig ? py.toPy(userConfig) : null));
   info.site_langs = Object.keys(b.intent_cache || {});
   info.wake_words = b.wake_words || [];   // what wakeword.js can hear (app.js)
+  info.precise_models = b.precise_models || {};   // Precise models on the site, by OVOS' model URL
   info.intent_langs = langs;   // what this boot has intents for (app.js)
   status("boot.ready", 1);
   // Python's deferred work (padatious' training pass) runs from here on,

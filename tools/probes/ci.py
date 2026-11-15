@@ -53,7 +53,7 @@ PROBES = [
         r'second said: \["(It|Currently)',                 # and an answer
     ]),
     ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/hey_mycroft_what_time.wav"), "ANSWERS": "2"}, [], [
-        r"wake word engine ready",
+        r"wake word engine ready in [0-9.]+s: precise",       # OVOS' default: ovos-ww-plugin-precise-onnx
         r'said: \["(It|Currently)',                        # no tap: the wake word
         r"answer 2; mic: mic[^,]*, wake listening",                # and back waiting for the next one
     ]),
@@ -62,6 +62,11 @@ PROBES = [
         r'"in five minutes": said \["Your alarm is set',
         r'"yes": said \["[^"]*from the OpenVoiceOS Blog',     # the skill's dialogs vary
         r'"stop": said \["[^"]+"\] \| captions \[\]',          # a stop line, not "couldn't help"
+    ]),
+    # speech without the wake word, for a minute: Precise must stay quiet
+    ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/what_time.wav"), "WAIT_S": "60"}, [], [
+        r"wake word engine ready in [0-9.]+s: precise",
+        r"FAILED: timed out waiting for answer 1",
     ]),
     ("panel_mobile.mjs", {}, [], [
         r"after tapping Settings: /panel/config",       # the panel's menu by touch
