@@ -54,12 +54,19 @@
       <button id="menu-export">Gem opsætning på telefonen</button>
       <button id="menu-import">Hent opsætning fra en fil</button>
       <input id="import-file" type="file" accept=".zip,application/zip" hidden>
+      <button id="menu-panel">OpenVoiceOS-indstillinger</button>
       <button id="menu-kiosk">Fuld skærm</button>
       <p id="menu-note" class="small"></p>
       <p class="small">OpenVoiceOS i din browser ·
         <a href="https://github.com/andlo/emkay-mobile" target="_blank" rel="noopener">kildekode</a></p>
       <button id="menu-close" class="secondary">Luk</button>
     </div>
+  </div>
+
+  <!-- the stock ovos-control-panel, served by the worker (sw.js, panel.py) -->
+  <div id="panel" class="panel" hidden>
+    <iframe id="panel-frame" title="OpenVoiceOS settings"></iframe>
+    <button id="panel-close" class="panel-close" aria-label="Luk">×</button>
   </div>
 
   <script type="module" src="app.js"></script>

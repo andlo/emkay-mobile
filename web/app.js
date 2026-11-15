@@ -289,6 +289,12 @@ const speaker = {
   async next() {
     const item = this.queue.shift();
     if (!item) { this.playing = false; return; }
+    if (!audioCtx) {
+      // nothing may sound before the first tap (browser rule): skip it, but
+      // tell OVOS it is done, so its speech state does not hang
+      call("playback_ended", { ident: item.meta.ident });
+      return this.next();
+    }
     this.playing = true;
     try {
       const buf = await audioCtx.decodeAudioData(item.wav);
@@ -350,7 +356,38 @@ $("type").onsubmit = (e) => {
   $("type-text").value = "";
 };
 
+// -------------------------------------------------------- settings panel
+// The stock ovos-control-panel runs in the worker (py/emkay_mobile/panel.py).
+// sw.js catches the requests its pages make and hands each one here, with
+// a port for the answer; the worker's panel app produces the response.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch((e) => console.warn("[emkay] service worker", e));
+  navigator.serviceWorker.onmessage = async (event) => {
+    const req = event.data?.panelRequest;
+    const port = event.ports[0];
+    if (!req || !port) return;
+    try {
+      await ready;   // OVOS (and so the panel) is up
+      const res = await call("panel_request", req, req.body ? [req.body] : []);
+      port.postMessage(res, [res.body.buffer]);
+    } catch (e) {
+      const body = new TextEncoder().encode(String(e));
+      port.postMessage({ status: 502, headers: [["content-type", "text/plain"]], body }, [body.buffer]);
+    }
+  };
+}
+
+/** Show the OpenVoiceOS settings over the face. */
+function openPanel() {
+  $("menu").hidden = true;
+  const frame = $("panel-frame");
+  if (!frame.getAttribute("src")) frame.src = "panel/";
+  $("panel").hidden = false;
+}
+$("panel-close").onclick = () => { $("panel").hidden = true; };
+
 // ------------------------------------------------------------------ menu
+$("menu-panel").onclick = openPanel;
 $("menu-button").onclick = () => { $("menu").hidden = !$("menu").hidden; };
 $("menu-close").onclick = () => { $("menu").hidden = true; };
 $("menu-kiosk").onclick = () => { kiosk = true; enterKiosk(); $("menu").hidden = true; };

@@ -18,7 +18,7 @@ answers through the `js_post(kind, payload, data=None)` callable given to
 import json
 import time
 
-from . import boot, browser, gui, phal, settings, speech
+from . import boot, browser, gui, panel, phal, settings, speech
 
 _js_post = None   # set by start(): post(kind, payload[, data])
 
@@ -123,6 +123,18 @@ def phal_position(lat=None, lon=None, error=None):
     """The browser's geolocation answer, for the PHAL plugin (phal.py)."""
     if phal.plugin() is not None:
         phal.plugin().on_position(lat, lon, error)
+
+
+async def panel_request(method, path, query, headers_json, body):
+    """One request for the stock settings panel (see panel.py and sw.js).
+
+    Returns a JS object {status, headers: [[k, v], ...], body: Uint8Array}.
+    """
+    import js
+    from pyodide.ffi import to_js
+    status, headers, data = await panel.request(method, path, query, headers_json, body)
+    return to_js({"status": status, "headers": json.loads(headers), "body": to_js(data)},
+                 dict_converter=js.Object.fromEntries)
 
 
 def export_settings():

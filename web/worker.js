@@ -148,6 +148,9 @@ const commands = {
   heard: ({ pcm, rate }) => main.heard(new Uint8Array(pcm), rate),
   playback_started: ({ ident, visemes }) => main.playback_started(ident, JSON.stringify(visemes || [])),
   playback_ended: ({ ident }) => main.playback_ended(ident),
+  /** One request for the settings panel (see sw.js and panel.py). */
+  panel_request: async ({ method, path, query, headers, body }) =>
+    main.panel_request(method, path, query, JSON.stringify(headers), body ? new Uint8Array(body) : null),
   /** The page's answer to the PHAL plugin's location request. */
   phal_position: ({ lat, lon, error }) => main.phal_position(lat ?? null, lon ?? null, error ?? null),
   /** The settings as a zip (Uint8Array), after flushing them to disk. */

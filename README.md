@@ -10,8 +10,8 @@ no app store, no sideloading – with the Mycroft Mark II Kickstarter face
 > ovos-gui with the homescreen and the Mark II face boot in the browser
 > (about 2½ minutes the first time on a PC, longer on a phone). A typed or
 > spoken question goes the whole way: intent, skill, the public OVOS TTS
-> server, sound and the face's mouth. The setup page (ovos-control-panel)
-> is not wired in yet.
+> server, sound and the face's mouth. The stock ovos-control-panel opens
+> from the ⚙ menu.
 >
 > Site: <https://andlo.github.io/emkay-mobile/> (built by GitHub Actions).
 
@@ -27,7 +27,7 @@ device gets, on the **alpha** channel, compiled to WebAssembly with
 | Skills | the installer defaults: `ovos-core[skills-essential,skills-internet,skills-audio]` |
 | Speech | the installer default (public servers): `ovos-stt-plugin-server`, `ovos-tts-plugin-server` |
 | Screen | `ovos-gui` + `ovos-skill-homescreen`, drawn by ovos-visage (the Mark II face) |
-| Setup | the stock `ovos-control-panel` (coming) |
+| Setup | the stock `ovos-control-panel`, in the ⚙ menu |
 
 See [`requirements/`](requirements) for the exact lists.
 
@@ -88,6 +88,13 @@ forces a workaround:
   ipgeo's `http://` service cannot be called from an https page; until the
   user allows it, OVOS gets the browser's time zone. Battery and network
   are next.
+- **The control panel has no port to listen on.** The stock FastAPI app is
+  built with `create_app(bus=..., connect_bus=False)`, as its own tests do,
+  and called as ASGI inside the worker ([`panel.py`](py/emkay_mobile/panel.py));
+  a Service Worker ([`sw.js`](web/sw.js)) is its network. It prefixes the
+  panel's absolute links when the site lives below a path, sets
+  `Sec-Fetch-Site` honestly for the panel's cross-site check, and lets this
+  one site show it in a frame (it forbids all frames otherwise).
 - **Config changes are followed over the bus** (`configuration.updated`),
   as the services on a device do; the file watcher thread is left out.
 - **On a phone** the screen fills the display; on a larger screen visage
