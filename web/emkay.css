@@ -32,7 +32,8 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 
 /* the menu: a corner button and a card over the screen */
 .menu-button { position: fixed; right: 12px; top: max(10px, env(safe-area-inset-top)); z-index: 30;
-  background: none; border: 0; color: #333; font-size: 22px; }
+  width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0;
+  background: #ffffff1f; color: #ddd; font-size: 24px; line-height: 44px; }
 .menu { position: fixed; inset: 0; z-index: 60; background: #000c; display: flex;
   align-items: center; justify-content: center; padding: 24px; }
 .menu[hidden] { display: none; }
