@@ -134,6 +134,7 @@ async function start() {
   // allow it only after one; the installed app opens full screen anyway)
   if (kiosk || phoneScreen.matches) enterKiosk();
   keepAwake();
+  wake.start(bootInfo?.wake_word).catch((e) => { wake.state = `error: ${e.message || e}`; });
   $("boot").hidden = true;
   for (const id of ["mic", "keyboard", "menu-button"]) $(id).hidden = false;
 }
@@ -255,6 +256,81 @@ let stream = null;
 let captionTimer = null;
 
 /**
+ * The microphone, opened once (the first tap) and kept. Echo cancellation
+ * stays on, so Emkay does not hear itself; the browser's noise suppression
+ * and automatic gain are off: they distort speech (the gain clips it) and
+ * the wake word model is trained on plain audio, as STT servers expect it.
+ */
+async function micStream() {
+  stream ??= await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: false, autoGainControl: false },
+  });
+  return stream;
+}
+
+/**
+ * The wake word: OVOS' `listener.wake_word` ("hey_mycroft" by default),
+ * heard by openWakeWord in its own worker (wakeword.js). The microphone
+ * stays open while Emkay is on screen; what it hears is passed on in 80 ms
+ * chunks of 16 kHz audio, except while Emkay records, speaks or is muted.
+ * Hearing it does what ovos-dinkum-listener does: tell OVOS
+ * (recognizer_loop:wakeword) and listen for the question.
+ */
+const wake = {
+  worker: null,
+  state: "off",   // for diagnostics: off (and why), loading, listening, error: ...
+  chunks: 0,      // 80 ms chunks passed on, and the best score seen (diagnostics)
+  best: 0,
+  async start(name) {
+    if (!name) { this.state = "off: no listener.wake_word"; return; }
+    if (!(bootInfo?.wake_words || []).includes(name)) { this.state = `off: no model for ${name}`; return; }
+    this.state = "loading";
+    const model = `${name}_v0.1.onnx`;
+    const source = audioCtx.createMediaStreamSource(await micStream());
+    this.worker = new Worker("wakeword.js", { type: "module" });
+    this.worker.onmessage = ({ data }) => {
+      if (data.error) { this.state = `error: ${data.error}`; console.warn("[emkay] wake word:", data.error); }
+      if (data.ready) { this.state = "listening"; $("mic").classList.add("wake"); }
+      if (data.score) this.best = Math.max(this.best, data.score);
+      if (data.detected && this.active()) this.heard(name);
+    };
+    this.worker.postMessage({ cmd: "start", model });
+    // to 16 kHz Int16 by averaging (as toPcm16), 1280 samples at a time
+    const ratio = audioCtx.sampleRate / 16000;
+    const chunk = new Int16Array(1280);
+    let fill = 0, acc = 0, n = 0, due = ratio;
+    const proc = audioCtx.createScriptProcessor(4096, 1, 1);
+    proc.onaudioprocess = (e) => {
+      if (!this.active()) { fill = 0; return; }
+      const x = e.inputBuffer.getChannelData(0);
+      for (let i = 0; i < x.length; i++) {
+        acc += x[i]; n++;
+        if (n >= due) {
+          const v = Math.max(-1, Math.min(1, acc / n));
+          chunk[fill++] = v < 0 ? v * 0x8000 : v * 0x7fff;
+          acc = 0; due += ratio - n; n = 0;
+          if (fill === chunk.length) {
+            this.worker.postMessage({ cmd: "audio", pcm: chunk.slice() });
+            this.chunks++;
+            fill = 0;
+          }
+        }
+      }
+    };
+    source.connect(proc);
+    proc.connect(audioCtx.destination);   // a ScriptProcessor runs only when connected; it outputs silence
+  },
+  /** Listening for the wake word now? Not while recording, speaking, muted or hidden. */
+  active() {
+    return !mic.busy && !mic.muted && !speaker.playing && document.visibilityState === "visible";
+  },
+  heard(name) {
+    call("wakeword", { name });
+    mic.listen();
+  },
+};
+
+/**
  * The line under the face: what the microphone is doing and what it heard,
  * so a question that gets no answer shows where it stopped.
  * @param {string} text
@@ -279,10 +355,7 @@ function caption(text, level = null, hideAfter = 0) {
  *   nothing was said
  */
 async function record({ maxSeconds = 10, silenceMs = 1100, noSpeechMs = 6000, level } = {}) {
-  stream ??= await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-  });
-  const source = audioCtx.createMediaStreamSource(stream);
+  const source = audioCtx.createMediaStreamSource(await micStream());
   const proc = audioCtx.createScriptProcessor(4096, 1, 1);
   const chunks = [];
   // Speech is what stands out from the room. The room is measured in the
@@ -542,4 +615,4 @@ $("menu-about").onclick = async () => {
 };
 $("about-close").onclick = () => { $("about").hidden = true; };
 
-window.emkay = { call, mic, speaker };
+window.emkay = { call, mic, speaker, wake };

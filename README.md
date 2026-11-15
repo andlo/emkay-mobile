@@ -108,6 +108,19 @@ forces a workaround:
   - the camera as ovos-PHAL-plugin-camera (`ovos.phal.camera.*`), except
     that `b64_frame` is a JPEG rather than OpenCV's raw pixel buffer.
   The page side is [`device.js`](web/device.js).
+- **The wake word** is OVOS' own `listener.wake_word` ("hey_mycroft" by
+  default; "hey_jarvis" and "alexa" also work), heard by
+  [openWakeWord](https://github.com/dscripka/openWakeWord) with its own
+  models and streaming pipeline, ported to the browser
+  ([`wakeword.js`](web/wakeword.js), onnxruntime-web, a Web Worker of its
+  own). The microphone stays open while Emkay is on screen – a phone or
+  tablet used as an assistant is usually on its charger – and listening
+  pauses while Emkay records, speaks or is muted. Hearing it does what
+  ovos-dinkum-listener does (`recognizer_loop:wakeword`, then listen).
+  Tapping the screen still works. The browser's noise suppression and
+  automatic gain are off (they distort speech); echo cancellation is on.
+  openWakeWord's code is Apache-2.0, its pre-trained models CC BY-NC-SA 4.0
+  (non-commercial).
 - **The listener's microphone controls** (`mycroft.mic.get_status`, `mute`,
   `unmute`) are answered as ovos-dinkum-listener does; a muted mic does not
   listen.
@@ -172,12 +185,13 @@ python3 -m pip wheel --pre --no-deps -w wheelhouse \
 python3 tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json
 
 # pre-train padatious (normal CPython venv with requirements/browser*.txt,
-# minus ovos-m2v-pipeline) and fetch the m2v models
+# minus ovos-m2v-pipeline), fetch the m2v and wake word models
 python tools/build_intent_cache.py build/intent_cache en-US da-DK
 python tools/fetch_m2v_models.py build/m2v en-US da-DK
+python tools/fetch_wakeword_models.py build/oww
 
 # build and serve the site on http://127.0.0.1:8080/
-EMKAY_M2V=build/m2v python3 tools/build_site.py wheelhouse plan.json build/intent_cache
+EMKAY_M2V=build/m2v EMKAY_OWW=build/oww python3 tools/build_site.py wheelhouse plan.json build/intent_cache
 python3 tools/serve.py
 
 # or run OVOS in Pyodide under Node

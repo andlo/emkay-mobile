@@ -132,10 +132,12 @@ jobs:
           langs=$(ls intents | sed 's/^intents-//')
           echo "languages: $langs"
           python tools/fetch_m2v_models.py m2v $langs
+      - name: Fetch the wake word models (openWakeWord)
+        run: python tools/fetch_wakeword_models.py oww
       - name: Build the site
         run: |
           python tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json
-          EMKAY_M2V=m2v python tools/build_site.py wheelhouse plan.json intents/*
+          EMKAY_M2V=m2v EMKAY_OWW=oww python tools/build_site.py wheelhouse plan.json intents/*
           du -sh build/site
       # the site in a real headless Chrome before it goes out: first start
       # and setup, languages, installing a skill, a dialog transformer, the

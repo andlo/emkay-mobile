@@ -163,6 +163,7 @@ importlib.invalidate_caches()
   main = py.pyimport("emkay_mobile.worker_main");
   const info = JSON.parse(main.start(post, userConfig ? py.toPy(userConfig) : null));
   info.site_langs = Object.keys(b.intent_cache || {});
+  info.wake_words = b.wake_words || [];   // what wakeword.js can hear (app.js)
   info.intent_langs = langs;   // what this boot has intents for (app.js)
   status("boot.ready", 1);
   // Python's deferred work (padatious' training pass) runs from here on,
@@ -180,6 +181,7 @@ const commands = {
   gui_message: ({ raw }) => main.gui_message(raw),
   say: ({ text }) => main.say(text),
   record_begin: () => main.record_begin(),
+  wakeword: ({ name }) => main.wakeword(name),
   heard: ({ pcm, rate }) => main.heard(new Uint8Array(pcm), rate),
   playback_started: ({ ident, visemes }) => main.playback_started(ident, JSON.stringify(visemes || [])),
   playback_ended: ({ ident }) => main.playback_ended(ident),

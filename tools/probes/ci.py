@@ -48,6 +48,14 @@ PROBES = [
         r"backup: 200 application/gzip attachment",   # the panel's Backup page
         r"after restore: unit imperial",
     ]),
+    ("mic_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/what_time.wav")}, [], [
+        r'captions: \["Listening…","One moment…","“What time is it\?”"\]',   # tap, STT
+        r'second said: \["(It|Currently) ',                 # and an answer
+    ]),
+    ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/hey_mycroft_what_time.wav")}, [], [
+        r"wake word engine ready",
+        r'said: \["(It|Currently) ',                        # no tap: the wake word
+    ]),
     ("phal_browser.mjs", {}, [], [
         r'internet_check: \[\{"internet_connected": true',
         r'camera\.get: .*"b64_frame"',

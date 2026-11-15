@@ -12,10 +12,13 @@
 
 Usage:
   python3 tools/build_site.py WHEELHOUSE PLAN.json [INTENT_CACHE_DIR ...]
-  (EMKAY_M2V=<dir from tools/fetch_m2v_models.py> adds the m2v models)
+  (EMKAY_M2V=<dir from tools/fetch_m2v_models.py> adds the m2v models,
+   EMKAY_OWW=<dir from tools/fetch_wakeword_models.py> the wake word models;
+   onnxruntime-web, which runs them, comes from node_modules)
 """
 import hashlib
 import io
+import os
 import re
 import urllib.request
 import json
@@ -153,6 +156,27 @@ def locale_texts() -> dict:
     return out
 
 
+#: the onnxruntime-web files web/wakeword.js loads (single-threaded wasm)
+ORT_FILES = ["ort.wasm.bundle.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm"]
+
+
+def add_wake_word(out: Path) -> list:
+    """onnxruntime-web into ort/ and the openWakeWord models into oww/.
+
+    Returns the wake words the site can hear (by OVOS name, e.g.
+    "hey_mycroft"); empty, and no wake word on the page, without
+    EMKAY_OWW.
+    """
+    src = os.environ.get("EMKAY_OWW")
+    if not src:
+        return []
+    (out / "ort").mkdir()
+    for name in ORT_FILES:
+        shutil.copy(REPO / "node_modules/onnxruntime-web/dist" / name, out / "ort" / name)
+    shutil.copytree(src, out / "oww")
+    return sorted(f.name.rsplit("_v", 1)[0] for f in (out / "oww").glob("*_v*.onnx"))
+
+
 def main():
     wheelhouse, plan_path, *cache_dirs = sys.argv[1:]
     plan = json.load(open(plan_path))
@@ -172,7 +196,6 @@ def main():
         intents[lang] = {"url": name, "hash": h, "bytes": len(data)}
 
     m2v = {}
-    import os
     if os.environ.get("EMKAY_M2V"):
         for d in sorted(Path(os.environ["EMKAY_M2V"]).iterdir()):
             if (d / "model.safetensors").exists():
@@ -185,6 +208,8 @@ def main():
                 (OUT / name).write_bytes(data)
                 m2v[d.name] = {"url": name, "hash": h, "bytes": len(data),
                                "source": (d / "SOURCE").read_text().strip()}
+
+    wake_words = add_wake_word(OUT)
 
     packages, pyodide_bytes = vendor_pyodide(plan["pyodide"] + ["micropip"])
 
@@ -199,6 +224,7 @@ def main():
         "bundle_bytes": len(bundle),
         "intent_cache": intents,
         "m2v_models": m2v,
+        "wake_words": wake_words,
         "shimmed": plan["shimmed"],
         "dropped": plan["dropped"],
         "versions": versions,

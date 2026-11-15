@@ -129,6 +129,11 @@ def say(text: str):
     boot.utterance(text)
 
 
+def wakeword(name: str):
+    """The page heard the wake word: tell OVOS as ovos-dinkum-listener does."""
+    boot.emit("recognizer_loop:wakeword", {"utterance": name, "engine": "openwakeword (browser)"})
+
+
 def record_begin():
     """The page started recording: tell OVOS, so the face starts listening."""
     boot.emit("recognizer_loop:record_begin")
