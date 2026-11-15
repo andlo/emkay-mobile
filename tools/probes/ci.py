@@ -59,6 +59,9 @@ PROBES = [
     ("panel_mobile.mjs", {}, [], [
         r"after tapping Settings: /panel/config",       # the panel's menu by touch
     ]),
+    ("noanswer_browser.mjs", {}, [], [
+        r'"what time is it": said \["(It|Currently) [^|]*\| captions \[\]',   # answered: no "couldn't help"
+    ]),
     ("phal_browser.mjs", {}, [], [
         r'internet_check: \[\{"internet_connected": true',
         r'camera\.get: .*"b64_frame"',

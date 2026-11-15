@@ -381,6 +381,7 @@ def start(on_message=None, user_config=None) -> dict:
             "confirm_listening": Configuration().get("confirm_listening", True),
             "start_listening_sound": Configuration().get("sounds", {}).get(
                 "start_listening", "snd/start_listening.wav"),
+            "error_sound": Configuration().get("sounds", {}).get("error", "snd/error.mp3"),
             "skipped_threads": list(browser.STARTED)}
 
 

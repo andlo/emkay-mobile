@@ -238,6 +238,7 @@ const mic = {
   async listen() {
     if (this.busy || this.muted || !audioCtx) return;
     this.busy = true;
+    questionsAsked++;
     $("mic").className = "mic listening";
     caption(t("mic.listening"), 0);
     // OVOS' confirm-listening sound, before the recording (so it is not in it)
@@ -254,7 +255,8 @@ const mic = {
         if (!text) caption(t("mic.nothing"), null, 4000);
         else {
           caption(`“${text}”`, null, 6000);
-          await call("heard_text", { text });
+          const before = speaker.spoken;
+          if (await call("heard_text", { text })) unanswered(before);
         }
         return;
       }
@@ -270,8 +272,10 @@ const mic = {
         caption(t("mic.nothing"), null, 4000);
       } else {
         caption(t("mic.thinking"));
+        const before = speaker.spoken;
         const text = await call("heard", { pcm: pcm.buffer, rate: 16000 }, [pcm.buffer]);
         caption(text ? `“${text}”` : t("mic.unclear"), null, text ? 6000 : 4000);
+        if (text) unanswered(before);
       }
     } catch (e) {
       console.warn("[emkay] mic", e);
@@ -285,6 +289,27 @@ const mic = {
 
 let stream = null;
 let captionTimer = null;
+let questionsAsked = 0;   // typed or spoken; ends the warm-up note
+
+/**
+ * A question was handled and nothing was said: a skill or fallback that
+ * failed quietly, often because its service cannot be reached from a
+ * browser (issue #6). Instead of silence: OVOS' error sound (sounds.error,
+ * as the listener plays it) and a line under the face. `before` is
+ * speaker.spoken when the question went in; speech may follow the
+ * handling by a moment, so it waits a little first.
+ */
+async function unanswered(before) {
+  await new Promise((r) => setTimeout(r, 1500));
+  if (speaker.spoken !== before || speaker.playing) return;
+  caption(t("noanswer"), null, 6000);
+  if (!mic.errorSound && bootInfo?.error_sound) {
+    try {
+      mic.errorSound = await audioCtx.decodeAudioData((await call("sound_bytes", { uri: bootInfo.error_sound })).buffer);
+    } catch { mic.errorSound = null; }
+  }
+  if (mic.errorSound) speaker.playSound(mic.errorSound);
+}
 
 /**
  * Right after start OVOS still prepares its intent matching in the
@@ -296,16 +321,22 @@ let captionTimer = null;
  */
 async function warmingWatch(seconds = 150) {
   const end = performance.now() + seconds * 1000;
-  let shown = false;
-  while (performance.now() < end) {
+  const asked = () => speaker.spoken > 0 || mic.busy || questionsAsked > 0;
+  let shown = false, wasSlow = false;
+  while (performance.now() < end && !asked()) {
     const slow = setTimeout(() => {
-      if (!mic.busy && $("caption").hidden) { caption(t("warming")); shown = true; }
+      wasSlow = true;
+      if (!asked() && $("caption").hidden) { caption(t("warming")); shown = true; }
     }, 700);
+    const t0 = performance.now();
     await call("python", { code: "1" }).catch(() => {});
     clearTimeout(slow);
-    if (shown && !mic.busy) { caption(t("warming"), null, 1); shown = false; }
+    const fast = performance.now() - t0 < 300;
+    if (shown && fast) { caption(t("warming"), null, 1); shown = false; }
+    if (wasSlow && fast) return;   // the warm-up is over
     await new Promise((r) => setTimeout(r, 1000));
   }
+  if (shown) caption(t("warming"), null, 1);
 }
 
 // ovos-stt-plugin-browser: the browser's own speech recognition, chosen as
@@ -543,7 +574,8 @@ const speaker = {
     this.level = level;
     if (this.gain) this.gain.gain.value = level.muted ? 0 : level.volume;
   },
-  enqueue(wav, meta) { this.queue.push({ wav, meta }); if (!this.playing) this.next(); },
+  spoken: 0,   // answers queued so far (unanswered() compares)
+  enqueue(wav, meta) { this.spoken++; this.queue.push({ wav, meta }); if (!this.playing) this.next(); },
   /**
    * A sound (ovos-audio's play_sound): played at once, over speech, through
    * the same volume. Resolves when it has finished.
@@ -634,7 +666,11 @@ $("keyboard").onclick = () => {
 $("type").onsubmit = (e) => {
   e.preventDefault();
   const text = $("type-text").value.trim();
-  if (text) call("say", { text });
+  if (text) {
+    const before = speaker.spoken;
+    questionsAsked++;
+    call("say", { text }).then(() => unanswered(before));
+  }
   $("type-text").value = "";
 };
 
