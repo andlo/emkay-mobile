@@ -127,9 +127,22 @@ let audioCtx = null;
 async function start() {
   $("start").hidden = true;
   $("first").hidden = true;
+  // iOS: Web Audio follows the ringer switch unless the page says what its
+  // sound is (Safari 17+ audioSession). Emkay plays speech and keeps the
+  // microphone open for the wake word: "play-and-record", which iOS does
+  // not silence.
+  try { if (navigator.audioSession) navigator.audioSession.type = "play-and-record"; } catch {}
   audioCtx = new AudioContext();
   speaker.attach(audioCtx);
   await audioCtx.resume();
+  // iOS suspends ("interrupted") the context after a call, Siri, the lock
+  // screen or another app's sound, and does not resume it by itself
+  audioCtx.onstatechange = () => {
+    if (audioCtx.state !== "running") audioCtx.resume().catch(() => {});
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && audioCtx.state !== "running") audioCtx.resume().catch(() => {});
+  });
   // a phone is the device itself: full screen from the first tap (browsers
   // allow it only after one; the installed app opens full screen anyway)
   if (kiosk || phoneScreen.matches) enterKiosk();
