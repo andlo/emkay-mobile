@@ -133,6 +133,16 @@ def add_phal_distribution(zf):
                 "[opm.stt]\novos-stt-plugin-browser = emkay_mobile.stt_browser:BrowserSTT\n")
     zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
     zf.writestr(f"{info}/RECORD", "")
+    # Piper voices made on the phone (emkay_mobile/tts_piper.py, web/piper.js)
+    info = "ovos_tts_plugin_piper_browser-0.1.0.dist-info"
+    zf.writestr(f"{info}/METADATA", "Metadata-Version: 2.1\n"
+                "Name: ovos-tts-plugin-piper-browser\nVersion: 0.1.0\n"
+                "Summary: Emkay: Piper text-to-speech on the device, in WebAssembly\n"
+                "Home-page: https://github.com/emkay-voice/emkay\nLicense: Apache-2.0\n")
+    zf.writestr(f"{info}/entry_points.txt",
+                "[opm.tts]\novos-tts-plugin-piper-browser = emkay_mobile.tts_piper:PiperBrowserTTS\n")
+    zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
+    zf.writestr(f"{info}/RECORD", "")
 
 
 def build_intents(cache_dirs):
@@ -187,6 +197,22 @@ def add_wake_word(out: Path) -> list:
         shutil.copy(REPO / "node_modules/onnxruntime-web/dist" / name, out / "ort" / name)
     shutil.copytree(src, out / "oww")
     return sorted(f.name.rsplit("_v", 1)[0] for f in (out / "oww").glob("*_v*.onnx"))
+
+
+#: piper-phonemize in WebAssembly (with espeak-ng's data), for web/piper.js
+PIPER_FILES = ["piper_phonemize.js", "piper_phonemize.wasm", "piper_phonemize.data"]
+
+
+def add_piper(out: Path):
+    """piper-phonemize into piper/ (the voices come from Hugging Face when
+    one is chosen; onnxruntime-web is the wake word's, in ort/)."""
+    src = REPO / "node_modules/@diffusionstudio/piper-wasm/build"
+    if not src.exists():
+        print("no @diffusionstudio/piper-wasm (npm install): no Piper TTS", file=sys.stderr)
+        return
+    (out / "piper").mkdir()
+    for name in PIPER_FILES:
+        shutil.copy(src / name, out / "piper" / name)
 
 
 def precise_models(out: Path) -> dict:
@@ -250,6 +276,7 @@ def main():
                                "source": (d / "SOURCE").read_text().strip()}
 
     wake_words = add_wake_word(OUT)
+    add_piper(OUT)
     precise = precise_models(OUT)
 
     packages, pyodide_bytes = vendor_pyodide(plan["pyodide"] + ["micropip"])

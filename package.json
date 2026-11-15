@@ -5,6 +5,7 @@
   "description": "Emkay on your phone: OpenVoiceOS in the browser with the Mark II Kickstarter face",
   "devDependencies": {
     "onnxruntime-web": "^1.31.1",
-    "pyodide": "314.0.8"
+    "pyodide": "314.0.8",
+    "@diffusionstudio/piper-wasm": "1.0.0"
   }
 }

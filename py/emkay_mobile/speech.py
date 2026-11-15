@@ -66,10 +66,34 @@ def transformers():
     return _dialog_tx, _tts_tx
 
 
+_fallback = None
+
+
+def _get_tts(utterance, path, lang):
+    """The configured TTS; if it fails, `tts.fallback_module`, as ovos-audio
+    does. A plugin that runs on the phone (Piper) can fail where a server
+    plugin does not: its voice still downloading, no network for that first
+    download, a language it has no voice for."""
+    global _fallback
+    try:
+        return tts().get_tts(utterance, path, lang=lang)
+    except Exception as e:
+        cfg = _config().get("tts", {})
+        name = cfg.get("fallback_module") or "ovos-tts-plugin-server"
+        if name == cfg.get("module"):
+            raise
+        print(f"[emkay] tts failed ({e!r}); using the fallback {name}")
+        if _fallback is None:
+            from ovos_plugin_manager.tts import OVOSTTSFactory
+            _fallback = OVOSTTSFactory.create({"tts": {"module": name, name: cfg.get(name, {}),
+                                                       "lang": _config().get("lang")}})
+        return _fallback.get_tts(utterance, path, lang=lang)
+
+
 def reload():
     """Drop the plugins so the next use reads mycroft.conf again."""
-    global _stt, _tts, _dialog_tx, _tts_tx
-    _stt = _tts = None
+    global _stt, _tts, _dialog_tx, _tts_tx, _fallback
+    _stt = _tts = _fallback = None
     for service in (_dialog_tx, _tts_tx):
         try:
             service and service.shutdown()
@@ -198,7 +222,7 @@ def on_speak(message):
     try:
         fd, path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
-        path, phonemes = tts().get_tts(utterance, path, lang=lang)
+        path, phonemes = _get_tts(utterance, path, lang)
         try:
             out, message.context = tts_tx.transform(path, message.context)
             if out and out != path:

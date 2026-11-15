@@ -209,6 +209,17 @@ forces a workaround:
   reaches a skill that is reading aloud. Without JSPI (older browsers)
   waits return at once, and a question back is asked but not waited
   for ([#20](https://github.com/emkay-voice/emkay/issues/20)).
+- **Speech can be made on the phone** with Piper: choose
+  `ovos-tts-plugin-piper-browser` as the TTS (the control panel's voice
+  settings). It is Emkay's stand-in for ovos-tts-plugin-piper, which needs
+  onnxruntime and espeak-ng: here piper-phonemize (espeak-ng) and the voice
+  run as WebAssembly in the worker (`web/piper.js`, onnxruntime-web). The
+  voice for OVOS' language (or `voice` in the plugin's config, a
+  [piper-voices](https://huggingface.co/rhasspy/piper-voices) name) is
+  downloaded the first time, about 63 MB plus 18 MB of espeak-ng data, and
+  kept; until then `tts.fallback_module` speaks. After that nothing leaves the
+  phone to speak, and a sentence takes well under a second on a laptop
+  ([#3](https://github.com/emkay-voice/emkay/issues/3)). It is not the default yet.
 
 ## The skill store
 
@@ -275,4 +286,7 @@ OpenVoiceOS.
 
 ## License
 
-Apache-2.0
+Apache-2.0. Parts that come with their own licence: ovos-visage and
+ovos-gui-visage (Apache-2.0), precise-onnx-js (Apache-2.0), onnxruntime-web
+(MIT), piper-wasm (MIT; it contains espeak-ng and its data, GPL-3.0, in
+`piper/`), and the Piper voices, each with the licence in its model card.

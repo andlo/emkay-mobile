@@ -14,6 +14,13 @@
 
 import { matchLang } from "./langs.js";
 
+// Piper TTS (web/piper.js), for emkay_mobile/tts_piper.py through `js`;
+// loaded the first time a Piper voice speaks
+globalThis.emkayPiper = {
+  synth: async (text, voice, speaker) => (await import("./piper.js")).synth(text, voice, speaker),
+  ready: async (voice) => (await import("./piper.js")).ready(voice),
+};
+
 let py = null;    // the Pyodide instance
 let main = null;  // the Python module emkay_mobile.worker_main
 const build = fetch("build.json", { cache: "no-cache" }).then((r) => r.json());
