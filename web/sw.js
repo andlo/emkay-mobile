@@ -178,9 +178,10 @@ html:root:not([data-emkay]) {
   --radius: 16px;
 }
 /* pages for hardware a browser tab does not have (Wi-Fi, the Mark 1
-   faceplate, hardware sensors, desktop apps): left out of the menu; the
-   pages themselves still open if asked for */
-nav a[href$="/network"], nav a[href$="/mark1"], nav a[href$="/sensors"],
+   faceplate, desktop apps): left out of the menu; the pages themselves
+   still open if asked for. Sensors stay: the browser PHAL plugin reports
+   the phone's (phal_device.py). */
+nav a[href$="/network"], nav a[href$="/mark1"],
 nav a[href$="/apps"] { display: none !important; }
 /* the setup wizard's wake word test: there is no wake word listener here
    yet (tap to talk), so its step is left out too */

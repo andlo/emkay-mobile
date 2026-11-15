@@ -88,7 +88,22 @@ forces a workaround:
   ipgeo's `http://` service cannot be called from an https page; until the
   user allows it, OVOS gets the browser's time zone. It ships as an
   ordinary installed PHAL plugin (`ovos-phal-plugin-browser`, entry point
-  `opm.phal`), so the control panel sees it. Battery and network are next.
+  `opm.phal`), so the control panel sees it. Also in it, each with the bus
+  contract of the plugin a device uses:
+  - power, factory reset and language as ovos-PHAL-plugin-system
+    ([`phal_system.py`](py/emkay_mobile/phal_system.py)): reboot and
+    "restart the services" reload the page, shutdown darkens it until
+    tapped, factory reset wipes what the system plugin wipes and starts
+    over; there is no SSH;
+  - connectivity as ovos-PHAL-plugin-connectivity-events, from the
+    browser's online/offline state ([`phal_device.py`](py/emkay_mobile/phal_device.py));
+  - the phone's sensors as ovos-PHAL-sensors reports them
+    (`ovos.phal.sensor`, shown on the control panel's Sensors page):
+    battery and charging, network type and speed, screen on and
+    orientation, moving or still, ambient light – whichever the browser has;
+  - the camera as ovos-PHAL-plugin-camera (`ovos.phal.camera.*`), except
+    that `b64_frame` is a JPEG rather than OpenCV's raw pixel buffer.
+  The page side is [`device.js`](web/device.js).
 - **The listener's microphone controls** (`mycroft.mic.get_status`, `mute`,
   `unmute`) are answered as ovos-dinkum-listener does; a muted mic does not
   listen.

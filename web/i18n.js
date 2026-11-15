@@ -47,6 +47,7 @@ export const TEXTS = {
     "export.failed": "Could not save: {msg}",
     "import.done": "Restored ({files} files from {date}). Restarting…",
     "import.failed": "Could not restore: {msg}",
+    "off": "Turned off – tap to start",
   },
   da: {
     "boot.loading": "Henter…",
@@ -84,6 +85,7 @@ export const TEXTS = {
     "export.failed": "Kunne ikke gemme: {msg}",
     "import.done": "Hentet ({files} filer fra {date}). Genstarter…",
     "import.failed": "Kunne ikke hente: {msg}",
+    "off": "Slukket – tryk for at starte",
   },
 };
 

@@ -158,6 +158,13 @@ def phal_position(lat=None, lon=None, error=None):
         phal.plugin().on_position(lat, lon, error)
 
 
+def phal_event(event, data_json):
+    """A change the page saw for the PHAL plugin: online, sensor, picture,
+    camera (phal_device.py)."""
+    if phal.plugin() is not None:
+        phal.plugin().on_page_event(event, json.loads(data_json))
+
+
 async def panel_request(method, path, query, headers_json, body):
     """One request for the stock settings panel (see panel.py and sw.js).
 

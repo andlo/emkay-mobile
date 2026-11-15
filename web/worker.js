@@ -156,6 +156,10 @@ const commands = {
   /** One request for the settings panel (see sw.js and panel.py). */
   panel_request: async ({ method, path, query, headers, body }) =>
     main.panel_request(method, path, query, JSON.stringify(headers), body ? new Uint8Array(body) : null),
+  /** Something the page saw for the PHAL plugin (device.js, phal_device.py). */
+  phal_event: ({ event, data }) => main.phal_event(event, JSON.stringify(data ?? {})),
+  /** Write the IndexedDB-backed folders now (before a reload). */
+  sync: () => syncfs(false),
   /** The page's answer to the PHAL plugin's location request. */
   phal_position: ({ lat, lon, error }) => main.phal_position(lat ?? null, lon ?? null, error ?? null),
   /** The settings as a zip (Uint8Array), after flushing them to disk. */

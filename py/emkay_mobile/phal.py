@@ -21,6 +21,9 @@ geolocation instead (it asks the user first) and OVOS' own
 `get_reverse_geolocation` turns it into city, country and time zone. Until
 then, or if the user says no, the layer gets the browser's time zone, so
 clocks and timers are right from the start.
+
+Power, factory reset and language (ovos-PHAL-plugin-system) are in
+phal_system.py; connectivity, sensors and the camera in phal_device.py.
 """
 import os
 import json
@@ -33,14 +36,19 @@ from ovos_config.models import AssistantConfig
 from ovos_plugin_manager.phal import PHALPlugin
 from ovos_utils.log import LOG
 
+from .phal_device import DeviceMixin
+from .phal_system import SystemMixin
+
 try:
     from json_database import JsonConfigXDG
 except ImportError:  # pragma: no cover
     JsonConfigXDG = None
 
 
-class BrowserPHAL(PHALPlugin):
-    """PHAL for a browser tab: volume and location; battery, network next."""
+class BrowserPHAL(SystemMixin, DeviceMixin, PHALPlugin):
+    """PHAL for a browser tab: volume, location, power, connectivity,
+    sensors and camera, each with the bus contract of the plugin a device
+    uses for it."""
 
     def __init__(self, bus=None, config=None, post=None):
         """
@@ -58,6 +66,8 @@ class BrowserPHAL(PHALPlugin):
             self.settings["muted"] = False
             self.settings["first_boot"] = False
             self._store()
+        self._system_start()
+        self._device_start()
         for topic, handler in self._handlers().items():
             self.bus.on(topic, handler)
         self._report()  # the page starts at the stored level
@@ -75,6 +85,8 @@ class BrowserPHAL(PHALPlugin):
             "mycroft.volume.unmute": self.handle_unmute_request,
             "mycroft.volume.mute.toggle": self.handle_mute_toggle_request,
             "ovos.ipgeo.update": self.on_location_update,
+            **self._system_handlers(),
+            **self._device_handlers(),
         }
 
     # --- the "mixer" ----------------------------------------------------

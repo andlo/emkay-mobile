@@ -8,6 +8,7 @@
 // app opens with it, see manifest.webmanifest).
 
 import { t, apply, setLang, onLangChange } from "./i18n.js";
+import { onRequest as deviceRequest, startDevice } from "./device.js";
 
 const $ = (id) => document.getElementById(id);
 apply();                    // the phone's language until OVOS is up
@@ -200,6 +201,7 @@ async function keepStorage() {
     await import("./visage/visage.js");
     bootStatus("boot.skills", 1, { n: info.skills.length });
     offerSetup();
+    startDevice(call);   // the phone's sensors and connectivity, for PHAL
     $("start").hidden = false;
   } catch (e) {
     bootStatus("boot.error", undefined, { msg: e.message });
@@ -359,6 +361,7 @@ const speaker = {
  */
 function onPhal(msg) {
   if (msg.request === "location") return locate();
+  if (deviceRequest(msg)) return;   // power, camera (device.js)
   speaker.setVolume(msg);
 }
 
