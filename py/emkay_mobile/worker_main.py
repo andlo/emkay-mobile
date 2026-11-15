@@ -52,9 +52,29 @@ def start(js_post, user_config=None) -> str:
     print(f"[emkay] gui up in {time.time() - t:.1f}s")
     speech.start(bus, lambda wav, meta: _post("audio", json.dumps(meta), wav))
     phal.start(bus, lambda raw: _post("phal", raw))   # the phone's "hardware"
+    _report_status(bus)
     bus.on("message", _watch)
     info["skipped_waits"] = browser.SKIPPED_WAITS[:]
     return json.dumps(info)
+
+
+#: The device services whose job a part of Emkay does, so they answer the
+#: same status questions (ProcessStatus) the services answer on a device:
+#: audio and voice (speech.py: playback, listener), gui_service (gui.py),
+#: PHAL (phal.py). ovos-core's skills and intents report themselves.
+_SERVICES = ("audio", "voice", "gui_service", "PHAL")
+_statuses = []
+
+
+def _report_status(bus):
+    """Answer mycroft.<service>.is_alive / is_ready for the parts above."""
+    from ovos_utils.process_utils import ProcessStatus
+    for name in _SERVICES:
+        status = ProcessStatus(name, bus=bus)
+        status.set_started()
+        status.set_alive()
+        status.set_ready()
+        _statuses.append(status)
 
 
 #: Bus events the page reacts to itself (the mic hint, follow-up listening).
