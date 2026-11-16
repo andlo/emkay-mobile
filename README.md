@@ -153,7 +153,16 @@ forces a workaround:
   - `ovos-ww-plugin-openwakeword`: [openWakeWord](https://github.com/dscripka/openWakeWord)'s
     own models and streaming pipeline ("hey_jarvis", "alexa", or
     "hey_mycroft" when configured; code Apache-2.0, pre-trained models
-    CC BY-NC-SA 4.0, non-commercial)
+    CC BY-NC-SA 4.0, non-commercial), and Emkay's own **"hey M K"**
+    (`hey_emkay`, trained with
+    [hey-emkay-wakeword](https://github.com/emkay-voice/hey-emkay-wakeword),
+    same licence). To use it:
+
+    ```json
+    {"listener": {"wake_word": "hey_emkay"},
+     "hotwords": {"hey_emkay": {"module": "ovos-ww-plugin-openwakeword",
+                                "threshold": 0.8, "listen": true}}}
+    ```
 
   The microphone stays open while Emkay is on screen – a phone or
   tablet used as an assistant is usually on its charger – and listening

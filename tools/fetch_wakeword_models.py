@@ -11,6 +11,9 @@ OVOS' config names for it (hotwords.<name>.module):
   (https://github.com/dscripka/openWakeWord, v0.5.1): the shared front end
   (melspectrogram, embedding) and the pre-trained wake words. The code of
   openWakeWord is Apache-2.0; its pre-trained models are CC BY-NC-SA 4.0.
+* Emkay's own wake word, "hey M K" (hey_emkay), an openWakeWord model from
+  emkay-voice/hey-emkay-wakeword's releases (CC BY-NC-SA 4.0, as
+  openWakeWord's own, because of the training data).
 
 Usage: python3 tools/fetch_wakeword_models.py OUT_DIR
 """
@@ -21,6 +24,13 @@ from pathlib import Path
 RELEASE = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/"
 FILES = ["melspectrogram.onnx", "embedding_model.onnx",
          "hey_mycroft_v0.1.onnx", "hey_jarvis_v0.1.onnx", "alexa_v0.1.onnx"]
+
+#: openWakeWord models of our own: file name -> URL (named <wake word>_v<version>.onnx
+#: as openWakeWord's, which is how build_site.py and the page find them)
+OWN = {
+    "hey_emkay_v0.1.onnx":
+        "https://github.com/emkay-voice/hey-emkay-wakeword/releases/download/v0.1/hey_emkay_v0.1.onnx",
+}
 
 PRECISE_JS_COMMIT = "8a408dba8f5d66745196a8d8c3405d407ebb04a9"
 PRECISE_JS = f"https://raw.githubusercontent.com/TigreGotico/precise-onnx-js/{PRECISE_JS_COMMIT}/"
@@ -47,6 +57,8 @@ if __name__ == "__main__":
     out.mkdir(parents=True, exist_ok=True)
     for name in FILES:
         get(RELEASE + name, out / name)
+    for name, url in OWN.items():
+        get(url, out / name)
     for name in PRECISE_JS_FILES:
         get(PRECISE_JS + name, out / "precise" / Path(name).name)
     for local in PRECISE_MODELS.values():
