@@ -44,12 +44,14 @@ ovos-control-panel
 
 # Emkay's own browser plugins, each its own package (emkay-voice/<name>):
 # the browser's speech recognition, Piper voices in WebAssembly, the
-# browser tab as the device (PHAL), and the page's <audio> element as
-# ovos-audio's player for music, radio and podcasts
+# browser tab as the device (PHAL), the page's <audio> element as
+# ovos-audio's player for music, radio and podcasts, and Whisper speech
+# recognition on the phone (offline)
 ovos-stt-plugin-browser
 ovos-tts-plugin-piper-browser
 ovos-phal-plugin-browser
 ovos-audio-plugin-browser
+ovos-stt-plugin-whisper-browser
 
 # browser glue
 pyodide-http

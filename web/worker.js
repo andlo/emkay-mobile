@@ -21,6 +21,14 @@ globalThis.emkayPiper = {
   ready: async (voice) => (await import("./piper.js")).ready(voice),
 };
 
+// Whisper STT on the phone (web/whisper.js), for ovos-stt-plugin-whisper-browser
+// through `js`; loaded the first time Whisper is chosen
+globalThis.emkayWhisper = {
+  ready: async (model) => (await import("./whisper.js")).ready(model),
+  transcribe: async (pcm, rate, lang, model) =>
+    (await import("./whisper.js")).transcribe(pcm, rate, lang, model),
+};
+
 let py = null;    // the Pyodide instance
 let main = null;  // the Python module emkay_mobile.worker_main
 const build = fetch("build.json", { cache: "no-cache" }).then((r) => r.json());

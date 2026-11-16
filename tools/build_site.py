@@ -215,6 +215,30 @@ def add_wake_word(out: Path) -> list:
 PIPER_FILES = ["piper_phonemize.js", "piper_phonemize.wasm", "piper_phonemize.data"]
 
 
+def add_whisper(out: Path):
+    """transformers.js and the onnxruntime-web wasm it was built with into
+    whisper/ (web/whisper.js); fetched only when Whisper STT is chosen, the
+    model itself comes from Hugging Face then."""
+    tjs = REPO / "node_modules/@huggingface/transformers"
+    if not tjs.exists():
+        print("no @huggingface/transformers (npm install): no Whisper STT", file=sys.stderr)
+        return
+    # its own onnxruntime-web (nested when the top level has another version)
+    ort = tjs / "node_modules/onnxruntime-web"
+    if not ort.exists():
+        ort = REPO / "node_modules/onnxruntime-web"
+    want = json.load(open(tjs / "package.json"))["dependencies"]["onnxruntime-web"]
+    have = json.load(open(ort / "package.json"))["version"]
+    if have != want:
+        raise SystemExit(f"transformers.js wants onnxruntime-web {want}, found {have}")
+    (out / "whisper").mkdir()
+    shutil.copy(tjs / "dist/transformers.min.js", out / "whisper/transformers.min.js")
+    # jsep: WebGPU (and wasm); asyncify: wasm alone, where there is no GPU
+    for name in ("ort-wasm-simd-threaded.jsep.mjs", "ort-wasm-simd-threaded.jsep.wasm",
+                 "ort-wasm-simd-threaded.asyncify.mjs", "ort-wasm-simd-threaded.asyncify.wasm"):
+        shutil.copy(ort / "dist" / name, out / "whisper" / name)
+
+
 def add_piper(out: Path):
     """piper-phonemize into piper/ (the voices come from Hugging Face when
     one is chosen; onnxruntime-web is the wake word's, in ort/)."""
@@ -289,6 +313,7 @@ def main():
 
     wake_words = add_wake_word(OUT)
     add_piper(OUT)
+    add_whisper(OUT)
     precise = precise_models(OUT)
 
     packages, pyodide_bytes = vendor_pyodide(plan["pyodide"] + ["micropip"])

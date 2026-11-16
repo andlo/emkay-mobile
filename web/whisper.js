@@ -1,0 +1,97 @@
+// Emkay – Whisper speech-to-text in the browser (issue #23, offline).
+//
+// OpenAI's Whisper as ONNX (onnx-community on Hugging Face), run with
+// transformers.js (Apache-2.0) in the Pyodide worker: the audio never leaves
+// the phone. transformers.js does what a device's whisper plugin does
+// (log-mel features, the encoder, decoding with the tokenizer); its
+// onnxruntime-web runs on WebGPU where the browser has it, else WebAssembly.
+//
+//   * transformers.js and its onnxruntime wasm: whisper/ on this site,
+//     fetched the first time Whisper is used
+//   * the model (whisper-base by default, ~77 MB at 8 bit), from Hugging
+//     Face the first time, kept in the browser's cache afterwards
+//
+// The OVOS side is ovos-stt-plugin-whisper-browser (its own package), which
+// calls transcribe() through JSPI, as ovos-tts-plugin-piper-browser calls
+// web/piper.js.
+
+const BASE = new URL("./", import.meta.url).href;
+
+let lib = null;                    // the transformers.js module
+const pipes = new Map();           // model -> Promise<pipeline>
+const loaded = new Set();          // models whose pipeline is ready
+
+async function transformers() {
+  lib ??= import(BASE + "whisper/transformers.min.js").then((t) => {
+    t.env.allowLocalModels = false;            // models come from the Hub
+    t.env.useBrowserCache = true;              // ... once, then the Cache API
+    const wasm = t.env.backends.onnx.wasm;
+    wasm.wasmPaths = BASE + "whisper/";        // never a CDN
+    wasm.numThreads = 1;                       // no cross-origin isolation here
+    return t;
+  });
+  return lib;
+}
+
+/** The ASR pipeline for `model`, made once. */
+function pipe(model) {
+  if (!pipes.has(model)) {
+    const p = (async () => {
+      const t = await transformers();
+      const device = "gpu" in navigator && (await navigator.gpu.requestAdapter().catch(() => null))
+        ? "webgpu" : "wasm";
+      // the encoder loses too much at 8 bit ("What? I'm a bit" for "what time is it");
+      // the decoder does not
+      const options = { device, dtype: { encoder_model: "fp32", decoder_model_merged: "q8" } };
+      if (device === "webgpu") options.dtype = { encoder_model: "fp32", decoder_model_merged: "q4" };
+      const asr = await t.pipeline("automatic-speech-recognition", model, options);
+      loaded.add(model);
+      console.log(`[emkay] whisper ${model} ready on ${device}`);
+      return asr;
+    })();
+    p.catch((e) => { pipes.delete(model); console.warn("[emkay] whisper", e); });
+    pipes.set(model, p);
+  }
+  return pipes.get(model);
+}
+
+/**
+ * True when `model` is loaded; otherwise starts loading it and answers
+ * false at once, so OVOS uses its fallback STT meanwhile.
+ */
+export async function ready(model) {
+  if (loaded.has(model)) return true;
+  pipe(model);
+  return false;
+}
+
+/** 16-bit mono PCM at `rate` -> Float32 at 16 kHz, as Whisper wants. */
+function toFloat16k(pcm16, rate) {
+  const src = new Int16Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength >> 1);
+  const out = new Float32Array(Math.floor(src.length * 16000 / rate));
+  const step = rate / 16000;
+  for (let i = 0; i < out.length; i++) {
+    const x = i * step, j = Math.floor(x), f = x - j;
+    const a = src[j] ?? 0, b = src[j + 1] ?? a;
+    out[i] = (a + (b - a) * f) / 32768;
+  }
+  return out;
+}
+
+/**
+ * Transcribe `pcm16` (Uint8Array of 16-bit mono samples at `rate` Hz) in
+ * `lang` ("da-DK" or "da"); returns the text.
+ */
+export async function transcribe(pcm16, rate, lang, model) {
+  // before anything awaits: the bytes may be a view into Pyodide's memory,
+  // which can move or be reused while we wait for the model
+  const audio = toFloat16k(pcm16.slice(), rate);
+  const asr = await pipe(model);
+  const t0 = performance.now();
+  const language = String(lang || "en").split("-")[0].toLowerCase();
+  const out = await asr(audio, { language, task: "transcribe" });
+  const text = (Array.isArray(out) ? out[0]?.text : out?.text) ?? "";
+  console.log(`[emkay] whisper ${((performance.now() - t0) / 1000).toFixed(1)}s for ` +
+              `${(audio.length / 16000).toFixed(1)}s: ${JSON.stringify(text)}`);
+  return text.trim();
+}
