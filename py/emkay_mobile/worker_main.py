@@ -56,6 +56,10 @@ def start(js_post, user_config=None) -> str:
     phal.start(bus, lambda raw: _post("phal", raw))   # the phone's "hardware"
     _report_status(bus)
     bus.on("message", _watch)
+    # a pipeline plugin installed in the panel is placed in the pipeline
+    # and loaded at once (pipeline_place.py)
+    from . import pipeline_place
+    bus.on("ovos.pip.install.complete", pipeline_place.on_installed)
     info["skipped_waits"] = browser.SKIPPED_WAITS[:]
     return json.dumps(info)
 

@@ -922,6 +922,7 @@ function receiveInstall(pkg) {
 // here instead of opening a new tab. Only the store's own origin is heard.
 addEventListener("message", (e) => {
   if (e.origin !== STORE_ORIGIN) return;
+  if (e.data?.emkayClose) { $("store").hidden = true; return; }   // its "Back to Emkay"
   const pkg = e.data?.emkayInstall;
   if (typeof pkg === "string" && PACKAGE_NAME.test(pkg)) receiveInstall(pkg);
 });
@@ -933,7 +934,6 @@ function openStore() {
   if (!frame.getAttribute("src")) frame.src = `${STORE_ORIGIN}/?in=emkay&lang=${encodeURIComponent(ovosLang || "")}`;
   $("store").hidden = false;
 }
-$("store-close").onclick = () => { $("store").hidden = true; };
 $("menu-store").onclick = (e) => { e.preventDefault(); openStore(); };
 
 /**

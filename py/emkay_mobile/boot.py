@@ -218,6 +218,16 @@ def _browser_defaults(done: int) -> dict:
             loc["timezone"].get("code") == loc["timezone"].get("name"):
         del user["location"]
         _write_whole_user_config(user)
+    # pipeline plugins installed since the last boot go where the rule says
+    # (pipeline_place.py); every boot, so one installed in the panel is used
+    # from the next start on even if the live placement (on_installed) missed it
+    from . import pipeline_place
+    seen = user.get("emkay", {}).get("pipelines_seen")
+    current = out.get("intents", {}).get("pipeline") or Configuration().get("intents", {}).get("pipeline", [])
+    placed, seen = pipeline_place.place_new(current, seen)
+    if placed:
+        out.setdefault("intents", {})["pipeline"] = placed
+    out.setdefault("emkay", {})["pipelines_seen"] = seen
     user_bl = read_user_config().get("intents", {}).get("blacklisted_pipelines", [])
     new_pipeline = out.get("intents", {}).get("pipeline")   # set above on a defaults step, else None
     out.setdefault("intents", {})["blacklisted_pipelines"] = \
@@ -232,23 +242,14 @@ def _browser_defaults(done: int) -> dict:
 
 
 def _with_common_reading(pipeline: list) -> list:
-    """`pipeline` with ovos-common-reading-pipeline-plugin's two stages added,
-    as its README asks: "-high" right after the stop matcher, "-low" after
-    padatious/adapt, before common query and the fallbacks. [] when nothing
-    is to change (already there, plugin missing, or no pipeline to edit)."""
+    """`pipeline` with ovos-common-reading-pipeline-plugin's two stages added
+    where its README asks (pipeline_place.OVERRIDES); [] when nothing is to
+    change (already there, plugin missing, or no pipeline to edit)."""
     from ovos_plugin_manager.pipeline import OVOSPipelineFactory
+    from . import pipeline_place
     if "ovos-common-reading-pipeline-plugin" not in OVOSPipelineFactory.get_installed_pipeline_ids():
         return []
-    if not pipeline or any(p.startswith("ovos-common-reading-pipeline-plugin") for p in pipeline):
-        return []
-    out = list(pipeline)
-    stop = [i for i, p in enumerate(out) if p in ("stop_high", "ovos-stop-pipeline-plugin-high")]
-    out.insert(stop[0] + 1 if stop else 0, "ovos-common-reading-pipeline-plugin-high")
-    later = ("common_qa", "ovos-common-query-pipeline-plugin", "fallback_medium",
-             "ovos-fallback-pipeline-plugin-medium", "fallback_low", "ovos-fallback-pipeline-plugin-low")
-    low = [i for i, p in enumerate(out) if p in later]
-    out.insert(low[0] if low else len(out), "ovos-common-reading-pipeline-plugin-low")
-    return out
+    return pipeline_place.place(pipeline, "ovos-common-reading-pipeline-plugin")
 
 
 def _phone_language():
