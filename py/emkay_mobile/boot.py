@@ -28,7 +28,7 @@ UNAVAILABLE_SKILLS = ("ovos-skill-boot-finished.openvoiceos",)
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 7
+DEFAULTS_VERSION = 8
 #: the package index the control panel searches (defaults v7)
 STORE_INDEX = "https://store.emkay.ai"
 
@@ -161,6 +161,9 @@ def _browser_defaults(done: int) -> dict:
       6. ovos-common-reading-pipeline-plugin (now on the site) goes into
          the pipeline where its README says: -high right after stop, -low
          before common query and the fallbacks
+      7. the control panel searches the Emkay store's package index
+      8. music plays through ovos-audio-plugin-browser, and OCP hands its
+         results to ovos-audio's AudioService ("legacy")
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -203,6 +206,20 @@ def _browser_defaults(done: int) -> dict:
             os.remove(os.path.join(get_xdg_cache_save_path(), "webui-pypi-index.json"))
         except OSError:
             pass
+    if done < 8:
+        # Music, radio and podcasts (#16). ovos-audio's AudioService plays
+        # them through ovos-audio-plugin-browser, the page's <audio>
+        # element; mycroft.conf's default backend is mpv, which a browser
+        # does not have. OCP hands its results to that AudioService
+        # ("legacy"), as it does on a device without ovos-media; without it
+        # OCP would also wait a second on every request for a player that
+        # never answers.
+        audio = out.setdefault("Audio", {})
+        audio["default-backend"] = "browser"
+        audio.setdefault("backends", {})["browser"] = {
+            "type": "ovos_audio_browser", "active": True}
+        out.setdefault("intents", {}).setdefault(
+            "ovos-ocp-pipeline-plugin", {})["legacy"] = True
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes

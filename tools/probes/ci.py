@@ -87,6 +87,14 @@ PROBES = [
         r"connected to messagebus at wss?://[^ ]*/visage2/core",
         r"connected to wss?://[^ ]*/visage2/gui and re-announced framework=html",
     ]),
+    # music (#16): ovos-audio's AudioService plays a short tone through
+    # ovos-audio-plugin-browser in the page's <audio>, ducks it while OVOS
+    # speaks, and hears the end of the track (no radio station needed)
+    ("media_browser.mjs", {}, [], [
+        r"ducked and restored",
+        r"bus: .*ovos\.audio\.browser\.play.*mycroft\.audio\.playing_track.*mycroft\.audio\.queue_end",
+        r"media ok",
+    ]),
     ("installable_browser.mjs", {}, [], [
         r"manifest errors: none",
         r"installability errors: none",                     # "Install as app" can be offered

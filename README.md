@@ -113,6 +113,16 @@ forces a workaround:
   - the camera as ovos-PHAL-plugin-camera (`ovos.phal.camera.*`), except
     that `b64_frame` is a JPEG rather than OpenCV's raw pixel buffer.
   The page side is [`device.js`](web/device.js).
+- **Music, radio and podcasts** play through ovos-audio's own
+  `AudioService`, unchanged, as on a device without ovos-media. Its player
+  is [ovos-audio-plugin-browser](https://github.com/emkay-voice/ovos-audio-plugin-browser)
+  (its own package) instead of mpv or vlc, which a browser cannot start: it
+  sends each command as an `ovos.audio.browser.*` bus message, and the page
+  plays it in an `<audio>` element ([`media.js`](web/media.js)) and reports
+  back. OCP hands its results to it (`"legacy": true`, as OCP does without
+  ovos-media), and the music is turned down while OVOS speaks or listens.
+  An https page cannot play `http://` streams, so stations without an
+  https address fail with a clear reason and OCP tries its next result.
 - **Speech to text** is OVOS' configured STT plugin, as on a device
   (the public OVOS servers by default). One more plugin ships with the
   site: **ovos-stt-plugin-browser**, the browser's own speech recognition

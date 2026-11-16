@@ -9,6 +9,7 @@
 
 import { t, apply, setLang, onLangChange, matchLang } from "./i18n.js";
 import { onRequest as deviceRequest, startDevice } from "./device.js";
+import { createMediaPlayer } from "./media.js";
 
 const $ = (id) => document.getElementById(id);
 apply();                    // the phone's language until OVOS is up
@@ -692,7 +693,14 @@ function onPhal(msg) {
   if (msg.request === "location") return locate();
   if (deviceRequest(msg)) return;   // power, camera (device.js)
   speaker.setVolume(msg);
+  media.setLevel(msg);               // music follows the same volume
 }
+
+// ------------------------------------------------------------------ media
+/** Music, radio and podcasts: ovos-audio's AudioService plays them here,
+ * through ovos-audio-plugin-browser (media.js has the details). */
+const media = createMediaPlayer((type, data) =>
+  call("core_send", { raw: JSON.stringify({ type, data, context: {} }) }));
 
 /**
  * The phone's position for OVOS' location (the plugin turns it into city,
@@ -712,6 +720,7 @@ function locate() {
 // ------------------------------------------------------------- bus events
 /** React to the few bus events the page itself cares about. */
 function onBus(msg) {
+  if (media.onBus(msg)) return;
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
   if (msg.type === "ovos.utterance.handled") utterancesHandled++;
   if (msg.type === "mycroft.mic.mute") mic.setMuted(true);
@@ -957,4 +966,4 @@ $("menu-about").onclick = async () => {
 };
 $("about-close").onclick = () => { $("about").hidden = true; };
 
-window.emkay = { call, mic, speaker, wake, stt: () => sttModule };
+window.emkay = { call, mic, speaker, media, wake, stt: () => sttModule };

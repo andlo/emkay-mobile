@@ -252,11 +252,21 @@ def on_speak(message):
                        "seconds": seconds, "visemes": visemes})
 
 
+try:   # the spec names; ovos-audio before the spec used recognizer_loop:audio_output_*
+    from ovos_spec_tools import SpecMessage as _Spec
+    _OUTPUT_STARTED, _OUTPUT_ENDED = _Spec.AUDIO_OUTPUT_STARTED, _Spec.AUDIO_OUTPUT_ENDED
+except ImportError:  # pragma: no cover
+    _OUTPUT_STARTED, _OUTPUT_ENDED = ("recognizer_loop:audio_output_start",
+                                      "recognizer_loop:audio_output_end")
+
+
 def playback_started(ident: str, visemes=None):
     from ovos_bus_client.message import Message
     msg = _pending.get(ident) or Message("speak")
     from . import boot
-    boot.bus().emit(msg.forward("recognizer_loop:audio_output_start"))
+    # the same message ovos-audio's PlaybackService sends (ovos-spec-tools);
+    # ovos-audio's AudioService ducks music on it, the visage animates on it
+    boot.bus().emit(msg.forward(_OUTPUT_STARTED))
     if visemes:
         boot.bus().emit(msg.forward("enclosure.mouth.viseme_list",
                                     {"start": time.time(), "visemes": visemes}))
@@ -266,7 +276,7 @@ def playback_ended(ident: str):
     from . import boot
     from ovos_bus_client.message import Message
     msg = _pending.pop(ident, None) or Message("speak")
-    boot.bus().emit(msg.forward("recognizer_loop:audio_output_end"))
+    boot.bus().emit(msg.forward(_OUTPUT_ENDED))
     if msg.data.get("expect_response"):
         boot.bus().emit(msg.forward("mycroft.mic.listen"))
 

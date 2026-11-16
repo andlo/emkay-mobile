@@ -56,6 +56,7 @@ def start(js_post, user_config=None) -> str:
     gui.start(bus, lambda raw: _post("gui", raw))
     print(f"[emkay] gui up in {time.time() - t:.1f}s")
     speech.start(bus, lambda wav, meta: _post("audio", json.dumps(meta), wav))
+    _start_audio_service(bus)
     from . import panel
     panel.follow_sensors(bus)                          # before the first reading
     phal.start(bus, lambda raw: _post("phal", raw))   # the phone's "hardware"
@@ -67,6 +68,31 @@ def start(js_post, user_config=None) -> str:
     bus.on("ovos.pip.install.complete", pipeline_place.on_installed)
     info["skipped_waits"] = browser.SKIPPED_WAITS[:]
     return json.dumps(info)
+
+
+_audio_service = None
+
+
+def _start_audio_service(bus):
+    """ovos-audio's classic AudioService, unchanged: music, radio, podcasts.
+
+    On a device ovos-audio runs it next to speech; here speech is speech.py,
+    so only the AudioService is started. Its player is
+    ovos-audio-plugin-browser, which plays in the page's <audio> element
+    (web/media.js). OCP plays through it (ovos-ocp-pipeline-plugin with
+    "legacy": true, boot.py), as do skills that use AudioServiceInterface;
+    it ducks the music while OVOS speaks or listens. The classic OCP
+    backend (ovos-plugin-common-play) is not installed, so it is off.
+    """
+    global _audio_service
+    t = time.time()
+    try:
+        from ovos_audio.audio import AudioService
+        _audio_service = AudioService(bus, disable_ocp=True)
+        names = [s.name for s in _audio_service.service]
+        print(f"[emkay] audio service up in {time.time() - t:.1f}s: {names}")
+    except Exception as e:   # music is a feature; speech must not depend on it
+        print(f"[emkay] audio service not started: {e!r}")
 
 
 #: The device services whose job a part of Emkay does, so they answer the
@@ -89,6 +115,10 @@ def _report_status(bus):
 
 
 #: Bus events the page reacts to itself (the mic hint, follow-up listening).
+#: ovos-audio-plugin-browser's commands to the page's <audio> (web/media.js);
+#: the page answers with <prefix>state through core_send
+_MEDIA_PREFIX = "ovos.audio.browser."
+
 _STATE_TOPICS = {
     "recognizer_loop:wakeword", "recognizer_loop:record_begin",
     "recognizer_loop:record_end", "mycroft.mic.listen",
@@ -107,7 +137,7 @@ def _watch(raw):
     t = msg.get("type") if isinstance(msg, dict) else None
     if _core_open:   # the new visage's core bus socket gets everything
         _post("core", raw if isinstance(raw, str) else raw.serialize())
-    if t in _STATE_TOPICS:
+    if t in _STATE_TOPICS or (t or "").startswith(_MEDIA_PREFIX) and t != _MEDIA_PREFIX + "state":
         _post("bus", json.dumps({"type": t, "data": msg.get("data", {})}))
     elif t in ("configuration.updated", "configuration.patch", "configuration.patch.clear"):
         # the page's own texts follow OVOS' language (web/i18n.js); read it
