@@ -127,6 +127,11 @@ def on_installed(message=None):
         patch["intents"] = {"pipeline": placed}
     boot.write_user_config(patch)
     Configuration.reload()
+    if placed:
+        # also into ovos-config's runtime patch layer, which sits above the
+        # file: once anything patched `intents` there (the control panel
+        # does), the file alone no longer decides the pipeline
+        boot.bus().emit(Message("configuration.patch", {"config": {"intents": {"pipeline": placed}}}))
     SessionManager.reset_default_session()   # the default session keeps its own copy
     if placed:
         boot.bus().emit(Message("intent.service.pipelines.reload"))
