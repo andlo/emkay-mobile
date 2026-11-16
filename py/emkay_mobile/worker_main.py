@@ -62,7 +62,9 @@ def start(js_post, user_config=None) -> str:
     _start_audio_service(bus)
     from . import panel
     panel.follow_sensors(bus)                          # before the first reading
-    phal.start(bus, lambda raw: _post("phal", raw))   # the phone's "hardware"
+    # the phone's "hardware", also kiosk and local only (#23): the skills
+    # send hardware-neutral bus messages, the plugin does the browser part
+    phal.start(bus, lambda raw: _post("phal", raw), reload_speech=speech.reload)
     _report_status(bus)
     bus.on("message", _watch)
     # a pipeline plugin installed in the panel is placed in the pipeline

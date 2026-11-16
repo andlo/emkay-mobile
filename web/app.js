@@ -219,14 +219,25 @@ function enterKiosk() {
   screen.orientation?.lock?.("portrait").catch(() => {});
 }
 
-/** Keep the screen on while the page is visible (Screen Wake Lock API). */
+/** Keep the screen on while the page is visible (Screen Wake Lock API);
+ * on by default, "let the screen sleep" (ovos-skill-kiosk) turns it off. */
+let wakeLockOn = true;
+let wakeSentinel = null;
 async function keepAwake() {
-  try {
-    await navigator.wakeLock?.request("screen");
-    document.addEventListener("visibilitychange", async () => {
-      if (document.visibilityState === "visible") await navigator.wakeLock?.request("screen");
-    });
-  } catch {}
+  const take = async () => {
+    if (!wakeLockOn || document.visibilityState !== "visible") return;
+    try { wakeSentinel = await navigator.wakeLock?.request("screen"); } catch {}
+  };
+  if (!keepAwake.watching) {
+    keepAwake.watching = true;
+    document.addEventListener("visibilitychange", take);
+  }
+  await take();
+}
+function letSleep() {
+  wakeLockOn = false;
+  wakeSentinel?.release?.().catch(() => {});
+  wakeSentinel = null;
 }
 
 /**
@@ -691,6 +702,8 @@ const speaker = {
  */
 function onPhal(msg) {
   if (msg.request === "location") return locate();
+  if (msg.request === "kiosk") return onKiosk(msg.message);   // ovos-skill-kiosk
+  if (msg.request === "local_only") { $("offline-shield").hidden = !msg.enabled; return; }
   if (deviceRequest(msg)) return;   // power, camera (device.js)
   speaker.setVolume(msg);
   media.setLevel(msg);               // music follows the same volume
@@ -965,6 +978,56 @@ $("menu-about").onclick = async () => {
     ? t("about.version", { date: new Date(b.built).toLocaleDateString() }) : "";
 };
 $("about-close").onclick = () => { $("about").hidden = true; };
+
+// ---------------------------------------------------------- kiosk by voice
+/**
+ * ovos.kiosk.* (ovos-skill-kiosk): full screen, keeping the screen on and
+ * installing as an app, asked for by voice. A browser allows full screen
+ * and installing only after a tap, so for those one big button shows; the
+ * answer (<type>.response) says what the screen is and whether a tap is
+ * needed, and <type>.done follows once it is done.
+ */
+const busSend = (type, data) => call("core_send", { raw: JSON.stringify({ type, data, context: {} }) });
+const kioskState = () => ({ fullscreen: !!document.fullscreenElement, keep_awake: wakeLockOn,
+  installed: installed(), can_install: !!installPrompt });
+
+function tapToDo(label, action) {
+  const button = $("tap-action");
+  button.textContent = label;
+  button.hidden = false;
+  button.onclick = async () => { button.hidden = true; await action(); };
+  clearTimeout(tapToDo.timer);
+  tapToDo.timer = setTimeout(() => { button.hidden = true; }, 30000);
+}
+
+function onKiosk(msg) {
+  const reply = (extra = {}) => busSend(`${msg.type}.response`, { ...kioskState(), ...extra });
+  const done = () => setTimeout(() => busSend(`${msg.type}.done`, kioskState()), 600);
+  const on = msg.data?.enabled !== false;
+  switch (msg.type) {
+    case "ovos.kiosk.fullscreen":
+      if (!on) {
+        kiosk = false;
+        document.exitFullscreen?.().catch(() => {});
+        return reply();
+      }
+      if (document.fullscreenElement) return reply();
+      tapToDo(t("kiosk.tap.fullscreen"), () => { kiosk = true; enterKiosk(); done(); });
+      return reply({ needs_tap: true });
+    case "ovos.kiosk.keep_awake":
+      if (on) { wakeLockOn = true; keepAwake(); } else letSleep();
+      return reply();
+    case "ovos.kiosk.install":
+      if (installed()) return reply();
+      if (installPrompt) {
+        tapToDo(t("kiosk.tap.install"), async () => { $("menu-install").onclick(); done(); });
+        return reply({ needs_tap: true });
+      }
+      return reply({ supported: false, ios: /iphone|ipad|ipod/i.test(navigator.userAgent) });
+    case "ovos.kiosk.status":
+      return reply();
+  }
+}
 
 // --------------------------------------------------------------- network
 /**

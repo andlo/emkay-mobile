@@ -116,3 +116,15 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .network-list td.fail { color: #e88; }
 .network-actions { display: flex; gap: 8px; }
 .network-actions button { flex: 1; padding: 10px; }
+
+/* the tap a browser needs for full screen or installing, asked by voice */
+.tap-action { position: fixed; left: 50%; bottom: 18vh; transform: translateX(-50%); z-index: 55;
+  font-size: 20px; padding: 18px 28px; border-radius: 18px; border: 0; background: #22a7f0; color: #fff; }
+.tap-action[hidden] { display: none; }
+
+/* "local only": a small shield, top left, while nothing leaves the phone */
+.offline-shield { position: fixed; left: 12px; top: max(10px, env(safe-area-inset-top)); z-index: 30;
+  display: flex; align-items: center; gap: 6px; color: #7d7; font-size: 13px;
+  background: #000a; border-radius: 14px; padding: 6px 10px 6px 6px; }
+.offline-shield svg { width: 26px; height: 26px; }
+.offline-shield[hidden] { display: none; }

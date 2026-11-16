@@ -37,6 +37,26 @@ const SERVICES = [
   [/radio-browser|somafm|(^|\.)dr\.dk$|stream/, "radio", "radio and news"],
 ];
 
+// "Local only" (py/emkay_mobile/local_only.py): every request is refused
+// but Emkay's own site and GET downloads of models and voices (the local
+// speech recognition and voice need them once). Refused requests are logged
+// as such (status 0, "blocked": true).
+let localOnly = false;
+const ALLOWED_KINDS = new Set(["self", "models"]);
+
+/** Switch "local only" (called from Python through emkayNet). */
+export function setLocalOnly(on) { localOnly = !!on; }
+export function isLocalOnly() { return localOnly; }
+
+function blocked(url, method) {
+  if (!localOnly) return false;
+  let host;
+  try { host = new URL(url, self.location.href).host; } catch { return false; }
+  if (url.startsWith("data:") || url.startsWith("blob:")) return false;
+  const [kind] = service(host);
+  return !(ALLOWED_KINDS.has(kind) && (kind === "self" || (method || "GET").toUpperCase() === "GET"));
+}
+
 let fs = null;            // Pyodide's FS, once ~/.local is mounted
 let pending = [];          // entries not written yet
 let pruned = false;
@@ -48,7 +68,7 @@ export function service(host) {
   return ["other", host];
 }
 
-function record(url, method, status, bytes, caller) {
+function record(url, method, status, bytes, caller, refused = false) {
   let host;
   try { host = new URL(url, self.location.href).host; } catch { return; }
   if (!host || url.startsWith("data:") || url.startsWith("blob:")) return;
@@ -56,7 +76,7 @@ function record(url, method, status, bytes, caller) {
   pending.push({
     t: Date.now(), host, method: (method || "GET").toUpperCase(),
     status: status || 0, bytes: Number.isFinite(bytes) ? bytes : null,
-    who: caller || "emkay", service: name, kind,
+    who: caller || "emkay", service: name, kind, ...(refused ? { blocked: true } : {}),
   });
 }
 
@@ -69,6 +89,10 @@ function wrapFetch() {
     const url = typeof input === "string" ? input : input?.url ?? String(input);
     const method = init.method || input?.method || "GET";
     const who = caller();
+    if (blocked(url, method)) {
+      record(url, method, 0, null, who, true);
+      throw new TypeError("Emkay is in local only mode: this request was not sent");
+    }
     try {
       const r = await plain(input, init);
       const len = Number(r.headers.get("content-length"));
@@ -100,6 +124,12 @@ function wrapXHR() {
     record(m.url, m.method, xhr.status, bytes, m.who);
   };
   proto.send = function (...args) {
+    const m = this._emkay;
+    if (m && blocked(m.url, m.method)) {
+      m.logged = true;
+      record(m.url, m.method, 0, null, m.who, true);
+      throw new DOMException("Emkay is in local only mode: this request was not sent", "NetworkError");
+    }
     if (this._emkay?.async) this.addEventListener("loadend", () => done(this));
     try {
       return send.apply(this, args);

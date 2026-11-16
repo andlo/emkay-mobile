@@ -15,8 +15,10 @@
 import { matchLang } from "./langs.js";
 import * as netlog from "./netlog.js";
 
-// every request this worker makes goes into the network log (netlog.js)
+// every request this worker makes goes into the network log (netlog.js),
+// which also keeps "local only" (local_only.py switches it through emkayNet)
 netlog.install();
+globalThis.emkayNet = { setLocalOnly: netlog.setLocalOnly, isLocalOnly: netlog.isLocalOnly };
 
 // Piper TTS (web/piper.js), for ovos-tts-plugin-piper-browser through `js`;
 // loaded the first time a Piper voice speaks

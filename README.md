@@ -31,6 +31,7 @@ device gets, on the **alpha** channel, compiled to WebAssembly with
 | Screen | `ovos-gui` + `ovos-skill-homescreen`, drawn by ovos-gui-visage (the Mark II face, Flutter web build) |
 | Setup | the stock `ovos-control-panel`, in the ⚙ menu |
 | Network | a log of everything Emkay contacts, by day and service, in the ⚙ menu ([docs/network-log.md](docs/network-log.md)) |
+| Local only | "go offline": speech and voice on the phone, nothing you say leaves it, a shield on the screen ([docs/local-only.md](docs/local-only.md)) |
 
 See [`requirements/`](requirements) for the exact lists.
 
