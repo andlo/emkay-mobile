@@ -149,6 +149,8 @@ const guiListeners = new Map();   // listener -> its guiSockets entry
 window.emkayVisage2 = {
   ready,
   call,
+  /** A tap on the new visage (visage2-shim.js): listen, as a tap on the old one does. */
+  tap: () => mic.listen(),
   subscribe(route, fn) {
     if (route === "core") return void coreListeners.add(fn);
     const entry = { deliver: fn };

@@ -76,6 +76,19 @@
     EmkaySocket.prototype[k] = v;
   }
 
+  // Tap-to-talk, as on the old visage, where the whole screen is the button
+  // (app.js). The frame gets the taps now, so it hands them on. ovos-gui-visage
+  // has no "listen" action of its own yet; until it has, a tap on one of its
+  // own controls also starts listening.
+  let down = null;
+  addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: e.timeStamp }; }, true);
+  addEventListener("pointerup", (e) => {
+    const d = down;
+    down = null;
+    if (!d || e.timeStamp - d.t > 500 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12) return;  // a drag
+    host.tap?.();
+  }, true);
+
   window.WebSocket = new Proxy(Native, {
     construct(target, args) {
       const path = new URL(String(args[0]), location.href).pathname;
