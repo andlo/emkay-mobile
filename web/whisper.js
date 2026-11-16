@@ -89,7 +89,9 @@ export async function transcribe(pcm16, rate, lang, model) {
   const asr = await pipe(model);
   const t0 = performance.now();
   const language = String(lang || "en").split("-")[0].toLowerCase();
-  const out = await asr(audio, { language, task: "transcribe" });
+  // an English-only model (*.en) has no language or task to choose
+  const options = /\.en$/.test(model) ? {} : { language, task: "transcribe" };
+  const out = await asr(audio, options);
   const text = (Array.isArray(out) ? out[0]?.text : out?.text) ?? "";
   console.log(`[emkay] whisper ${((performance.now() - t0) / 1000).toFixed(1)}s for ` +
               `${(audio.length / 16000).toFixed(1)}s: ${JSON.stringify(text)}`);
