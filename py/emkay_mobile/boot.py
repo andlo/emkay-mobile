@@ -28,10 +28,38 @@ UNAVAILABLE_SKILLS = ("ovos-skill-boot-finished.openvoiceos",)
 #: skills Emkay has its own version of (defaults v9): ovos-skill-about-emkay
 #: answers ovos-skill-personal's questions as Emkay, so the two would compete
 REPLACED_SKILLS = ("ovos-skill-personal.openvoiceos",)
+#: skills that cannot work in a browser yet (defaults v10): they ask public
+#: translation servers that do not allow a web page to read them (CORS), and
+#: Wolfram Alpha needs an app id. Asked in turn by common query and the
+#: fallbacks, each would add seconds to every unanswered question.
+BROWSERLESS_SKILLS = ("ovos-skill-ddg.openvoiceos", "ovos-skill-wolfie.openvoiceos")
+
+#: The intent pipeline ovos-installer writes (defaults v10), so Emkay matches
+#: an installed device rather than ovos-config's bare default: it adds
+#: common query (knowledge skills compete, e.g. Wikipedia and
+#: ovos-skill-wiki-offline) and persona (high and low). Copied from
+#: ovos-installer's ansible/roles/ovos_config/templates/mycroft.conf.j2,
+#: November 2026.
+INSTALLER_PIPELINE = (
+    "ovos-stop-pipeline-plugin-high",
+    "ovos-converse-pipeline-plugin",
+    "ovos-ocp-pipeline-plugin-high",
+    "ovos-persona-pipeline-plugin-high",
+    "ovos-padatious-pipeline-plugin-high",
+    "ovos-m2v-pipeline-high",
+    "ovos-fallback-pipeline-plugin-high",
+    "ovos-adapt-pipeline-plugin-high",
+    "ovos-stop-pipeline-plugin-medium",
+    "ovos-adapt-pipeline-plugin-medium",
+    "ovos-common-query-pipeline-plugin",
+    "ovos-fallback-pipeline-plugin-medium",
+    "ovos-persona-pipeline-plugin-low",
+    "ovos-fallback-pipeline-plugin-low",
+)
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 9
+DEFAULTS_VERSION = 10
 #: the package index the control panel searches (defaults v7)
 STORE_INDEX = "https://store.emkay.ai"
 
@@ -169,6 +197,9 @@ def _browser_defaults(done: int) -> dict:
          results to ovos-audio's AudioService ("legacy")
       9. ovos-skill-personal is blacklisted: ovos-skill-about-emkay answers
          the same questions as Emkay (REPLACED_SKILLS)
+     10. the intent pipeline is ovos-installer's (INSTALLER_PIPELINE), with
+         common query and persona, and the skills that cannot work in a
+         browser yet are blacklisted (BROWSERLESS_SKILLS)
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -228,12 +259,13 @@ def _browser_defaults(done: int) -> dict:
     if done < 9:
         # Emkay's own version of a skill replaces OVOS' (REPLACED_SKILLS); the
         # setup page can take it off the list again
-        skills = out.setdefault("skills", {})
-        blacklisted = skills.get("blacklisted_skills")
-        if blacklisted is None:
-            blacklisted = list(Configuration().get("skills", {}).get("blacklisted_skills", []))
-        blacklisted += [s for s in REPLACED_SKILLS if s not in blacklisted]
-        skills["blacklisted_skills"] = blacklisted
+        _blacklist(out, REPLACED_SKILLS)
+    if done < 10:
+        # As ovos-installer sets it up, with common reading where step 6
+        # put it; the setup page can change it again
+        pipeline = list(INSTALLER_PIPELINE)
+        out.setdefault("intents", {})["pipeline"] = _with_common_reading(pipeline) or pipeline
+        _blacklist(out, BROWSERLESS_SKILLS)
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes
@@ -270,6 +302,19 @@ def _browser_defaults(done: int) -> dict:
         # language, too much for a phone)
         out["intents"]["ovos_m2v_pipeline"] = {"models": models}
     return out
+
+
+def _blacklist(out: dict, skill_ids) -> None:
+    """Add `skill_ids` to skills.blacklisted_skills in the patch `out`,
+    starting from the list already there (an earlier step's, else the
+    configuration's)."""
+    from ovos_config import Configuration
+    skills = out.setdefault("skills", {})
+    blacklisted = skills.get("blacklisted_skills")
+    if blacklisted is None:
+        blacklisted = list(Configuration().get("skills", {}).get("blacklisted_skills", []))
+    blacklisted += [s for s in skill_ids if s not in blacklisted]
+    skills["blacklisted_skills"] = blacklisted
 
 
 def _with_common_reading(pipeline: list) -> list:

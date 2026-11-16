@@ -31,6 +31,7 @@ on the event loop. None changes an answer.
 import asyncio
 import concurrent.futures as _cf
 import os
+import re
 import sys
 import threading
 
@@ -331,6 +332,40 @@ def raise_http_errors():
     opener_open = urllib.request.OpenerDirector.open
     if getattr(opener_open, "__name__", "") == "urlopen_self_removed":   # pyodide-http's
         urllib.request.OpenerDirector.open = lambda self, url, *a, **k: urlopen(url, *a, **k)
+
+
+#: MediaWiki's action API (Wikipedia, Wiktionary, Wikidata ...)
+_MEDIAWIKI_API = re.compile(r"^https://[^/]+\.(wikipedia|wiktionary|wikidata|wikimedia|wikiquote|wikibooks)\.org/w/api\.php")
+
+
+def mediawiki_cors():
+    """Requests to MediaWiki's action API carry origin=*, so a browser may read
+    the answer.
+
+    MediaWiki sends CORS headers only to anonymous requests that ask with
+    origin=* (mediawiki.org/wiki/API:Cross-site_requests); without it the
+    browser blocks the reply and Wikipedia never answers here. A device
+    ignores the parameter. Fixed upstream in ovos-wikipedia-plugin
+    (OpenVoiceOS/ovos-wikipedia-plugin#50); this covers it until that is
+    released, and any other skill that asks the action API through requests.
+    """
+    import requests
+    request = requests.sessions.Session.request
+    if getattr(request, "_emkay_mediawiki", False):
+        return
+
+    def with_origin(self, method, url, params=None, **kwargs):
+        if isinstance(url, str) and _MEDIAWIKI_API.match(url) and "origin=" not in url:
+            if isinstance(params, dict):
+                params = {**params, "origin": params.get("origin", "*")}
+            elif params is None:
+                params = {"origin": "*"}
+            else:   # a list of pairs or a string: add it to the URL instead
+                url += ("&" if "?" in url else "?") + "origin=*"
+        return request(self, method, url, params=params, **kwargs)
+
+    with_origin._emkay_mediawiki = True
+    requests.sessions.Session.request = with_origin
 
 
 def install():
