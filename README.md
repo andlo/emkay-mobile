@@ -30,6 +30,7 @@ device gets, on the **alpha** channel, compiled to WebAssembly with
 | Speech | the installer default (public servers): `ovos-stt-plugin-server`, `ovos-tts-plugin-server` |
 | Screen | `ovos-gui` + `ovos-skill-homescreen`, drawn by ovos-gui-visage (the Mark II face, Flutter web build) |
 | Setup | the stock `ovos-control-panel`, in the ⚙ menu |
+| Network | a log of everything Emkay contacts, by day and service, in the ⚙ menu ([docs/network-log.md](docs/network-log.md)) |
 
 See [`requirements/`](requirements) for the exact lists.
 
@@ -46,7 +47,7 @@ page (web/app.js)                 Web Worker (web/worker.js + Pyodide)
  │   core + gui websockets       (and every bus message)       │
  ├─ microphone → 16 kHz PCM  ───► speech.heard → STT plugin    ├─ FakeBus ─ ovos-core
  ├─ speaker ◄─ WAV + visemes ◄─── speech.on_speak → TTS plugin ┘            + skills
- └─ menu: Settings (the stock OpenVoiceOS control panel), full screen, about
+ └─ menu: Settings (the stock OpenVoiceOS control panel), full screen, network log, about
 ```
 
 - `py/emkay_mobile/boot.py` starts OVOS the way `ovos_core.__main__` does.

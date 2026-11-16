@@ -21,7 +21,7 @@ import time
 # Emkay's own modules first: importing boot runs browser.install(), which
 # puts the stand-ins for native packages (shims/: pexpect, psutil, ...) on
 # the path; ovos-utils' security module imports pexpect
-from . import boot, browser, gui, panel, speech
+from . import boot, browser, gui, netlog, panel, speech
 
 import ovos_phal_plugin_browser as phal   # the browser tab as the device
 
@@ -48,6 +48,7 @@ def start(js_post, user_config=None) -> str:
         pyodide_http.patch_all()   # requests/urllib through the browser's fetch
         browser.raise_http_errors()  # ... with urllib's HTTPError, as on a device
         browser.mediawiki_cors()     # ... and Wikipedia's API readable from a page
+        netlog.install()             # ... each request naming its skill (network log)
     except ImportError:
         pass
     t = time.time()

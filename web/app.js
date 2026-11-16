@@ -966,4 +966,100 @@ $("menu-about").onclick = async () => {
 };
 $("about-close").onclick = () => { $("about").hidden = true; };
 
+// --------------------------------------------------------------- network
+/**
+ * The network log (netlog.js in the worker): everything Emkay contacted in
+ * the last days, by day, then by service, then each request, every level
+ * folded with <details>. Nothing but host, method, status, size and who
+ * asked is kept, so nothing here says what was asked.
+ */
+const kB = (n) => (n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} kB`
+  : `${(n / 1048576).toFixed(1)} MB`);
+const sum = (list) => list.reduce((a, e) => a + (e.bytes || 0), 0);
+const groupBy = (list, key) => list.reduce((m, e) => m.set(key(e), [...(m.get(key(e)) || []), e]), new Map());
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  Object.assign(node, attrs);
+  node.append(...children);
+  return node;
+}
+
+/** A service's name in the menu's language: network.kind.<kind>, else the log's words. */
+const serviceName = (e) => (e.kind && e.kind !== "other" && t(`network.kind.${e.kind}`) !== `network.kind.${e.kind}`
+  ? t(`network.kind.${e.kind}`) : e.service || e.host);
+
+function renderNetwork(entries) {
+  const list = $("network-list");
+  list.replaceChildren();
+  const today = new Date().toDateString();
+  const todays = entries.filter((e) => new Date(e.t).toDateString() === today);
+  $("network-summary").textContent = t("network.summary", {
+    services: new Set(todays.map(serviceName)).size, calls: todays.length, size: kB(sum(todays)) || "0 B" });
+  if (!entries.length) { list.append(el("p", { className: "small", textContent: t("network.empty") })); return; }
+  const days = groupBy([...entries].reverse(), (e) => new Date(e.t).toDateString());
+  let first = true;
+  for (const [day, dayEntries] of days) {
+    const dayBox = el("details", { open: first },
+      el("summary", {}, new Date(dayEntries[0].t).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }),
+        el("span", { className: "count", textContent: `${dayEntries.length} · ${kB(sum(dayEntries))}` })));
+    first = false;
+    const services = [...groupBy(dayEntries, serviceName)].sort((a, b) => b[1].length - a[1].length);
+    for (const [name, calls] of services) {
+      const hosts = [...new Set(calls.map((e) => e.host))].join(", ");
+      const who = [...new Set(calls.map((e) => e.who))].join(", ");
+      const box = el("details", {},
+        el("summary", { title: hosts }, name, el("span", { className: "count", textContent: `${calls.length} · ${kB(sum(calls))}` })),
+        el("p", { className: "small", textContent: `${hosts} – ${t("network.who")}: ${who}` }));
+      const table = el("table");
+      for (const e of calls.slice(0, 200)) {
+        table.append(el("tr", {},
+          el("td", { textContent: new Date(e.t).toLocaleTimeString() }),
+          el("td", { textContent: e.who }),
+          el("td", { textContent: `${e.method} ${e.status || "–"}`, className: e.status && e.status < 400 ? "" : "fail" }),
+          el("td", { textContent: kB(e.bytes) })));
+      }
+      box.append(table);
+      dayBox.append(box);
+    }
+    list.append(dayBox);
+  }
+}
+
+function download(name, type, text) {
+  const a = el("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+let networkEntries = [];
+$("menu-network").onclick = async () => {
+  $("menu").hidden = true;
+  $("network").hidden = false;
+  networkEntries = await call("net_log").catch(() => []);
+  renderNetwork(networkEntries);
+};
+$("network-json").onclick = () => download("emkay-network.json", "application/json",
+  JSON.stringify(networkEntries, null, 1));
+$("network-csv").onclick = () => download("emkay-network.csv", "text/csv",
+  ["time,host,kind,service,who,method,status,bytes",
+   ...networkEntries.map((e) => [new Date(e.t).toISOString(), e.host, e.kind ?? "", e.service, e.who, e.method, e.status, e.bytes ?? ""]
+     .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n"));
+// two taps to clear: the first asks, the second clears (no dialogs here)
+$("network-clear").onclick = async () => {
+  const button = $("network-clear");
+  if (!button.dataset.armed) {
+    button.dataset.armed = "1";
+    button.textContent = t("network.clear.sure");
+    setTimeout(() => { delete button.dataset.armed; button.textContent = t("network.clear"); }, 4000);
+    return;
+  }
+  delete button.dataset.armed;
+  button.textContent = t("network.clear");
+  await call("net_clear");
+  networkEntries = [];
+  renderNetwork(networkEntries);
+};
+$("network-close").onclick = () => { $("network").hidden = true; };
+
 window.emkay = { call, mic, speaker, media, wake, stt: () => sttModule };

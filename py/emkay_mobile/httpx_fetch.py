@@ -73,8 +73,11 @@ def patch(httpx):
         body = await request.aread()
         if body:
             kwargs["body"] = body
+        from . import netlog
         try:
-            r = await pyfetch(str(request.url), **kwargs)
+            with netlog.calling():   # the network log names the caller
+                fetching = pyfetch(str(request.url), **kwargs)
+            r = await fetching
             content = await r.bytes()
         except Exception as e:
             raise httpx.ConnectError(str(e), request=request) from e

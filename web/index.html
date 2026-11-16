@@ -51,6 +51,7 @@
       <button id="menu-kiosk" data-i18n="menu.kiosk"></button>
       <button id="menu-install" data-i18n="menu.install" hidden></button>
       <p id="install-ios" class="small" data-i18n="install.ios" hidden></p>
+      <button id="menu-network" data-i18n="menu.network"></button>
       <button id="menu-about" data-i18n="menu.about"></button>
       <p class="small"><span data-i18n="about"></span> ·
         <a href="https://github.com/emkay-voice/emkay" target="_blank" rel="noopener" data-i18n="source"></a></p>
@@ -82,6 +83,22 @@
         <a href="https://emkay.ai" target="_blank" rel="noopener">emkay.ai</a> ·
         <a href="https://github.com/emkay-voice/emkay" target="_blank" rel="noopener" data-i18n="source"></a></p>
       <button id="about-close" class="secondary" data-i18n="close"></button>
+    </div>
+  </div>
+
+  <!-- the network log: what Emkay contacted, by day and service (netlog.js) -->
+  <div id="network" class="menu" hidden>
+    <div class="menu-card network-card">
+      <h2 data-i18n="network.title"></h2>
+      <p class="small" data-i18n="network.intro"></p>
+      <p id="network-summary" class="network-summary"></p>
+      <div id="network-list" class="network-list"></div>
+      <div class="network-actions">
+        <button id="network-json" class="secondary">JSON</button>
+        <button id="network-csv" class="secondary">CSV</button>
+        <button id="network-clear" class="secondary" data-i18n="network.clear"></button>
+      </div>
+      <button id="network-close" class="secondary" data-i18n="close"></button>
     </div>
   </div>
 

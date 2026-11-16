@@ -102,3 +102,17 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 
 /* the screen: ovos-gui-visage in a frame (app.js showVisage) */
 .visage2 { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #05070a; }
+
+/* the network log (app.js, netlog.js): day > service > requests, each folds */
+.network-card { max-width: 520px; max-height: 92vh; }
+.network-summary { margin: 0; text-align: center; font-size: 14px; }
+.network-list { overflow-y: auto; flex: 1; min-height: 120px; font-size: 14px; }
+.network-list details { margin: 4px 0; border-radius: 10px; background: #111; }
+.network-list details details { margin: 4px 0 4px 12px; background: #1a1a1a; }
+.network-list summary { cursor: pointer; padding: 8px 10px; list-style-position: inside; }
+.network-list summary .count { float: right; color: #789; }
+.network-list table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 0 0 6px; }
+.network-list td { padding: 3px 10px; color: #abc; border-top: 1px solid #222; }
+.network-list td.fail { color: #e88; }
+.network-actions { display: flex; gap: 8px; }
+.network-actions button { flex: 1; padding: 10px; }

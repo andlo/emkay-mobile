@@ -13,6 +13,10 @@
 // tools/build_site.py writes next to this file.
 
 import { matchLang } from "./langs.js";
+import * as netlog from "./netlog.js";
+
+// every request this worker makes goes into the network log (netlog.js)
+netlog.install();
 
 // Piper TTS (web/piper.js), for ovos-tts-plugin-piper-browser through `js`;
 // loaded the first time a Piper voice speaks
@@ -120,6 +124,7 @@ async function boot({ userConfig }) {
     py.FS.mount(py.FS.filesystems.IDBFS, {}, `${home}/${d}`);
   }
   await syncfs(true);
+  netlog.attach(py.FS);   // the log's file is in ~/.local
 
   status("boot.packages");
   await py.loadPackage(b.pyodide_packages, { messageCallback: () => {} });
@@ -225,6 +230,9 @@ const commands = {
   sync: () => syncfs(false),
   /** The page's answer to the PHAL plugin's location request. */
   phal_position: ({ lat, lon, error }) => promising(main.phal_position, lat ?? null, lon ?? null, error ?? null),
+  /** The network log: every request this worker made in the last days (netlog.js). */
+  net_log: () => netlog.entries(),
+  net_clear: () => netlog.clear(),
   /** Run a line of Python and return its value as text (for debugging). */
   python: ({ code }) => String(py.runPython(code)),
   /** The same through runPythonAsync: Python that may wait (JSPI, issue #20). */
