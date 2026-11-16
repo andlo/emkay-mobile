@@ -92,6 +92,8 @@ def _start_audio_service(bus):
         _audio_service = AudioService(bus, disable_ocp=True)
         names = [s.name for s in _audio_service.service]
         print(f"[emkay] audio service up in {time.time() - t:.1f}s: {names}")
+        from . import now_playing   # OCP's "now playing" page (now_playing.py)
+        now_playing.start(bus)
     except Exception as e:   # music is a feature; speech must not depend on it
         print(f"[emkay] audio service not started: {e!r}")
 

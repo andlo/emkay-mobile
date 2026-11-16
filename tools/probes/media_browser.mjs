@@ -63,8 +63,8 @@ async function until(expression, seconds, what) {
 const emit = (type, data = {}) =>
   js(`window.emkay.call("core_send", {raw: JSON.stringify(${JSON.stringify({ type, data, context: {} })})}); true`);
 
-// 3 s of a quiet 440 Hz tone as a WAV data: URI
-function toneUri(seconds = 3, rate = 8000) {
+// 15 s of a quiet 440 Hz tone as a WAV data: URI (long enough to press its buttons)
+function toneUri(seconds = 15, rate = 8000) {
   const n = seconds * rate, buf = Buffer.alloc(44 + n * 2);
   buf.write("RIFF", 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write("WAVEfmt ", 8);
   buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
@@ -83,7 +83,7 @@ try {
   await sleep(8000);
   // the bus as the page sees it (every message, for the visage's core socket)
   await js(`window.__bus = []; window.emkayVisage2.subscribe("core", (raw) => {
-    try { const m = JSON.parse(raw); if (/^(ovos\\.audio\\.|mycroft\\.audio\\.|ovos\\.pip\\.install|ovos\\.common_play\\.(query|search)|speak)/.test(m.type)) window.__bus.push(m.type + (/speak/.test(m.type) ? ":" + m.data.utterance : /install\\.failed|query\\.response/.test(m.type) ? ":" + JSON.stringify(m.data).slice(0, 1500) : "")); } catch {} }); true`);
+    try { const m = JSON.parse(raw); if (/^(ovos\\.audio\\.|mycroft\\.audio\\.|ovos\\.pip\\.install|ovos\\.common_play\\.(query|search)|speak|gui\\.page\\.show)/.test(m.type)) window.__bus.push(m.type + (/speak/.test(m.type) ? ":" + m.data.utterance : /install\\.failed|query\\.response/.test(m.type) ? ":" + JSON.stringify(m.data).slice(0, 1500) : m.type === "gui.page.show" ? ":" + m.data.__from + "/" + (m.data.page_names || []).join(",") : "")); } catch {} }); true`);
   if (process.env.PRE_PY) {   // test-only Python to run first (e.g. to stand in for an upstream fix)
     log(`pre: ${await js(`window.emkay.call("python", {code: ${JSON.stringify(process.env.PRE_PY)}}).then(String)`)}`);
   }
@@ -110,6 +110,21 @@ try {
   await emit("ovos.audio.output.ended");
   await until(`window.emkay.media.state().volume === ${full}`, 10, "the volume back after speech");
   log("ducked and restored");
+  // the "now playing" page (now_playing.py): OCP's own page, in the visage
+  await until(`window.__bus.some((t) => t === "gui.page.show:ovos.common_play/OVOSSyncPlayer")`, 15, "the now playing page");
+  log("now playing page shown");
+  await sleep(2500);
+  try {
+    const shot = await send("Page.captureScreenshot", { format: "png" });
+    (await import("fs")).writeFileSync(process.env.SHOT || "/tmp/emkay-now-playing.png", Buffer.from(shot.result.data, "base64"));
+    log(`screenshot ${process.env.SHOT || "/tmp/emkay-now-playing.png"}`);
+  } catch (e) { log(`no screenshot: ${e.message}`); }
+  // its buttons, as the visage sends them (ovos-gui: "<namespace>.<event>")
+  await emit("ovos.common_play.pause");
+  await until(`window.emkay.media.state().paused`, 10, "the pause button");
+  await emit("ovos.common_play.resume");
+  await until(`!window.emkay.media.state().paused`, 10, "the resume button");
+  log("pause and resume buttons work");
   if (process.env.STREAM || process.env.SAY) {
     await sleep(4000);
     await emit("mycroft.audio.service.stop");

@@ -92,6 +92,8 @@ PROBES = [
     # speaks, and hears the end of the track (no radio station needed)
     ("media_browser.mjs", {}, [], [
         r"ducked and restored",
+        r"now playing page shown",
+        r"pause and resume buttons work",
         r"bus: .*ovos\.audio\.browser\.play.*mycroft\.audio\.playing_track.*mycroft\.audio\.queue_end",
         r"media ok",
     ]),

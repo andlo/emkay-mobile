@@ -123,6 +123,12 @@ forces a workaround:
   ovos-media), and the music is turned down while OVOS speaks or listens.
   An https page cannot play `http://` streams, so stations without an
   https address fail with a clear reason and OCP tries its next result.
+  The "now playing" screen is OCP's own page (`ovos.common_play/OVOSSyncPlayer`,
+  which the visage draws). In legacy mode nothing fills it on a device
+  either (the classic OCP player did, and is deprecated), so
+  [`now_playing.py`](py/emkay_mobile/now_playing.py) does, from OCP's
+  results and AudioService's state, and turns its buttons into AudioService
+  commands. It belongs in OCP itself, and goes there as a PR.
 - **Speech to text** is OVOS' configured STT plugin, as on a device
   (the public OVOS servers by default). One more plugin ships with the
   site: **ovos-stt-plugin-browser**, the browser's own speech recognition
