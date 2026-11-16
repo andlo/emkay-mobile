@@ -156,7 +156,10 @@ forces a workaround:
     CC BY-NC-SA 4.0, non-commercial), and Emkay's own **"hey M K"**
     (`hey_emkay`, trained with
     [hey-emkay-wakeword](https://github.com/emkay-voice/hey-emkay-wakeword),
-    same licence). To use it:
+    same licence). Its `hotwords` entry is in Emkay's defaults (step 11
+    in `boot.py`), so it can be chosen as **Wake word** under Voice
+    settings in the control panel; the wake word in use does not change
+    on its own. Chosen by hand, it is:
 
     ```json
     {"listener": {"wake_word": "hey_emkay"},

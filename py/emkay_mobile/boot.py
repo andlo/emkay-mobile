@@ -34,6 +34,14 @@ REPLACED_SKILLS = ("ovos-skill-personal.openvoiceos",)
 #: fallbacks, each would add seconds to every unanswered question.
 BROWSERLESS_SKILLS = ("ovos-skill-ddg.openvoiceos", "ovos-skill-wolfie.openvoiceos")
 
+#: Emkay's own wake word, "hey M K" (defaults v11): the openWakeWord model
+#: trained in emkay-voice/hey-emkay-wakeword, which the site already ships as
+#: oww/hey_emkay_v0.1.onnx (tools/fetch_wakeword_models.py). Only offered,
+#: not switched on: with this entry in `hotwords`, "hey_emkay" can be chosen
+#: as the wake word in the control panel's Voice settings; listener.wake_word
+#: stays as it is.
+HEY_EMKAY = {"module": "ovos-ww-plugin-openwakeword", "threshold": 0.8, "listen": True}
+
 #: The intent pipeline ovos-installer writes (defaults v10), so Emkay matches
 #: an installed device rather than ovos-config's bare default: it adds
 #: common query (knowledge skills compete, e.g. Wikipedia and
@@ -59,7 +67,7 @@ INSTALLER_PIPELINE = (
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 10
+DEFAULTS_VERSION = 11
 #: the package index the control panel searches (defaults v7)
 STORE_INDEX = "https://store.emkay.ai"
 
@@ -200,6 +208,9 @@ def _browser_defaults(done: int) -> dict:
      10. the intent pipeline is ovos-installer's (INSTALLER_PIPELINE), with
          common query and persona, and the skills that cannot work in a
          browser yet are blacklisted (BROWSERLESS_SKILLS)
+     11. Emkay's own wake word "hey M K" is in `hotwords` (HEY_EMKAY), so
+         the control panel offers "hey_emkay"; the wake word in use does
+         not change
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -266,6 +277,9 @@ def _browser_defaults(done: int) -> dict:
         pipeline = list(INSTALLER_PIPELINE)
         out.setdefault("intents", {})["pipeline"] = _with_common_reading(pipeline) or pipeline
         _blacklist(out, BROWSERLESS_SKILLS)
+    if done < 11:
+        # offered, not chosen: listener.wake_word is left alone
+        out.setdefault("hotwords", {})["hey_emkay"] = HEY_EMKAY
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes
