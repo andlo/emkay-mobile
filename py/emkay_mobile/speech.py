@@ -92,8 +92,8 @@ def _get_tts(utterance, path, lang):
 
 def reload():
     """Drop the plugins so the next use reads mycroft.conf again."""
-    global _stt, _tts, _dialog_tx, _tts_tx, _fallback
-    _stt = _tts = _fallback = None
+    global _stt, _tts, _dialog_tx, _tts_tx, _fallback, _stt_fallback
+    _stt = _tts = _fallback = _stt_fallback = None
     for service in (_dialog_tx, _tts_tx):
         try:
             service and service.shutdown()
@@ -109,9 +109,32 @@ def transcribe(pcm16: bytes, sample_rate: int = 16000, lang: str = None) -> str:
     lang = lang or _config().get("lang", "en-US")
     audio = AudioData(pcm16, sample_rate, 2)
     t = time.time()
-    text = stt().execute(audio, language=lang) or ""
+    text = _execute_stt(audio, lang) or ""
     print(f"[emkay] stt {time.time() - t:.1f}s: {text!r}")
     return text.strip()
+
+
+_stt_fallback = None
+
+
+def _execute_stt(audio, lang):
+    """The configured STT; if it fails, `stt.fallback_module`, as
+    ovos-dinkum-listener does. A plugin that runs on the phone (Whisper)
+    fails while its model is still downloading, the first time."""
+    global _stt_fallback
+    try:
+        return stt().execute(audio, language=lang)
+    except Exception as e:
+        cfg = _config().get("stt", {})
+        name = cfg.get("fallback_module") or "ovos-stt-plugin-server"
+        if name == cfg.get("module"):
+            raise
+        print(f"[emkay] stt failed ({e!r}); using the fallback {name}")
+        if _stt_fallback is None:
+            from ovos_plugin_manager.stt import OVOSSTTFactory
+            _stt_fallback = OVOSSTTFactory.create({"stt": {"module": name, name: cfg.get(name, {}),
+                                                           "lang": _config().get("lang")}})
+        return _stt_fallback.execute(audio, language=lang)
 
 
 def heard(pcm16: bytes, sample_rate: int = 16000):

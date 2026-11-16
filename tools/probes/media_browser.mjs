@@ -130,9 +130,10 @@ try {
     await emit("mycroft.audio.service.stop");
     await until(`!window.emkay.media.state().uri`, 10, "stop");
   } else {
-    await until(`window.__bus.includes("mycroft.audio.queue_end")`, 20, "the end of the track to reach AudioService");
+    await until(`window.__bus.includes("mycroft.audio.queue_end")`, 30, "the end of the track to reach AudioService");
+    log("queue end reached");
   }
-  log(`bus: ${(await js(`window.__bus.join(" ")`)).slice(0, 400)}`);
+  log(`bus: ${(await js(`window.__bus.join(" ")`)).slice(0, 3000)}`);
   log("media ok");
 } catch (e) {
   log(`FAILED: ${e.message}`);

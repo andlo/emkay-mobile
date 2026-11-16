@@ -46,6 +46,7 @@ def start(js_post, user_config=None) -> str:
     try:
         import pyodide_http
         pyodide_http.patch_all()   # requests/urllib through the browser's fetch
+        browser.raise_http_errors()  # ... with urllib's HTTPError, as on a device
     except ImportError:
         pass
     t = time.time()

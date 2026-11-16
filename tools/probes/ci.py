@@ -94,7 +94,8 @@ PROBES = [
         r"ducked and restored",
         r"now playing page shown",
         r"pause and resume buttons work",
-        r"bus: .*ovos\.audio\.browser\.play.*mycroft\.audio\.playing_track.*mycroft\.audio\.queue_end",
+        r"bus: .*ovos\.audio\.browser\.play.*mycroft\.audio\.playing_track",
+        r"queue end reached",
         r"media ok",
     ]),
     ("installable_browser.mjs", {}, [], [

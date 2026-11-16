@@ -299,6 +299,40 @@ class _WaiterLock:
         self._held = False
 
 
+def raise_http_errors():
+    """urllib's urlopen through the browser raises HTTPError for 4xx/5xx again.
+
+    pyodide-http's urlopen returns every answer as a response, a 404 page
+    included; CPython's raises urllib.error.HTTPError. Code written for the
+    latter then reads an error page as data: the control panel, asking the
+    package index for a name it does not have, parsed the 404 page as JSON and
+    failed with a 502 instead of answering "not found". Applied after
+    pyodide_http.patch_all(), to urlopen and to the opener it also patches.
+    """
+    import io
+    import urllib.error
+    import urllib.request
+    if getattr(urllib.request.urlopen, "_emkay_errors", False):
+        return
+    plain = urllib.request.urlopen
+
+    def urlopen(url, *args, **kwargs):
+        response = plain(url, *args, **kwargs)
+        status = getattr(response, "status", 200) or 200
+        if status >= 400:
+            body = response.read()
+            target = url.full_url if isinstance(url, urllib.request.Request) else str(url)
+            raise urllib.error.HTTPError(target, status, getattr(response, "reason", "") or "",
+                                         response.headers, io.BytesIO(body))
+        return response
+
+    urlopen._emkay_errors = True
+    urllib.request.urlopen = urlopen
+    opener_open = urllib.request.OpenerDirector.open
+    if getattr(opener_open, "__name__", "") == "urlopen_self_removed":   # pyodide-http's
+        urllib.request.OpenerDirector.open = lambda self, url, *a, **k: urlopen(url, *a, **k)
+
+
 def install():
     """Apply the platform patches above. Safe to call more than once."""
     if getattr(install, "_done", False):
