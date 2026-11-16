@@ -18,9 +18,12 @@ answers through the `js_post(kind, payload, data=None)` callable given to
 import json
 import time
 
-import ovos_phal_plugin_browser as phal   # the browser tab as the device
-
+# Emkay's own modules first: importing boot runs browser.install(), which
+# puts the stand-ins for native packages (shims/: pexpect, psutil, ...) on
+# the path; ovos-utils' security module imports pexpect
 from . import boot, browser, gui, panel, speech
+
+import ovos_phal_plugin_browser as phal   # the browser tab as the device
 
 _js_post = None   # set by start(): post(kind, payload[, data])
 
