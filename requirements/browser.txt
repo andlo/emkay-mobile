@@ -39,6 +39,10 @@ ovos-common-reading-pipeline-plugin
 ovos-skill-ovosblog
 ovos-skill-horoscope-readings
 
+# who the assistant is, as Emkay: takes the place of ovos-skill-personal,
+# which boot.py blacklists (REPLACED_SKILLS)
+ovos-skill-about-emkay
+
 # the setup page: the stock OpenVoiceOS control panel
 ovos-control-panel
 

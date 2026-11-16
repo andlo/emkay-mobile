@@ -25,10 +25,13 @@ M2V_DIR = os.path.expanduser("~/.local/share/emkay-mobile/m2v")
 #: Skills that wait for host services a browser does not have: they loop
 #: until ovos-audio and ovos-dinkum-listener report ready, which never happens.
 UNAVAILABLE_SKILLS = ("ovos-skill-boot-finished.openvoiceos",)
+#: skills Emkay has its own version of (defaults v9): ovos-skill-about-emkay
+#: answers ovos-skill-personal's questions as Emkay, so the two would compete
+REPLACED_SKILLS = ("ovos-skill-personal.openvoiceos",)
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 8
+DEFAULTS_VERSION = 9
 #: the package index the control panel searches (defaults v7)
 STORE_INDEX = "https://store.emkay.ai"
 
@@ -164,6 +167,8 @@ def _browser_defaults(done: int) -> dict:
       7. the control panel searches the Emkay store's package index
       8. music plays through ovos-audio-plugin-browser, and OCP hands its
          results to ovos-audio's AudioService ("legacy")
+      9. ovos-skill-personal is blacklisted: ovos-skill-about-emkay answers
+         the same questions as Emkay (REPLACED_SKILLS)
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -220,6 +225,15 @@ def _browser_defaults(done: int) -> dict:
             "type": "ovos_audio_browser", "active": True}
         out.setdefault("intents", {}).setdefault(
             "ovos-ocp-pipeline-plugin", {})["legacy"] = True
+    if done < 9:
+        # Emkay's own version of a skill replaces OVOS' (REPLACED_SKILLS); the
+        # setup page can take it off the list again
+        skills = out.setdefault("skills", {})
+        blacklisted = skills.get("blacklisted_skills")
+        if blacklisted is None:
+            blacklisted = list(Configuration().get("skills", {}).get("blacklisted_skills", []))
+        blacklisted += [s for s in REPLACED_SKILLS if s not in blacklisted]
+        skills["blacklisted_skills"] = blacklisted
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes
