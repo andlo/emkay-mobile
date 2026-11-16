@@ -42,6 +42,8 @@ ovos-skill-horoscope-readings
 # who the assistant is, as Emkay: takes the place of ovos-skill-personal,
 # which boot.py blacklists (REPLACED_SKILLS)
 ovos-skill-about-emkay
+# what went out and who hears you, from Emkay's network log (docs/network-log.md)
+ovos-skill-guardian
 
 # the setup page: the stock OpenVoiceOS control panel
 ovos-control-panel
