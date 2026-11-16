@@ -308,14 +308,23 @@ _recent = {}
 
 
 def _once(m):
-    """The bus mirrors "speak" and "ovos.utterance.speak"; speak once."""
+    """The bus mirrors "speak" and "ovos.utterance.speak"; speak once.
+
+    The bus runs handlers one after the other, so the mirror arrives after
+    on_speak() returns, which takes as long as the TTS: seconds the first
+    time, or while a Piper voice downloads. The window is therefore counted
+    from when the sentence was handled, not from when it arrived; counted
+    from the start, a slow TTS let the mirror through and the answer was
+    said twice."""
     m = _as_message(m)
     key = (m.data.get("utterance"), m.context.get("ident"))
-    now = time.time()
-    if now - _recent.get(key, 0) < 2.0:
+    if time.time() - _recent.get(key, 0) < 2.0:
         return
-    _recent[key] = now
-    on_speak(m)
+    _recent[key] = float("inf")       # handling it now: any mirror is a repeat
+    try:
+        on_speak(m)
+    finally:
+        _recent[key] = time.time()
 
 
 #: The listener's mute state, as ovos-dinkum-listener keeps it (not saved:
