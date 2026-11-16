@@ -36,6 +36,11 @@ SKIP_PARTS = {"__pycache__", "tests", "test"}
 PYODIDE_CORE = ["pyodide.js", "pyodide.mjs", "pyodide.asm.mjs", "pyodide.asm.wasm",
                 "python_stdlib.zip", "pyodide-lock.json"]
 PYODIDE_CDN = f"https://cdn.jsdelivr.net/pyodide/v{PYODIDE_VERSION}/full/"
+#: jsDelivr's other CDNs, tried in turn when one answers 503 ("No healthy
+#: backends", which cdn.jsdelivr.net does for minutes at a time)
+PYODIDE_MIRRORS = [PYODIDE_CDN,
+                   f"https://fastly.jsdelivr.net/pyodide/v{PYODIDE_VERSION}/full/",
+                   f"https://gcore.jsdelivr.net/pyodide/v{PYODIDE_VERSION}/full/"]
 
 
 def norm(n):
@@ -68,32 +73,37 @@ def vendor_pyodide(packages):
     for n in sorted(need):
         fn = by_norm[n]["file_name"]
         if not (cache / fn).exists():
-            fetch(PYODIDE_CDN + fn, cache / fn)
+            fetch([m + fn for m in PYODIDE_MIRRORS], cache / fn)
         shutil.copy(cache / fn, dst / fn)
         total += (dst / fn).stat().st_size
     return sorted(need), total
 
 
-def fetch(url: str, dest: Path, tries: int = 5):
-    """Download url to dest, retrying when the server has a bad moment.
+def fetch(urls, dest: Path, tries: int = 5):
+    """Download the first of `urls` that answers to dest, retrying when the
+    servers have a bad moment.
 
-    The Pyodide CDN now and then answers 503 ("No healthy backends") for a
-    few minutes; one such answer used to fail the whole site build. The
-    file goes to a .part name first, so a broken download never sits in the
-    cache looking finished.
+    The Pyodide CDN now and then answers 503 ("No healthy backends") for
+    minutes; one such answer used to fail the whole site build. Each try goes
+    through the mirrors in turn, and the file goes to a .part name first, so
+    a broken download never sits in the cache looking finished. CI keeps the
+    cache between builds (pages.yml), so most builds need no download.
     """
+    urls = [urls] if isinstance(urls, str) else list(urls)
     part = dest.with_name(dest.name + ".part")
     for n in range(1, tries + 1):
-        try:
-            urllib.request.urlretrieve(url, part)
-            part.replace(dest)
-            return
-        except (urllib.error.URLError, OSError) as e:
-            if n == tries:
-                raise
-            wait = 10 * n
-            print(f"  {url}: {e}; trying again in {wait} s", flush=True)
-            time.sleep(wait)
+        for url in urls:
+            try:
+                urllib.request.urlretrieve(url, part)
+                part.replace(dest)
+                return
+            except (urllib.error.URLError, OSError) as e:
+                print(f"  {url}: {e}", flush=True)
+        if n == tries:
+            raise RuntimeError(f"could not download {dest.name} from {urls}")
+        wait = 10 * n
+        print(f"  trying again in {wait} s", flush=True)
+        time.sleep(wait)
 
 
 def short_hash(data: bytes) -> str:

@@ -171,6 +171,13 @@ jobs:
       # (issue #22); shown with ?visage=new until it is the default
       - name: Fetch the new visage (web build)
         run: python tools/fetch_visage2.py
+      # the Pyodide packages from its CDN, kept between builds: most builds
+      # download nothing, and a CDN outage only matters for new packages
+      - uses: actions/cache@v4
+        with:
+          path: build/pyodide-cache
+          key: pyodide-${{ hashFiles('node_modules/pyodide/package.json') }}-${{ hashFiles('requirements/*.txt') }}
+          restore-keys: pyodide-${{ hashFiles('node_modules/pyodide/package.json') }}-
       - name: Build the site
         run: |
           python tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json
