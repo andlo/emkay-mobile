@@ -7,9 +7,9 @@ ovos-gui keeps its clients in GUIWebsocketHandler.clients and only calls
 GUIWebsocketHandler's own, borrowed in start()), so the browser joins that
 list as an in-process client: no server, no socket, same GUI protocol.
 
-ovos-visage's own server-side state model (GuiState) runs here too, so its
-frontend gets exactly the snapshot-then-deltas stream it gets from
-ovos-visage's /ws endpoint.
+The page hands this stream to ovos-gui-visage as its legacy GUI socket
+(web/visage2-shim.js); on a (re)connect, worker_main.gui_sync replays the
+state as GUIWebsocketHandler.open() does.
 """
 import json
 
@@ -22,13 +22,7 @@ class BrowserGuiClient:
     def __init__(self, ns_manager, post):
         self.ns_manager = ns_manager
         self._post = post            # callable(str): hands JSON to the page
-        self._framework = "html"     # ovos-visage announces framework=html
-        self.state = None
-        try:
-            from ovos_visage.state import GuiState
-            self.state = GuiState()
-        except Exception as e:  # visage not installed: plain passthrough
-            print(f"[emkay] ovos-visage state model unavailable: {e!r}")
+        self._framework = "html"     # ovos-gui-visage announces framework=html
 
     @property
     def framework(self):
@@ -36,30 +30,16 @@ class BrowserGuiClient:
 
     # --- what ovos-gui calls -------------------------------------------
     def send(self, message: dict):
-        if self.state is not None:
-            try:
-                self.state.apply(message)
-            except Exception as e:
-                print(f"[emkay] visage state could not apply {message.get('type')}: {e!r}")
         self._post(json.dumps(message))
 
     def write_message(self, payload, *a, **k):
         self.send(json.loads(payload) if isinstance(payload, str) else payload)
 
     # --- what the page calls --------------------------------------------
-    def snapshot(self) -> str:
-        state = self.state.snapshot() if self.state is not None else {}
-        return json.dumps({"type": "visage.snapshot", "state": state,
-                           "gui_connected": True})
-
     def from_page(self, raw: str):
         """A GUI-protocol message from the page (focus, events, set)."""
         from ovos_gui.bus import GUIWebsocketHandler
         msg = json.loads(raw)
-        if msg.get("type") == "focus":  # ovos-visage's own focus shorthand
-            msg = {"type": "mycroft.events.triggered", "namespace": msg["namespace"],
-                   "event_name": "page_gained_focus",
-                   "parameters": {"number": msg["number"], "skillId": msg["namespace"]}}
         GUIWebsocketHandler.on_message(self, json.dumps(msg))
 
 

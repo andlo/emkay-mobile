@@ -194,9 +194,8 @@ const promising = (fn, ...args) => (fn.callPromising ? fn.callPromising(...args)
 /** Everything the page can ask for. Each returns a value or a Promise. */
 const commands = {
   boot,
-  gui_snapshot: () => main.gui_snapshot(),
   gui_message: ({ raw }) => promising(main.gui_message, raw),
-  // the new visage (web/visage2.js): its bus socket, GUI resync, res/ files
+  // the visage (web/visage2-shim.js): its bus socket, GUI resync, res/ files
   core_open: ({ open }) => main.core_open(open),
   core_send: ({ raw }) => promising(main.core_send, raw),
   gui_sync: () => promising(main.gui_sync),

@@ -4,9 +4,8 @@
     index.html, app.js, worker.js, ...   web/ as is
     texts.json                           Emkay's own texts, from locale/<lang>/*.dialog
     bundle-<hash>.zip                    every pure-Python package OVOS needs
-                                         (from the wheelhouse), emkay_mobile
-                                         and ovos_visage, unpacked into
-                                         site-packages by the worker
+                                         (from the wheelhouse) and emkay_mobile,
+                                         unpacked into site-packages by the worker
     intents-<lang>-<hash>.zip            pre-trained padatious cache per language
     build.json                           what to load, for the worker
 
@@ -99,7 +98,6 @@ def build_bundle(wheelhouse: Path, plan: dict) -> bytes:
                     seen.add(item.filename)
                     out.writestr(item.filename, whl.read(item))
         add_tree(out, REPO / "py/emkay_mobile", "emkay_mobile")
-        add_tree(out, REPO / "py/ovos_visage", "ovos_visage")
         add_phal_distribution(out)
     return buf.getvalue()
 

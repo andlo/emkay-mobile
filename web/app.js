@@ -1,8 +1,8 @@
 // Emkay – the page side: screen, microphone and speaker.
 //
-// OVOS itself runs in worker.js. ovos-visage draws the screen, unchanged:
-// it thinks it talks to its own server over WebSocket("/ws"), and gets the
-// same GUI stream from ovos-gui in the worker instead (GuiSocket below).
+// OVOS itself runs in worker.js. ovos-gui-visage (Mike's Flutter GUI) draws
+// the screen, in a frame (visage2/); its websockets are web/visage2-shim.js,
+// which talks to OVOS through window.emkayVisage2 below.
 //
 // URL options: ?kiosk  full screen + portrait lock on start (the installed
 // app opens with it, see manifest.webmanifest).
@@ -17,30 +17,8 @@ onLangChange(() => { apply(); bootStatus(lastStatus.key, undefined, lastStatus.v
 const params = new URLSearchParams(location.search);
 let kiosk = params.has("kiosk");
 
-// ---------------------------------------------------------------- layout
-// On a large screen visage draws the whole Mark II and scales it to the
-// window. On a phone the phone *is* the device: html.fullscreen hides the
-// drawing (emkay.css) and the 480 px wide Mark II screen gets the phone's
-// own aspect ratio, so visage's scaling makes it fill the display. This
-// listener is registered before visage's own resize handler (visage.js is
-// imported later), so visage always measures the new size.
+/** A phone or a small tablet: it is the device, so it goes full screen on start. */
 const phoneScreen = matchMedia("(max-width: 700px), (pointer: coarse) and (max-width: 1100px)");
-
-/** Size the screen for this window: full screen on phones, the device elsewhere. */
-function layout() {
-  const root = document.documentElement;
-  const full = phoneScreen.matches;
-  root.classList.toggle("fullscreen", full);
-  if (full) {
-    // the Mark II screen is 480 x 800; never shorter than 640 (landscape)
-    const h = Math.max(640, Math.round(480 * innerHeight / innerWidth));
-    root.style.setProperty("--screen-h", `${h}px`);
-  } else {
-    root.style.removeProperty("--screen-h");
-  }
-}
-layout();
-addEventListener("resize", layout);
 
 // ------------------------------------------- one Emkay per browser
 // The store's "Get" opens app.emkay.ai/?install=<package> in a new tab. If
@@ -112,44 +90,22 @@ worker.onmessage = ({ data }) => {
   }
 };
 
-// ---------------------------------------------- ovos-visage's GUI socket
 let ovosReady;
 const ready = new Promise((r) => (ovosReady = r));
 
+// ---------------------------------------------------------------- the screen
 /**
- * Stands in for the WebSocket ovos-visage opens to its server: on "open"
- * it delivers ovos-gui's snapshot, then every GUI message as it comes.
- */
-class GuiSocket {
-  static OPEN = 1;
-  constructor() {
-    this.readyState = 0;
-    guiSockets.add(this);
-    ready.then(async () => {
-      this.readyState = 1;
-      this.deliver(await call("gui_snapshot"));
-    });
-  }
-  /** One GUI message (JSON text) for visage. */
-  deliver(raw) { this.onmessage?.({ data: raw }); }
-  /** A message from visage (page focus, events) for ovos-gui. */
-  send(raw) { call("gui_message", { raw }); }
-  close() { guiSockets.delete(this); this.readyState = 3; }
-}
-// ------------------------------------------ the new visage (?visage=new)
-/**
- * ovos-gui-visage, the Flutter port (issue #22), runs in a frame
+ * ovos-gui-visage, the Flutter GUI (issue #22), runs in a frame
  * (visage2/index.html). Its websockets are web/visage2-shim.js in that
  * frame, which talks to OVOS through this: `core` gets every bus message
- * (worker_main.core_open), `gui` the same GUI stream as the old visage.
+ * (worker_main.core_open), `gui` ovos-gui's GUI stream (gui.py).
  */
-const NEW_VISAGE = new URLSearchParams(location.search).get("visage") === "new";
 const coreListeners = new Set();
 const guiListeners = new Map();   // listener -> its guiSockets entry
 window.emkayVisage2 = {
   ready,
   call,
-  /** A tap on the new visage (visage2-shim.js): listen, as a tap on the old one does. */
+  /** A tap on the visage (visage2-shim.js): listen; the whole screen is the talk button. */
   tap: () => mic.listen(),
   subscribe(route, fn) {
     if (route === "core") return void coreListeners.add(fn);
@@ -165,27 +121,18 @@ window.emkayVisage2 = {
 };
 
 /**
- * Put the new visage's frame in place of the old visage. It fills the
- * window itself (Flutter lays out for any size), so it replaces the whole
- * Mark II device frame, under Emkay's own layer (boot, menu, mic).
+ * Put the visage's frame on the page, under Emkay's own layer (boot, menu,
+ * mic). It fills the window on any screen: Flutter lays out for the size.
  */
-function showNewVisage() {
+function showVisage() {
   const frame = document.createElement("iframe");
   frame.id = "visage2";
   frame.className = "visage2";
   frame.src = "visage2/index.html";
   frame.title = "OVOS Visage";
   frame.allow = "autoplay";
-  $("device").hidden = true;
   document.body.prepend(frame);
 }
-
-const NativeWebSocket = window.WebSocket;
-window.WebSocket = new Proxy(NativeWebSocket, {
-  construct(target, args) {
-    return String(args[0]).endsWith("/ws") ? new GuiSocket() : new target(...args);
-  },
-});
 
 // ------------------------------------------------------------------ boot
 let lastStatus = { key: "boot.loading" };
@@ -306,8 +253,7 @@ async function keepStorage() {
     ovosLang = info.lang || ovosLang;
     sttModule = info.stt_module;
     ovosReady();
-    if (NEW_VISAGE) showNewVisage();
-    else await import("./visage/visage.js");
+    showVisage();
     bootStatus("boot.skills", 1, { n: info.skills.length });
     offerSetup();
     startDevice(call);   // the phone's sensors and connectivity, for PHAL
@@ -666,10 +612,6 @@ function toPcm16(chunks, from, to) {
   return new Uint8Array(out.buffer);
 }
 
-$("screen").addEventListener("click", (e) => {
-  if (e.target.closest("button, a, input")) return;
-  mic.listen();
-});
 
 // --------------------------------------------------------------- speaker
 /**
@@ -838,7 +780,7 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch((e) => console.warn("[emkay] service worker", e));
   navigator.serviceWorker.onmessage = async (event) => {
     const port = event.ports[0];
-    const resPath = event.data?.resRequest;   // the new visage's res/, res-abs/
+    const resPath = event.data?.resRequest;   // the visage's res/, res-abs/
     if (resPath && port) {
       await ready;
       const bytes = await call("res_file", { path: resPath }).catch(() => null);

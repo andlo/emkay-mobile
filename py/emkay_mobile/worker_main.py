@@ -9,7 +9,7 @@ They talk through postMessage. worker.js calls the functions below; Python
 answers through the `js_post(kind, payload, data=None)` callable given to
 `start()`. The kinds are:
 
-  "gui"    one GUI-protocol message (JSON) for ovos-visage
+  "gui"    one GUI-protocol message (JSON) for the visage
   "audio"  speech to play: payload is JSON metadata, data the WAV bytes
   "bus"    one of the few bus events the page reacts to itself
   "phal"   from the browser PHAL plugin: a volume level, or a request
@@ -121,22 +121,17 @@ def _post_lang():
 
 # --- calls from the page -------------------------------------------------
 
-def gui_snapshot() -> str:
-    """The full GUI state, for a newly connected ovos-visage screen."""
-    return gui.client().snapshot()
-
-
 def gui_message(raw: str):
     """A GUI-protocol message from the screen (focus, page events)."""
     gui.client().from_page(raw)
 
 
-# --- the new visage (ovos-gui-visage, Flutter web build) -----------------
+# --- the visage (ovos-gui-visage, Flutter web build) ---------------------
 #
 # It opens two websockets on a device: the core messagebus and ovos-gui's
-# legacy GUI socket (web/visage2.js stands in for both). The GUI socket is
-# the same stream the old visage gets (gui.py's BrowserGuiClient); the bus
-# socket is every bus message, both ways, while it is open.
+# legacy GUI socket (web/visage2-shim.js stands in for both). The GUI socket
+# is ovos-gui's stream (gui.py's BrowserGuiClient); the bus socket is every
+# bus message, both ways, while it is open.
 
 _core_open = False
 

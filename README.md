@@ -3,7 +3,7 @@
 A stock [OpenVoiceOS](https://openvoiceos.org) running **in a browser** – on a
 phone, a tablet, a TV or a Raspberry Pi in kiosk mode; no app store, no
 sideloading, nothing to install – with the Mycroft Mark II Kickstarter face
-([ovos-visage](https://github.com/OscillateLabsLLC/ovos-visage)) as the screen.
+([ovos-gui-visage](https://github.com/OscillateLabsLLC/ovos-gui-visage)) as the screen.
 
 "Emkay" is "MK" said out loud, a nod to Mycroft's Mark I and Mark II.
 
@@ -28,7 +28,7 @@ device gets, on the **alpha** channel, compiled to WebAssembly with
 | Core | `ovos-core[plugins]` – SkillManager, IntentService and the pipeline plugins (m2v, padatious, adapt, …) on an in-process bus |
 | Skills | the installer defaults: `ovos-core[skills-essential,skills-internet,skills-audio]` |
 | Speech | the installer default (public servers): `ovos-stt-plugin-server`, `ovos-tts-plugin-server` |
-| Screen | `ovos-gui` + `ovos-skill-homescreen`, drawn by ovos-visage (the Mark II face) |
+| Screen | `ovos-gui` + `ovos-skill-homescreen`, drawn by ovos-gui-visage (the Mark II face, Flutter web build) |
 | Setup | the stock `ovos-control-panel`, in the ⚙ menu |
 
 See [`requirements/`](requirements) for the exact lists.
@@ -42,15 +42,20 @@ phone and restores them, so they survive clearing the browser.
 
 ```
 page (web/app.js)                 Web Worker (web/worker.js + Pyodide)
- ├─ ovos-visage (unmodified) ◄──► BrowserGuiClient ─ ovos-gui ─┐
+ ├─ ovos-gui-visage (frame) ◄───► BrowserGuiClient ─ ovos-gui ─┐
+ │   core + gui websockets       (and every bus message)       │
  ├─ microphone → 16 kHz PCM  ───► speech.heard → STT plugin    ├─ FakeBus ─ ovos-core
  ├─ speaker ◄─ WAV + visemes ◄─── speech.on_speak → TTS plugin ┘            + skills
  └─ menu: Settings (the stock OpenVoiceOS control panel), full screen, about
 ```
 
 - `py/emkay_mobile/boot.py` starts OVOS the way `ovos_core.__main__` does.
-- `py/emkay_mobile/gui.py` makes the page a GUI client of ovos-gui; visage's
-  own `GuiState` (vendored in `py/ovos_visage`) keeps the screen state.
+- `py/emkay_mobile/gui.py` makes the page a GUI client of ovos-gui. The screen
+  is ovos-gui-visage's web build, unchanged, in a frame
+  ([`tools/fetch_visage2.py`](tools/fetch_visage2.py) takes it from its pinned
+  Docker image); [`web/visage2-shim.js`](web/visage2-shim.js) gives it the two
+  websockets its nginx sidecar gives it on a device: the bus and ovos-gui's
+  legacy GUI socket. A tap on it starts listening.
 - `py/emkay_mobile/speech.py` runs whatever STT/TTS plugin `mycroft.conf` names.
 - `web/worker.js` downloads the bundle once, caches it, and mounts IndexedDB.
 
@@ -189,8 +194,8 @@ forces a workaround:
   run in a browser, and its wake word step is hidden for now.
 - **Config changes are followed over the bus** (`configuration.updated`),
   as the services on a device do; the file watcher thread is left out.
-- **On a phone** the screen fills the display; on a larger screen visage
-  draws the whole Mark II around it.
+- **The screen fills the window** on a phone, a tablet or a PC (an installed
+  app or kiosk mode alike): ovos-gui-visage lays itself out for any size.
 - **Left out:** `ovos-skill-boot-finished` (waits for an audio service and a
   listener that do not exist here).
 - **Added to the "ovos" skill profile:** skills that answer without a server
@@ -286,7 +291,7 @@ OpenVoiceOS.
 
 ## License
 
-Apache-2.0. Parts that come with their own licence: ovos-visage and
-ovos-gui-visage (Apache-2.0), precise-onnx-js (Apache-2.0), onnxruntime-web
+Apache-2.0. Parts that come with their own licence: ovos-gui-visage
+(Apache-2.0), precise-onnx-js (Apache-2.0), onnxruntime-web
 (MIT), piper-wasm (MIT; it contains espeak-ng and its data, GPL-3.0, in
 `piper/`), and the Piper voices, each with the licence in its model card.

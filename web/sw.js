@@ -49,7 +49,7 @@ function panelPath(url) {
 }
 
 /**
- * The new visage (web/visage2/, ?visage=new) fetches GUI resources from
+ * The visage (web/visage2/) fetches GUI resources from
  * res/ (ovos-gui's cache) and res-abs/ (absolute paths), which its nginx
  * sidecar serves from OVOS' disk on a device. Here they come from the
  * worker's file system (worker_main.res_file).
@@ -189,7 +189,7 @@ addEventListener("click", (e) => {
 /**
  * Emkay's look for the panel: its own colour tokens (app.css custom
  * properties) set to Emkay's dark palette and blue accent, the same as the
- * face (visage.css) and the boot screen. Only the values change; the
+ * boot screen and the visage. Only the values change; the
  * panel's CSS is untouched. "html:root:not([data-emkay])" outranks both of
  * the panel's dark-mode rules, so Emkay's palette holds in every mode.
  * It also leaves the pages for hardware a phone does not have out of the

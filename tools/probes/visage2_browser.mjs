@@ -1,4 +1,4 @@
-// The new visage (?visage=new, issue #22) in headless Chromium: boot, tap
+// The visage (ovos-gui-visage, issue #22) in headless Chromium: boot, tap
 // start, ask something, and take screenshots; prints the page's (and the
 // visage frame's) console lines and errors.
 //
@@ -9,7 +9,7 @@ import { writeFileSync } from "fs";
 
 const base = process.argv[2] || "http://127.0.0.1:8080/";
 const out = process.argv[3] || "/tmp/visage2";
-const url = base + (base.includes("?") ? "&" : "?") + "visage=new";
+const url = base;
 const port = 9351;
 const chrome = spawn(process.env.CHROME, [
   "--headless=new", `--remote-debugging-port=${port}`, "--user-data-dir=/tmp/emkay-chrome-v2",

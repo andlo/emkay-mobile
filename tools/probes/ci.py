@@ -81,6 +81,12 @@ PROBES = [
         r'"what is the capital of australia": said \[[^\]]*Canberra',
         r'"read my horoscope for leo": said \["[^"]*Leo',       # common reading
     ]),
+    # the screen: ovos-gui-visage connects to the bus and to ovos-gui's GUI
+    # socket through web/visage2-shim.js (issue #22)
+    ("visage2_browser.mjs", {"SETTLE_MS": "20000", "QUESTIONS": "what time is it"}, [], [
+        r"connected to messagebus at wss?://[^ ]*/visage2/core",
+        r"connected to wss?://[^ ]*/visage2/gui and re-announced framework=html",
+    ]),
     ("installable_browser.mjs", {}, [], [
         r"manifest errors: none",
         r"installability errors: none",                     # "Install as app" can be offered

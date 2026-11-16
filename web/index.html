@@ -9,28 +9,11 @@
   <title>Emkay</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="visage/visage.css">
-  <link rel="stylesheet" href="visage/face/face.css">
-  <link rel="stylesheet" href="visage/skills.css">
-  <link rel="stylesheet" href="visage/alerts.css">
-  <link rel="stylesheet" href="visage/ocp.css">
-  <link rel="stylesheet" href="visage/templates.css">
   <link rel="stylesheet" href="emkay.css">
 </head>
 <body>
-  <!-- ovos-visage's screen, unchanged -->
-  <div id="device" class="device" aria-label="Emkay display">
-    <svg class="silhouette" viewBox="0 0 560 960" aria-hidden="true">
-      <rect x="4" y="4" width="552" height="952" rx="96" class="shell"/>
-      <rect x="22" y="22" width="516" height="916" rx="80" class="bezel"/>
-      <circle cx="280" cy="52" r="5" class="camera"/>
-    </svg>
-    <main id="screen" class="screen">
-      <section id="page" class="page"></section>
-      <section id="attention" class="attention" data-state="rest" aria-hidden="true"></section>
-      <div id="link" class="link offline" title="GUI connection">GUI offline</div>
-    </main>
-  </div>
+  <!-- the screen: ovos-gui-visage in a frame (app.js showVisage), under
+       Emkay's own layer -->
 
   <!-- Emkay's own layer: boot, start button, mic, typing -->
   <div id="boot" class="boot">
