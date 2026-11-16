@@ -10,7 +10,9 @@ constraints file, the protected core packages, reloading the plugin manager
 - is ovos-core's own.
 
 What it can install: pure-Python wheels ("py3-none-any"), which is what OVOS
-skills and most plugins are, from PyPI, with their dependencies. A package
+skills and most plugins are, from PyPI, with their dependencies. A
+pure-Python package PyPI only has as source comes as a wheel the Emkay store
+built from that source (STORE_WHEELS). A package
 that needs a compiled (native) wheel without a WebAssembly build cannot be
 installed, and says so.
 
@@ -38,6 +40,26 @@ USER_SITE = os.path.expanduser(
     f"~/.local/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages")
 
 PYPI = "https://pypi.org/pypi/{name}/json"
+
+#: Wheels the Emkay store built for pure-Python packages that PyPI only has as
+#: source (emkay-voice/store, tools/build_wheels.py): {name: {version: [file
+#: entries as in PyPI's JSON]}}. Used only for a release PyPI has no wheel for.
+STORE_WHEELS = "https://store.emkay.ai/wheels/index.json"
+_store_wheels = None
+
+
+def _built_wheels(name: str) -> dict:
+    """{version: [files]} the store built for `name` ({} if none or unreachable)."""
+    global _store_wheels
+    if _store_wheels is None:
+        import requests
+        try:
+            r = requests.get(STORE_WHEELS, timeout=30)
+            _store_wheels = r.json() if r.ok else {}
+        except Exception:
+            _store_wheels = {}
+    from packaging.utils import canonicalize_name
+    return _store_wheels.get(canonicalize_name(name), {})
 
 
 class PipError(RuntimeError):
@@ -193,6 +215,13 @@ def _choose(req, constraints, pre):
         if limit is not None and not limit.contains(v, prereleases=True):
             continue
         wheel = _pure_wheel(releases[text])
+        if wheel is None and releases[text]:
+            # PyPI has only source (or compiled builds) for this release: the
+            # store may have built it as a pure wheel
+            wheel = _pure_wheel(_built_wheels(req.name).get(text, []))
+            if wheel is not None:
+                log_built = f"{req.name} {text}: the Emkay store's wheel, built from PyPI's source"
+                print(f"[emkay] (pip) {log_built}")
         if wheel is None:
             native_only = native_only or bool(releases[text])
             continue
