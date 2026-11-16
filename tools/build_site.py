@@ -19,6 +19,7 @@ import hashlib
 import io
 import os
 import re
+import urllib.error
 import urllib.request
 import json
 import shutil
@@ -67,10 +68,32 @@ def vendor_pyodide(packages):
     for n in sorted(need):
         fn = by_norm[n]["file_name"]
         if not (cache / fn).exists():
-            urllib.request.urlretrieve(PYODIDE_CDN + fn, cache / fn)
+            fetch(PYODIDE_CDN + fn, cache / fn)
         shutil.copy(cache / fn, dst / fn)
         total += (dst / fn).stat().st_size
     return sorted(need), total
+
+
+def fetch(url: str, dest: Path, tries: int = 5):
+    """Download url to dest, retrying when the server has a bad moment.
+
+    The Pyodide CDN now and then answers 503 ("No healthy backends") for a
+    few minutes; one such answer used to fail the whole site build. The
+    file goes to a .part name first, so a broken download never sits in the
+    cache looking finished.
+    """
+    part = dest.with_name(dest.name + ".part")
+    for n in range(1, tries + 1):
+        try:
+            urllib.request.urlretrieve(url, part)
+            part.replace(dest)
+            return
+        except (urllib.error.URLError, OSError) as e:
+            if n == tries:
+                raise
+            wait = 10 * n
+            print(f"  {url}: {e}; trying again in {wait} s", flush=True)
+            time.sleep(wait)
 
 
 def short_hash(data: bytes) -> str:
