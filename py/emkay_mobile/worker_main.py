@@ -2,7 +2,7 @@
 
 The worker owns everything OVOS: the bus, ovos-core and its skills, ovos-gui,
 the small listener/audio halves (speech.py) and the PHAL plugin for the
-phone's "hardware" (phal.py). The page owns what only a browser tab can
+phone's "hardware" (ovos-phal-plugin-browser). The page owns what only a browser tab can
 reach: the screen, the microphone and the speaker.
 
 They talk through postMessage. worker.js calls the functions below; Python
@@ -18,7 +18,9 @@ answers through the `js_post(kind, payload, data=None)` callable given to
 import json
 import time
 
-from . import boot, browser, gui, panel, phal, speech
+import ovos_phal_plugin_browser as phal   # the browser tab as the device
+
+from . import boot, browser, gui, panel, speech
 
 _js_post = None   # set by start(): post(kind, payload[, data])
 
@@ -67,7 +69,7 @@ def start(js_post, user_config=None) -> str:
 #: The device services whose job a part of Emkay does, so they answer the
 #: same status questions (ProcessStatus) the services answer on a device:
 #: audio and voice (speech.py: playback, listener), gui_service (gui.py),
-#: PHAL (phal.py). ovos-core's skills and intents report themselves.
+#: PHAL (ovos-phal-plugin-browser). ovos-core's skills and intents report themselves.
 _SERVICES = ("audio", "voice", "gui_service", "PHAL")
 _statuses = []
 
@@ -225,14 +227,14 @@ def playback_ended(ident: str):
 
 
 def phal_position(lat=None, lon=None, error=None):
-    """The browser's geolocation answer, for the PHAL plugin (phal.py)."""
+    """The browser's geolocation answer, for the PHAL plugin (ovos-phal-plugin-browser)."""
     if phal.plugin() is not None:
         phal.plugin().on_position(lat, lon, error)
 
 
 def phal_event(event, data_json):
     """A change the page saw for the PHAL plugin: online, sensor, picture,
-    camera (phal_device.py)."""
+    camera (ovos-phal-plugin-browser)."""
     if phal.plugin() is not None:
         phal.plugin().on_page_event(event, json.loads(data_json))
 

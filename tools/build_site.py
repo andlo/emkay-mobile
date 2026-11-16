@@ -98,49 +98,7 @@ def build_bundle(wheelhouse: Path, plan: dict) -> bytes:
                     seen.add(item.filename)
                     out.writestr(item.filename, whl.read(item))
         add_tree(out, REPO / "py/emkay_mobile", "emkay_mobile")
-        add_phal_distribution(out)
     return buf.getvalue()
-
-
-def add_phal_distribution(zf):
-    """Install emkay_mobile.phal as an ordinary PHAL plugin distribution.
-
-    OVOS finds PHAL plugins by their "opm.phal" entry point, and the control
-    panel decides what a device can do from the installed distributions. So
-    the browser's PHAL plugin gets the metadata any pip-installed plugin
-    has: name ovos-phal-plugin-browser, the entry point, no files of its
-    own (the code ships in emkay_mobile).
-    """
-    info = "ovos_phal_plugin_browser-0.1.0.dist-info"
-    zf.writestr(f"{info}/METADATA", "Metadata-Version: 2.1\n"
-                "Name: ovos-phal-plugin-browser\nVersion: 0.1.0\n"
-                "Summary: Emkay: the browser tab as OVOS hardware (volume, location)\n"
-                "Home-page: https://github.com/emkay-voice/emkay\nLicense: Apache-2.0\n")
-    zf.writestr(f"{info}/entry_points.txt",
-                "[opm.phal]\novos-phal-plugin-browser = emkay_mobile.phal:BrowserPHAL\n")
-    zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
-    zf.writestr(f"{info}/RECORD", "")
-    # the browser's own speech recognition, an STT plugin like any other
-    # (emkay_mobile/stt_browser.py)
-    info = "ovos_stt_plugin_browser-0.1.0.dist-info"
-    zf.writestr(f"{info}/METADATA", "Metadata-Version: 2.1\n"
-                "Name: ovos-stt-plugin-browser\nVersion: 0.1.0\n"
-                "Summary: Emkay: the browser's own speech recognition (Web Speech API) as OVOS STT\n"
-                "Home-page: https://github.com/emkay-voice/emkay\nLicense: Apache-2.0\n")
-    zf.writestr(f"{info}/entry_points.txt",
-                "[opm.stt]\novos-stt-plugin-browser = emkay_mobile.stt_browser:BrowserSTT\n")
-    zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
-    zf.writestr(f"{info}/RECORD", "")
-    # Piper voices made on the phone (emkay_mobile/tts_piper.py, web/piper.js)
-    info = "ovos_tts_plugin_piper_browser-0.1.0.dist-info"
-    zf.writestr(f"{info}/METADATA", "Metadata-Version: 2.1\n"
-                "Name: ovos-tts-plugin-piper-browser\nVersion: 0.1.0\n"
-                "Summary: Emkay: Piper text-to-speech on the device, in WebAssembly\n"
-                "Home-page: https://github.com/emkay-voice/emkay\nLicense: Apache-2.0\n")
-    zf.writestr(f"{info}/entry_points.txt",
-                "[opm.tts]\novos-tts-plugin-piper-browser = emkay_mobile.tts_piper:PiperBrowserTTS\n")
-    zf.writestr(f"{info}/top_level.txt", "emkay_mobile\n")
-    zf.writestr(f"{info}/RECORD", "")
 
 
 def build_intents(cache_dirs):

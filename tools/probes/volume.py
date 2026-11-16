@@ -1,6 +1,6 @@
 """The browser PHAL plugin against the stock volume skill, in Pyodide.
 
-Boots OVOS, loads emkay_mobile.phal with a page stand-in that prints what
+Boots OVOS, loads ovos-phal-plugin-browser with a page stand-in that prints what
 the page would be told, and asks the volume skill a few things.
 
   EMKAY_MOUNT=build/intent_cache:/home/pyodide/.local/share/mycroft,build/m2v:/home/pyodide/.local/share/emkay-mobile/m2v \
@@ -9,7 +9,8 @@ the page would be told, and asks the volume skill a few things.
 import asyncio
 import time
 
-from emkay_mobile import boot, phal
+import ovos_phal_plugin_browser as phal
+from emkay_mobile import boot
 
 T0 = time.time()
 

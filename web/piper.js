@@ -8,7 +8,7 @@
 //   * onnxruntime-web, which Emkay already ships for the wake word (ort/)
 //   * the voice itself, from rhasspy's piper-voices on Hugging Face, only
 //     when that voice is chosen, and kept in the Cache API afterwards
-// The OVOS side is emkay_mobile/tts_piper.py (ovos-tts-plugin-piper-browser),
+// The OVOS side is ovos-tts-plugin-piper-browser (its own package),
 // which calls synth() through JSPI and gets a WAV back, as a device's
 // ovos-tts-plugin-piper writes one.
 
@@ -107,7 +107,7 @@ function session(voice) {
 /**
  * Whether `voice` can speak right away. If not, its download starts (once)
  * and false is returned: the first download is tens of megabytes, and OVOS
- * should not stay silent meanwhile (tts_piper.py then lets the fallback
+ * should not stay silent meanwhile (the plugin then lets the fallback
  * TTS speak).
  */
 export function ready(voice) {

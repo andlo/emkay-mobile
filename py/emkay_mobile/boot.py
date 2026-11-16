@@ -177,7 +177,7 @@ def _browser_defaults(done: int) -> dict:
             "allow_pip": True, "allow_alphas": True, "constraints": ALPHA_CONSTRAINTS}
         out["webui"] = {"release_channel": "alpha"}
     # The location now comes from the browser PHAL plugin, in the assistant
-    # layer like ipgeo's (phal.py). Builds of 2026-11-14 wrote the browser's
+    # layer like ipgeo's (ovos-phal-plugin-browser). Builds of 2026-11-14 wrote the browser's
     # time zone into the user layer instead, where it would hide that; such
     # an entry, and only that, is dropped again.
     if done < 5:
@@ -290,7 +290,7 @@ def _phone_timezone():
     minutes" said 10:29 a.m. for 17:29 in Copenhagen). The browser PHAL
     plugin finds the real location later (geolocation, with permission), so
     the phone's time zone (EMKAY_TZ, worker.js) goes into the assistant
-    layer first, before any skill loads - the stand-in phal.py writes too.
+    layer first, before any skill loads - the browser PHAL plugin writes too.
     A location found later, or one set in the control panel, replaces it.
     """
     from ovos_config.models import AssistantConfig
@@ -426,7 +426,7 @@ def start(on_message=None, user_config=None) -> dict:
     # the default session keeps its own copy of the configuration from when
     # it was made (location and time zone, but also the intent pipeline and
     # its blacklist), and it was made before the steps above: make it again
-    # from what they wrote, as phal.py does for a new location
+    # from what they wrote, as the browser PHAL plugin does for a new location
     from ovos_bus_client.session import SessionManager
     SessionManager.reset_default_session()
     if sys.platform == "emscripten":

@@ -42,5 +42,12 @@ ovos-skill-horoscope-readings
 # the setup page: the stock OpenVoiceOS control panel
 ovos-control-panel
 
+# Emkay's own browser plugins, each its own package (emkay-voice/<name>):
+# the browser's speech recognition, Piper voices in WebAssembly, and the
+# browser tab as the device (PHAL)
+ovos-stt-plugin-browser
+ovos-tts-plugin-piper-browser
+ovos-phal-plugin-browser
+
 # browser glue
 pyodide-http

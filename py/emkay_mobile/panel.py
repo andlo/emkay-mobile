@@ -73,10 +73,10 @@ def _browser_capabilities():
 
     The panel enables a control (e.g. the volume slider) when a plugin it
     knows provides it is installed (ovos_webui.phal.CAPABILITIES). The
-    browser plugin (phal.py, installed as ovos-phal-plugin-browser) answers
+    browser plugin (ovos-phal-plugin-browser) answers
     the volume messages the same way ovos-PHAL-plugin-alsa does and the
     power, factory reset and language ones as ovos-PHAL-plugin-system
-    (phal_system.py), so it is added to the providers of those three.
+    (ovos-phal-plugin-browser), so it is added to the providers of those three.
     """
     from ovos_webui import phal as capabilities
     for key in ("volume", "power", "system"):

@@ -619,7 +619,7 @@ function toPcm16(chunks, from, to) {
  * when each starts and ends (that is what moves the face's mouth).
  *
  * Everything goes through one gain node: the "mixer" of the browser PHAL
- * plugin (py/emkay_mobile/phal.py), which answers OVOS' mycroft.volume.*
+ * plugin (ovos-phal-plugin-browser), which answers OVOS' mycroft.volume.*
  * messages and sends the level here.
  */
 const speaker = {
@@ -684,7 +684,7 @@ const speaker = {
 
 // ------------------------------------------------------------ PHAL plugin
 /**
- * A message from the browser PHAL plugin (py/emkay_mobile/phal.py), which
+ * A message from the browser PHAL plugin (ovos-phal-plugin-browser), which
  * answers OVOS' hardware messages: a volume level to apply, or a request
  * for something only the page can reach.
  */

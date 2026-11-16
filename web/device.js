@@ -1,5 +1,5 @@
 // The phone's hardware, as the browser PHAL plugin sees it
-// (py/emkay_mobile/phal.py, phal_system.py, phal_device.py).
+// (ovos-phal-plugin-browser, emkay-voice/ovos-phal-plugin-browser).
 //
 // The plugin speaks OVOS' bus contracts; this side reads the browser's APIs
 // and reports changes, and carries out what the plugin asks for:
@@ -19,7 +19,7 @@ const event = (name, data) => call("phal_event", { event: name, data }).catch(()
 const lastSent = new Map();   // "device_name" -> last state sent
 
 /**
- * One sensor reading, in ovos-PHAL-sensors' terms (see phal_device.py).
+ * One sensor reading, in ovos-PHAL-sensors' terms (see ovos-phal-plugin-browser).
  * Only a changed state is sent: motion and orientation events come many
  * times a second, and the worker should hear about changes, not samples.
  */

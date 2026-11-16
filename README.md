@@ -88,7 +88,7 @@ forces a workaround:
   page is its client directly. 1.6 moved GUI clients to adapter plugins
   (ovos-gui-plugin-visage), which is the way forward once it is released.
 - **The phone's "hardware"** is a PHAL plugin whose device is the page
-  ([`phal.py`](py/emkay_mobile/phal.py)). Volume answers `mycroft.volume.*`
+  ([ovos-phal-plugin-browser](https://github.com/emkay-voice/ovos-phal-plugin-browser), its own package). Volume answers `mycroft.volume.*`
   exactly like ovos-PHAL-plugin-alsa, with the page's output gain as the
   mixer. Location works like ovos-phal-plugin-ipgeo (assistant config
   layer, `ovos.ipgeo.update`), but from the browser's geolocation, since
@@ -98,12 +98,12 @@ forces a workaround:
   `opm.phal`), so the control panel sees it. Also in it, each with the bus
   contract of the plugin a device uses:
   - power, factory reset and language as ovos-PHAL-plugin-system
-    ([`phal_system.py`](py/emkay_mobile/phal_system.py)): reboot and
+    (in [ovos-phal-plugin-browser](https://github.com/emkay-voice/ovos-phal-plugin-browser)): reboot and
     "restart the services" reload the page, shutdown darkens it until
     tapped, factory reset wipes what the system plugin wipes and starts
     over; there is no SSH;
   - connectivity as ovos-PHAL-plugin-connectivity-events, from the
-    browser's online/offline state ([`phal_device.py`](py/emkay_mobile/phal_device.py));
+    browser's online/offline state (in [ovos-phal-plugin-browser](https://github.com/emkay-voice/ovos-phal-plugin-browser));
   - the phone's sensors as ovos-PHAL-sensors reports them
     (`ovos.phal.sensor`, shown on the control panel's Sensors page):
     battery and charging, network type and speed, screen on and
@@ -118,7 +118,7 @@ forces a workaround:
   site: **ovos-stt-plugin-browser**, the browser's own speech recognition
   (Web Speech API – Google's in Chrome on Android, Apple's on an iPhone),
   picked in the control panel like any other STT
-  ([`stt_browser.py`](py/emkay_mobile/stt_browser.py)). It handles languages
+  ([ovos-stt-plugin-browser](https://github.com/emkay-voice/ovos-stt-plugin-browser), its own package). It handles languages
   the public servers do not (Danish, for one) and shows the words as you
   speak; the audio goes to Google or Apple. The browser listens itself, so
   Emkay lets the microphone go meanwhile; where the browser has no speech
@@ -215,10 +215,10 @@ forces a workaround:
   waits return at once, and a question back is asked but not waited
   for ([#20](https://github.com/emkay-voice/emkay/issues/20)).
 - **Speech can be made on the phone** with Piper: choose
-  `ovos-tts-plugin-piper-browser` as the TTS (the control panel's voice
+  [`ovos-tts-plugin-piper-browser`](https://github.com/emkay-voice/ovos-tts-plugin-piper-browser) as the TTS (the control panel's voice
   settings). It is Emkay's stand-in for ovos-tts-plugin-piper, which needs
   onnxruntime and espeak-ng: here piper-phonemize (espeak-ng) and the voice
-  run as WebAssembly in the worker (`web/piper.js`, onnxruntime-web). The
+  run as WebAssembly in the worker (`web/piper.js`, onnxruntime-web; the plugin is its own package). The
   voice for OVOS' language (or `voice` in the plugin's config, a
   [piper-voices](https://huggingface.co/rhasspy/piper-voices) name) is
   downloaded the first time, about 63 MB plus 18 MB of espeak-ng data, and

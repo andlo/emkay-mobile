@@ -209,7 +209,7 @@ html:root:not([data-emkay]) {
 /* pages for hardware a browser tab does not have (Wi-Fi, the Mark 1
    faceplate, desktop apps): left out of the menu; the pages themselves
    still open if asked for. Sensors stay: the browser PHAL plugin reports
-   the phone's (phal_device.py). */
+   the phone's (ovos-phal-plugin-browser). */
 nav a[href$="/network"], nav a[href$="/mark1"],
 nav a[href$="/apps"] { display: none !important; }
 /* the setup wizard's wake word test: there is no wake word listener here

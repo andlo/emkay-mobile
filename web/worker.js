@@ -14,7 +14,7 @@
 
 import { matchLang } from "./langs.js";
 
-// Piper TTS (web/piper.js), for emkay_mobile/tts_piper.py through `js`;
+// Piper TTS (web/piper.js), for ovos-tts-plugin-piper-browser through `js`;
 // loaded the first time a Piper voice speaks
 globalThis.emkayPiper = {
   synth: async (text, voice, speaker) => (await import("./piper.js")).synth(text, voice, speaker),
@@ -211,7 +211,7 @@ const commands = {
   /** One request for the settings panel (see sw.js and panel.py). */
   panel_request: async ({ method, path, query, headers, body }) =>
     main.panel_request(method, path, query, JSON.stringify(headers), body ? new Uint8Array(body) : null),
-  /** Something the page saw for the PHAL plugin (device.js, phal_device.py). */
+  /** Something the page saw for the PHAL plugin (device.js, ovos-phal-plugin-browser). */
   phal_event: ({ event, data }) => promising(main.phal_event, event, JSON.stringify(data ?? {})),
   /** Write the IndexedDB-backed folders now (before a reload). */
   sync: () => syncfs(false),
