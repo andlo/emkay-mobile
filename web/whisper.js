@@ -1,6 +1,7 @@
 // Emkay – Whisper speech-to-text in the browser (issue #23, offline).
 //
-// OpenAI's Whisper as ONNX (onnx-community on Hugging Face), run with
+// OpenAI's Whisper as ONNX (onnx-community on Hugging Face), or a language's
+// own model where it does better (Danish: Røst, a wav2vec2 model), run with
 // transformers.js (Apache-2.0) in the Pyodide worker: the audio never leaves
 // the phone. transformers.js does what a device's whisper plugin does
 // (log-mel features, the encoder, decoding with the tokenizer); its
@@ -40,10 +41,11 @@ function pipe(model) {
       const t = await transformers();
       const device = "gpu" in navigator && (await navigator.gpu.requestAdapter().catch(() => null))
         ? "webgpu" : "wasm";
-      // the encoder loses too much at 8 bit ("What? I'm a bit" for "what time is it");
-      // the decoder does not
-      const options = { device, dtype: { encoder_model: "fp32", decoder_model_merged: "q8" } };
-      if (device === "webgpu") options.dtype = { encoder_model: "fp32", decoder_model_merged: "q4" };
+      // Whisper: the encoder loses too much at 8 bit ("What? I'm a bit" for
+      // "what time is it"); the decoder does not. A CTC model (wav2vec2, like
+      // Røst for Danish) is one file, "model", used at 8 bit.
+      const options = { device, dtype: { encoder_model: "fp32", decoder_model_merged: "q8", model: "q8" } };
+      if (device === "webgpu") options.dtype.decoder_model_merged = "q4";
       const asr = await t.pipeline("automatic-speech-recognition", model, options);
       loaded.add(model);
       console.log(`[emkay] whisper ${model} ready on ${device}`);
@@ -89,10 +91,19 @@ export async function transcribe(pcm16, rate, lang, model) {
   const asr = await pipe(model);
   const t0 = performance.now();
   const language = String(lang || "en").split("-")[0].toLowerCase();
-  // an English-only model (*.en) has no language or task to choose
-  const options = /\.en$/.test(model) ? {} : { language, task: "transcribe" };
-  const out = await asr(audio, options);
-  const text = (Array.isArray(out) ? out[0]?.text : out?.text) ?? "";
+  // Whisper is told the language; an English-only Whisper (*.en) and a
+  // one-language CTC model (wav2vec2) have none to choose
+  const whisper = asr.model.config.model_type === "whisper";
+  const options = whisper && !/\.en$/.test(model) ? { language, task: "transcribe" } : {};
+  let text = "";
+  try {
+    const out = await asr(audio, options);
+    text = (Array.isArray(out) ? out[0]?.text : out?.text) ?? "";
+  } catch (e) {
+    // transformers.js throws "token_ids must be a non-empty array" when
+    // Whisper hears nothing at all; that is an empty transcript, not an error
+    if (!/non-empty array/.test(e.message)) throw e;
+  }
   console.log(`[emkay] whisper ${((performance.now() - t0) / 1000).toFixed(1)}s for ` +
               `${(audio.length / 16000).toFixed(1)}s: ${JSON.stringify(text)}`);
   return text.trim();
