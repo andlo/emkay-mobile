@@ -24,7 +24,8 @@ next / previous / seek (ovos-gui turns the GUI event into
 the AudioService messages.
 
 It belongs in OCP itself (its pipeline already is the `ovos.common_play`
-application); until then Emkay runs it beside AudioService.
+application), and is proposed there; once an OCP with it is installed,
+start() leaves the page to OCP.
 """
 from ovos_bus_client.apis.gui import GUIInterface
 from ovos_bus_client.message import Message
@@ -121,9 +122,13 @@ class NowPlaying:
         if not self.showing:
             return
         data = message.data or {}
-        self.gui["position"] = int(data.get("position") or 0)
         if data.get("length"):
             self.gui["duration"] = self.gui["length"] = int(data["length"])
+        # only with a known length: a live stream's page counts the time
+        # itself, and the visage reads a position as seconds when the
+        # length is 0
+        if self.gui.get("length"):
+            self.gui["position"] = int(data.get("position") or 0)
 
     def _on_end(self, message=None):
         if not self.showing:
@@ -148,6 +153,14 @@ _now_playing = None
 
 
 def start(bus):
+    """Start it, unless OCP shows the page itself (ovos-ocp-pipeline-plugin
+    with ocp_pipeline/legacy_gui.py, proposed upstream from this module)."""
     global _now_playing
+    try:
+        import ocp_pipeline.legacy_gui  # noqa: F401
+        print("[emkay] OCP shows its own now playing page")
+        return None
+    except ImportError:
+        pass
     _now_playing = NowPlaying(bus)
     return _now_playing
