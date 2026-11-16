@@ -28,7 +28,9 @@ UNAVAILABLE_SKILLS = ("ovos-skill-boot-finished.openvoiceos",)
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 6
+DEFAULTS_VERSION = 7
+#: the package index the control panel searches (defaults v7)
+STORE_INDEX = "https://store.emkay.ai"
 
 #: OVOS' own alpha-channel constraints, for what is installed later (the
 #: site itself is built from the alpha channel).
@@ -189,6 +191,18 @@ def _browser_defaults(done: int) -> dict:
         pipeline = _with_common_reading(Configuration().get("intents", {}).get("pipeline", []))
         if pipeline:
             out.setdefault("intents", {})["pipeline"] = pipeline
+    if done < 7:
+        # The control panel searches the Emkay store's package index, which
+        # lists only what Emkay ships and what its nightly test found
+        # working in a browser (emkay-voice/store), instead of all of PyPI
+        # (#21). Packages still install from PyPI. The panel's cached PyPI
+        # list is dropped so its next search reads the new index.
+        out.setdefault("webui", {})["pypi_index"] = STORE_INDEX
+        try:
+            from ovos_config.locations import get_xdg_cache_save_path
+            os.remove(os.path.join(get_xdg_cache_save_path(), "webui-pypi-index.json"))
+        except OSError:
+            pass
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes

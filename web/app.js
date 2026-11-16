@@ -42,6 +42,40 @@ function layout() {
 layout();
 addEventListener("resize", layout);
 
+// ------------------------------------------- one Emkay per browser
+// The store's "Get" opens app.emkay.ai/?install=<package> in a new tab. If
+// Emkay already runs in another tab of this browser, that one should get
+// the skill: a second OVOS would boot on the same saved data. So a new tab
+// with ?install first asks on a BroadcastChannel (this origin's tabs only)
+// whether an Emkay is running; if one answers, the package goes to it, this
+// tab says so and stops here, before its own OVOS starts.
+const STORE_ORIGIN = "https://store.emkay.ai";
+const PACKAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+let pendingInstall = null;   // a package handed over before OVOS was up
+if (params.get("install")) {
+  const probe = new BroadcastChannel("emkay-tabs");
+  const answered = await new Promise((resolve) => {
+    probe.onmessage = ({ data }) => { if (data?.pong) resolve(true); };
+    probe.postMessage({ ping: true });
+    setTimeout(() => resolve(false), 800);
+  });
+  if (answered) {
+    probe.postMessage({ install: params.get("install") });
+    probe.close();
+    $("boot-text").textContent = t("install.handed", { pkg: params.get("install") });
+    $("boot-bar").parentElement.hidden = true;
+    await new Promise(() => {});   // this tab stays a note; Emkay runs in the other one
+  }
+  probe.close();
+}
+// from here on this tab is the running Emkay: it answers the next tab's ping
+// (the channel is made after the probe, so a tab never answers itself)
+const tabs = new BroadcastChannel("emkay-tabs");
+tabs.onmessage = ({ data }) => {
+  if (data?.ping) tabs.postMessage({ pong: true });
+  if (data?.install && PACKAGE_NAME.test(data.install)) receiveInstall(data.install);
+};
+
 // ---------------------------------------------------------------- worker
 const worker = new Worker("worker.js", { type: "module" });
 let nextId = 1;
@@ -200,7 +234,9 @@ async function start() {
   }
   $("boot").hidden = true;
   for (const id of ["mic", "keyboard", "menu-button"]) $(id).hidden = false;
+  started = true;
   installFromStore();
+  if (pendingInstall) { installFromStore(pendingInstall); pendingInstall = null; }
 }
 
 const WELCOMED = "emkay-welcomed";
@@ -848,12 +884,15 @@ function languageChanged(lang) {
  * own "are you sure?") installs it with ovos-core's installer. Emkay itself
  * installs nothing on a link's say-so.
  */
-function installFromStore() {
-  const pkg = params.get("install");
-  if (!pkg || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(pkg)) return;
-  const url = new URL(location);
-  url.searchParams.delete("install");   // a reload must not ask again
-  history.replaceState(null, "", url);
+function installFromStore(pkg = params.get("install")) {
+  if (params.get("install")) {
+    const url = new URL(location);
+    url.searchParams.delete("install");   // a reload must not ask again
+    history.replaceState(null, "", url);
+    params.delete("install");
+  }
+  if (!pkg || !PACKAGE_NAME.test(pkg)) return;
+  $("store").hidden = true;
   const frame = $("panel-frame");
   frame.addEventListener("load", () => {
     try {
@@ -866,6 +905,36 @@ function installFromStore() {
   }, { once: true });
   openPanel("plugins");
 }
+
+let started = false;   // the first tap has been made (start())
+
+/**
+ * A package from the store, by another tab (?install, above) or by the
+ * store shown inside Emkay (a message from its frame): offered in the
+ * panel once Emkay is started, as for ?install.
+ */
+function receiveInstall(pkg) {
+  if (started) installFromStore(pkg);
+  else pendingInstall = pkg;
+}
+
+// The store inside Emkay (menu → Skill store): its "Get" posts the package
+// here instead of opening a new tab. Only the store's own origin is heard.
+addEventListener("message", (e) => {
+  if (e.origin !== STORE_ORIGIN) return;
+  const pkg = e.data?.emkayInstall;
+  if (typeof pkg === "string" && PACKAGE_NAME.test(pkg)) receiveInstall(pkg);
+});
+
+/** Show the skill store over the face, in a frame, so "Get" stays in this Emkay. */
+function openStore() {
+  $("menu").hidden = true;
+  const frame = $("store-frame");
+  if (!frame.getAttribute("src")) frame.src = `${STORE_ORIGIN}/?in=emkay&lang=${encodeURIComponent(ovosLang || "")}`;
+  $("store").hidden = false;
+}
+$("store-close").onclick = () => { $("store").hidden = true; };
+$("menu-store").onclick = (e) => { e.preventDefault(); openStore(); };
 
 /**
  * Show the OpenVoiceOS settings over the face.

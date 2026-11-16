@@ -108,6 +108,13 @@
   <!-- shut down (system.shutdown): dark until tapped, then a fresh start -->
   <div id="off" class="off" hidden></div>
 
+  <!-- the skill store (store.emkay.ai) inside Emkay: "Get" posts the
+       package here (app.js), so it installs in this Emkay -->
+  <div id="store" class="panel" hidden>
+    <iframe id="store-frame" title="Emkay skill store"></iframe>
+    <button id="store-close" class="panel-close" data-i18n-aria="close">×</button>
+  </div>
+
   <!-- the stock ovos-control-panel, served by the worker (sw.js, panel.py) -->
   <div id="panel" class="panel" hidden>
     <iframe id="panel-frame" title="OpenVoiceOS settings"></iframe>
