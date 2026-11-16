@@ -121,7 +121,30 @@ def build_bundle(wheelhouse: Path, plan: dict) -> bytes:
                     seen.add(item.filename)
                     out.writestr(item.filename, whl.read(item))
         add_tree(out, REPO / "py/emkay_mobile", "emkay_mobile")
+        add_shim_distributions(out, plan["shimmed"])
     return buf.getvalue()
+
+
+def add_shim_distributions(zf, shimmed):
+    """A .dist-info next to the stand-ins (emkay_mobile/shims) for each
+    native package they replace, with the version this site was built with.
+
+    Then importlib.metadata finds them, so a skill installed later that
+    requires rapidfuzz, psutil, ... finds the requirement met (pip.py), and
+    the control panel lists them, the same as for the packages in the
+    bundle. INSTALLER says where they come from.
+    """
+    for wheel in shimmed:
+        name, version = wheel.split("-")[:2]
+        info = f"emkay_mobile/shims/{name}-{version}.dist-info"
+        zf.writestr(f"{info}/METADATA", (
+            "Metadata-Version: 2.1\n"
+            f"Name: {name}\n"
+            f"Version: {version}\n"
+            f"Summary: Emkay's pure-Python stand-in for {name}, which has no "
+            "WebAssembly build (emkay_mobile/shims)\n"))
+        zf.writestr(f"{info}/INSTALLER", "emkay-shim\n")
+        zf.writestr(f"{info}/RECORD", "")
 
 
 def build_intents(cache_dirs):

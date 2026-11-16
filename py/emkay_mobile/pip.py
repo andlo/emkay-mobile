@@ -210,6 +210,14 @@ def _choose(req, constraints, pre):
             continue
         if v.is_prerelease and not allow_pre:
             continue
+        # --pre takes OVOS' alphas (aN), betas and release candidates, but
+        # not development snapshots (.devN) of other projects unless the
+        # requirement names one: with OVOS' alpha channel pip would take
+        # httpx 1.0.dev6, a rewrite with another API, for pyradios'
+        # "httpx>=0.25.2", which breaks it on a device as well
+        if v.is_devrelease and not req.specifier.prereleases and \
+                not (limit is not None and limit.prereleases):
+            continue
         if not req.specifier.contains(v, prereleases=True):
             continue
         if limit is not None and not limit.contains(v, prereleases=True):

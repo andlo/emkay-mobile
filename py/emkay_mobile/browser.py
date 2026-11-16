@@ -326,6 +326,11 @@ def install():
     threading._allocate_lock = _WaiterLock
     import time as _time
     _time.sleep = _sleep
+    if sys.platform == "emscripten":
+        # httpx through the browser's fetch (pyodide-http covers requests
+        # and urllib only); applied when httpx is first imported
+        from . import httpx_fetch
+        httpx_fetch.install()
     os.environ.setdefault("OVOS_DEFAULT_LOG_NAME", "emkay")
     # Emscripten has no users; OVOS checks file ownership with these
     for fn in ("geteuid", "getuid", "getegid", "getgid"):
@@ -428,10 +433,24 @@ def adapt_ovos():
       the answer, which only this same thread could deliver (_get_response
       above). This one does change answers: follow-up questions get "no
       answer" instead of hanging the assistant.
+    * ovos-utils: is_process_running answers "no" instead of running `ps`,
+      which a browser does not have (OCP asks it on every search).
     """
     try:
         from ovos_padatious.opm import PadatiousPipeline
         PadatiousPipeline._warm_prefilters = lambda self, lang: None
+    except ImportError:
+        pass
+    try:
+        # ovos-utils asks `ps axw` whether a program is running
+        # (is_process_running, used by is_gui_running, which OCP calls for
+        # every search). There is no ps and no subprocess in a browser
+        # (Emscripten raises OSError), and no other program runs beside
+        # OVOS here, so the answer is always no. gui.py has its own copy of
+        # the name.
+        import ovos_utils.gui as _gui
+        import ovos_utils.system as _system
+        _system.is_process_running = _gui.is_process_running = lambda process: False
     except ImportError:
         pass
     try:

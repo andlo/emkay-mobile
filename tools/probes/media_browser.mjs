@@ -6,6 +6,10 @@
 // checks that the page plays it, that speech ducks it, and that the
 // service hears the end. Prints "media ok" on success. Optional:
 //   STREAM=https://...   play this instead (a real station), then stop it
+//   INSTALL=ovos-skill-pyradios SAY="play DR P1"
+//                        install a skill (ovos.pip.install) and ask it to
+//                        play instead: the whole way through OCP
+//   PRE_PY="..."         Python run in the worker first (test only)
 //
 //   CHROME=... node tools/probes/media_browser.mjs [url]
 import { spawn } from "child_process";
@@ -15,7 +19,8 @@ const port = 9361;
 const chrome = spawn(process.env.CHROME, [
   "--headless=new", `--remote-debugging-port=${port}`, "--user-data-dir=/tmp/emkay-chrome-media",
   "--window-size=390,844", "--autoplay-policy=no-user-gesture-required", "--no-first-run",
-  "--enable-unsafe-swiftshader", "about:blank"], { stdio: "ignore" });
+  "--enable-unsafe-swiftshader", `--lang=${process.env.PHONE_LANG || "en-US"}`,
+  `--accept-lang=${process.env.PHONE_LANG || "en-US"}`, "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const t0 = Date.now();
 const log = (m) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
@@ -35,9 +40,14 @@ const pending = new Map();
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); }
+  if (m.method === "Target.attachedToTarget" && m.params.targetInfo.type === "worker") {
+    // the worker (OVOS) logs to its own console
+    ws.send(JSON.stringify({ id: ++id, method: "Runtime.enable", sessionId: m.params.sessionId }));
+    ws.send(JSON.stringify({ id: ++id, method: "Runtime.runIfWaitingForDebugger", sessionId: m.params.sessionId }));
+  }
   if (m.method === "Runtime.consoleAPICalled") {
     const text = m.params.args.map((a) => a.value ?? a.description ?? "").join(" ");
-    if (/audio|media|ocp|error|exception/i.test(text)) log(`  console: ${text.slice(0, Number(process.env.LOGLEN || 300))}`);
+    if (new RegExp(process.env.GREP || "audio|media|ocp|error|exception", "i").test(text)) log(`  console: ${text.slice(0, Number(process.env.LOGLEN || 300))}`);
   }
   if (m.method === "Runtime.exceptionThrown") log(`  EXCEPTION: ${m.params.exceptionDetails.exception?.description?.slice(0, 300)}`);
 };
@@ -66,17 +76,33 @@ function toneUri(seconds = 3, rate = 8000) {
 
 try {
   await send("Runtime.enable");
+  await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
   await send("Page.navigate", { url });
   await until(`!!document.getElementById("start") && !document.getElementById("start").hidden`, 400, "OVOS boot");
   await js(`document.getElementById("start").click(); true`);
   await sleep(8000);
   // the bus as the page sees it (every message, for the visage's core socket)
   await js(`window.__bus = []; window.emkayVisage2.subscribe("core", (raw) => {
-    try { const m = JSON.parse(raw); if (/^(ovos\\.audio\\.|mycroft\\.audio\\.)/.test(m.type)) window.__bus.push(m.type); } catch {} }); true`);
-  const uri = process.env.STREAM || toneUri();
-  log(`play ${uri.slice(0, 60)}`);
-  await emit("mycroft.audio.service.play", { tracks: [uri] });
-  await until(`window.emkay.media.state().uri && !window.emkay.media.state().paused`, 30, "the page to play");
+    try { const m = JSON.parse(raw); if (/^(ovos\\.audio\\.|mycroft\\.audio\\.|ovos\\.pip\\.install|ovos\\.common_play\\.(query|search)|speak)/.test(m.type)) window.__bus.push(m.type + (/speak/.test(m.type) ? ":" + m.data.utterance : /install\\.failed|query\\.response/.test(m.type) ? ":" + JSON.stringify(m.data).slice(0, 1500) : "")); } catch {} }); true`);
+  if (process.env.PRE_PY) {   // test-only Python to run first (e.g. to stand in for an upstream fix)
+    log(`pre: ${await js(`window.emkay.call("python", {code: ${JSON.stringify(process.env.PRE_PY)}}).then(String)`)}`);
+  }
+  if (process.env.INSTALL) {
+    log(`install ${process.env.INSTALL}`);
+    await emit("ovos.pip.install", { packages: [process.env.INSTALL] });
+    await until(`window.__bus.some((t) => /ovos\\.pip\\.install\\.(complete|failed)/.test(t))`, 240, "the install");
+    log(`install: ${await js(`window.__bus.filter((t) => t.startsWith("ovos.pip")).join(" ")`)}`);
+    await sleep(Number(process.env.LOAD_MS || 20000));   // the skill loads
+  }
+  if (process.env.SAY) {
+    log(`say: ${process.env.SAY}`);
+    await js(`window.emkay.call("say", {text: ${JSON.stringify(process.env.SAY)}}); true`);
+  } else {
+    const uri = process.env.STREAM || toneUri();
+    log(`play ${uri.slice(0, 60)}`);
+    await emit("mycroft.audio.service.play", { tracks: [uri] });
+  }
+  await until(`window.emkay.media.state().uri && !window.emkay.media.state().paused`, process.env.SAY ? 90 : 30, "the page to play");
   log(`playing: ${JSON.stringify(await js(`window.emkay.media.state()`)).slice(0, 200)}`);
   const full = await js(`window.emkay.media.state().volume`);
   await emit("ovos.audio.output.started");
@@ -84,7 +110,7 @@ try {
   await emit("ovos.audio.output.ended");
   await until(`window.emkay.media.state().volume === ${full}`, 10, "the volume back after speech");
   log("ducked and restored");
-  if (process.env.STREAM) {
+  if (process.env.STREAM || process.env.SAY) {
     await sleep(4000);
     await emit("mycroft.audio.service.stop");
     await until(`!window.emkay.media.state().uri`, 10, "stop");

@@ -109,10 +109,53 @@ def place_new(pipeline: list, seen) -> tuple:
     return (out if out != list(pipeline) else []), sorted(set(seen) | set(installed))
 
 
+#: the MediaProvider plugins OCP had when last (re)loaded
+_providers_seen = None
+
+
+def _installed_media_providers() -> set:
+    import importlib
+    from importlib.metadata import entry_points
+    importlib.invalidate_caches()   # a package installed a moment ago
+    return {ep.name for ep in entry_points(group="opm.media.provider")}
+
+
+def reload_media_providers():
+    """Load newly installed MediaProvider plugins into the running OCP.
+
+    OCP (ovos-ocp-pipeline-plugin) loads its MediaProviders (opm.media.provider:
+    ovos-media-provider-pyradios, -somafm, -news, ...; they replace the old
+    OCP search skills) once, when the pipeline starts. ovos-core's
+    intent.service.pipelines.reload would build a second OCP beside the
+    running one, so OCP's own loader is run again instead. Only when the
+    installed set changed. A candidate for OCP itself (reload on
+    ovos.pip.install.complete).
+    """
+    global _providers_seen
+    now = _installed_media_providers()
+    if _providers_seen is not None and now == _providers_seen:
+        return
+    first = _providers_seen is None
+    _providers_seen = now
+    if first:
+        return   # OCP loaded these at boot
+    from . import boot
+    service = getattr(getattr(boot, "_manager", None), "intents", None)   # IntentService
+    for plugin in (getattr(service, "pipeline_plugins", None) or {}).values():
+        if hasattr(plugin, "_load_media_providers"):
+            plugin._load_media_providers()
+            print(f"[emkay] OCP media providers: {sorted(plugin.media_providers)}")
+
+
 def on_installed(message=None):
     """After an install (ovos.pip.install.complete): place any new pipeline
     plugin now, and have ovos-core load it (intent.service.pipelines.reload,
-    its own message for that), so it answers without a restart."""
+    its own message for that), so it answers without a restart. A new
+    MediaProvider goes into the running OCP (reload_media_providers)."""
+    try:
+        reload_media_providers()
+    except Exception as e:   # an install must not fail on this
+        print(f"[emkay] media providers not reloaded: {e!r}")
     from ovos_bus_client.message import Message
     from ovos_bus_client.session import SessionManager
     from ovos_config import Configuration

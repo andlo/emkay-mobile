@@ -66,6 +66,7 @@ def start(js_post, user_config=None) -> str:
     # and loaded at once (pipeline_place.py)
     from . import pipeline_place
     bus.on("ovos.pip.install.complete", pipeline_place.on_installed)
+    pipeline_place.reload_media_providers()   # notes the providers OCP loaded at boot
     info["skipped_waits"] = browser.SKIPPED_WAITS[:]
     return json.dumps(info)
 
