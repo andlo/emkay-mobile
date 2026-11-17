@@ -67,22 +67,53 @@ def transformers():
 
 
 _fallback = None
+#: the plugins in use before a settings change (reload(keep_previous=True)):
+#: they speak and listen until the new ones work, e.g. while a new local
+#: model downloads, so switching from one local model to another needs no
+#: server meanwhile
+_previous = {"stt": None, "tts": None}
+_interim_said = set()   # ("tts", "previous") etc. already told the page since the last reload
+
+
+def _interim(what: str, using: str, module: str = None):
+    """Tell the page, once per change, what speaks or listens meanwhile:
+    `using` is "previous" (the plugin from before the change) or "fallback"
+    (`<what>.fallback_module`, named in `module`). app.js shows it under the
+    download progress."""
+    if (what, using) in _interim_said:
+        return
+    _interim_said.add((what, using))
+    try:
+        from ovos_bus_client.message import Message
+        from . import boot
+        boot.bus().emit(Message("emkay.speech.interim",
+                                {"what": what, "using": using, "module": module}))
+    except Exception as e:
+        print(f"[emkay] interim not shown: {e!r}")
 
 
 def _get_tts(utterance, path, lang):
-    """The configured TTS; if it fails, `tts.fallback_module`, as ovos-audio
-    does. A plugin that runs on the phone (Piper) can fail where a server
-    plugin does not: its voice still downloading, no network for that first
-    download, a language it has no voice for."""
+    """The configured TTS; if it fails, the plugin from before the last
+    settings change, else `tts.fallback_module`, as ovos-audio does. A plugin
+    that runs on the phone (Piper) can fail where a server plugin does not:
+    its voice still downloading, no network for that first download, a
+    language it has no voice for."""
     global _fallback
     try:
-        return tts().get_tts(utterance, path, lang=lang)
+        out = tts().get_tts(utterance, path, lang=lang)
+        _previous["tts"] = None      # the new one works: the old one can go
+        return out
     except Exception as e:
+        if _previous["tts"] is not None:
+            print(f"[emkay] tts failed ({e!r}); the previous TTS speaks meanwhile")
+            _interim("tts", "previous")
+            return _previous["tts"].get_tts(utterance, path, lang=lang)
         cfg = _config().get("tts", {})
         name = cfg.get("fallback_module") or "ovos-tts-plugin-server"
         if name == cfg.get("module"):
             raise
         print(f"[emkay] tts failed ({e!r}); using the fallback {name}")
+        _interim("tts", "fallback", name)
         if _fallback is None:
             from ovos_plugin_manager.tts import OVOSTTSFactory
             _fallback = OVOSTTSFactory.create({"tts": {"module": name, name: cfg.get(name, {}),
@@ -90,9 +121,20 @@ def _get_tts(utterance, path, lang):
         return _fallback.get_tts(utterance, path, lang=lang)
 
 
-def reload():
-    """Drop the plugins so the next use reads mycroft.conf again."""
+def reload(keep_previous: bool = False):
+    """Drop the plugins so the next use reads mycroft.conf again.
+
+    keep_previous: keep the STT and TTS in use until the new ones work (a
+    settings change: settings_changed()); without it they go at once (local
+    only switches to plugins that wait for their models instead).
+    """
     global _stt, _tts, _dialog_tx, _tts_tx, _fallback, _stt_fallback
+    if keep_previous:
+        _previous["stt"] = _stt or _previous["stt"]
+        _previous["tts"] = _tts or _previous["tts"]
+    else:
+        _previous["stt"] = _previous["tts"] = None
+    _interim_said.clear()
     _stt = _tts = _fallback = _stt_fallback = None
     for service in (_dialog_tx, _tts_tx):
         try:
@@ -100,6 +142,36 @@ def reload():
         except Exception:
             pass
     _dialog_tx = _tts_tx = None
+
+
+def prewarm():
+    """Start downloading the models of the configured STT and TTS now, so a
+    change made in the settings is ready (and its progress shows) before the
+    next sentence. Only Emkay's browser plugins have models to fetch; for
+    any other plugin there is nothing to do."""
+    try:
+        import js
+    except ImportError:          # not in a browser (tests)
+        return
+    cfg = _config()
+    lang = cfg.get("lang", "en-US")
+    stt_cfg, tts_cfg = cfg.get("stt", {}), cfg.get("tts", {})
+    try:
+        if stt_cfg.get("module") == "ovos-stt-plugin-whisper-browser":
+            from ovos_stt_plugin_whisper_browser import model_for
+            model = (stt_cfg.get("ovos-stt-plugin-whisper-browser") or {}).get("model") \
+                or model_for(lang.split("-")[0].lower())
+            js.emkayWhisper.ready(model)          # starts the download; not awaited
+    except Exception as e:
+        print(f"[emkay] stt prewarm: {e!r}")
+    try:
+        if tts_cfg.get("module") == "ovos-tts-plugin-piper-browser":
+            from ovos_tts_plugin_piper_browser import voice_for
+            voice = (tts_cfg.get("ovos-tts-plugin-piper-browser") or {}).get("voice") or voice_for(lang)
+            if voice:
+                js.emkayPiper.ready(voice)
+    except Exception as e:
+        print(f"[emkay] tts prewarm: {e!r}")
 
 
 # --- listener half ------------------------------------------------------
@@ -118,18 +190,25 @@ _stt_fallback = None
 
 
 def _execute_stt(audio, lang):
-    """The configured STT; if it fails, `stt.fallback_module`, as
-    ovos-dinkum-listener does. A plugin that runs on the phone (Whisper)
+    """The configured STT; if it fails, the plugin from before the last
+    settings change, else `stt.fallback_module`, as ovos-dinkum-listener does. A plugin that runs on the phone (Whisper)
     fails while its model is still downloading, the first time."""
     global _stt_fallback
     try:
-        return stt().execute(audio, language=lang)
+        text = stt().execute(audio, language=lang)
+        _previous["stt"] = None      # the new one works: the old one can go
+        return text
     except Exception as e:
+        if _previous["stt"] is not None:
+            print(f"[emkay] stt failed ({e!r}); the previous STT listens meanwhile")
+            _interim("stt", "previous")
+            return _previous["stt"].execute(audio, language=lang)
         cfg = _config().get("stt", {})
         name = cfg.get("fallback_module") or "ovos-stt-plugin-server"
         if name == cfg.get("module"):
             raise
         print(f"[emkay] stt failed ({e!r}); using the fallback {name}")
+        _interim("stt", "fallback", name)
         if _stt_fallback is None:
             from ovos_plugin_manager.stt import OVOSSTTFactory
             _stt_fallback = OVOSSTTFactory.create({"stt": {"module": name, name: cfg.get(name, {}),

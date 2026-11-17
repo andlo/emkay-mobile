@@ -66,6 +66,7 @@ def start(js_post, user_config=None) -> str:
     # send hardware-neutral bus messages, the plugin does the browser part
     phal.start(bus, lambda raw: _post("phal", raw), reload_speech=speech.reload)
     _report_status(bus)
+    remember_speech_settings()   # later changes apply without a restart (_settings_changed)
     bus.on("message", _watch)
     # a pipeline plugin installed in the panel is placed in the pipeline
     # and loaded at once (pipeline_place.py)
@@ -132,6 +133,7 @@ _STATE_TOPICS = {
     "recognizer_loop:record_end", "mycroft.mic.listen",
     "mycroft.mic.mute", "mycroft.mic.unmute",
     "ovos.utterance.handled", "mycroft.skill.handler.complete",
+    "emkay.speech.interim",   # speech.py: what speaks or listens while a new model loads
     "complete_intent_failure", "ovos.intent.unmatched",
 }
 
@@ -153,6 +155,68 @@ def _watch(raw):
         # panel sends configuration.patch, a PHAL plugin .updated)
         import asyncio
         asyncio.get_event_loop().call_soon(_post_lang)
+        asyncio.get_event_loop().call_soon(_settings_changed)
+
+
+#: the speech settings as last applied (_speech_settings()), to see what a
+#: configuration change touched; None until the first change after boot
+_applied = None
+
+
+def _speech_settings() -> dict:
+    """The settings that decide how Emkay hears and speaks."""
+    from ovos_config import Configuration
+    cfg = Configuration()
+    ww = cfg.get("listener", {}).get("wake_word")
+    return {"lang": cfg.get("lang", "en-US"),
+            "stt": json.dumps(cfg.get("stt", {}), sort_keys=True),
+            "tts": json.dumps(cfg.get("tts", {}), sort_keys=True),
+            "wake_word": ww,
+            "hotword": json.dumps(cfg.get("hotwords", {}).get(ww or "", {}), sort_keys=True)}
+
+
+def remember_speech_settings():
+    """At boot: what is in use now."""
+    global _applied
+    _applied = _speech_settings()
+
+
+def _settings_changed():
+    """A configuration change (the control panel, a skill, a PHAL plugin):
+    apply what it did to speech without a restart, as ovos-dinkum-listener
+    and ovos-audio do on a device.
+
+    - another language: skills, intents and models are loaded for the
+      language at boot, as on a device, so Emkay starts again in it; the page
+      says so first
+    - another STT or TTS: speech.reload() keeps the ones in use until the new
+      ones work, and prewarm() starts their download now (the page shows it)
+    - another wake word, or its settings: the page starts its engine again
+    """
+    global _applied
+    if _applied is None:
+        return
+    new = _speech_settings()
+    old, _applied = _applied, new
+    if new["lang"] != old["lang"]:
+        print(f"[emkay] language {old['lang']} -> {new['lang']}: starting again")
+        _post("bus", json.dumps({"type": "emkay.lang.restart", "data": {"lang": new["lang"]}}))
+        import asyncio
+        from ovos_bus_client.message import Message
+        # the PHAL plugin saves to disk, then reloads the page (system.reboot)
+        asyncio.get_event_loop().call_later(
+            2.5, lambda: boot.bus().emit(Message("system.reboot", {"display": False})))
+        return
+    if new["stt"] != old["stt"] or new["tts"] != old["tts"]:
+        print("[emkay] speech settings changed: new STT/TTS from the next use")
+        speech.reload(keep_previous=True)
+        speech.prewarm()
+    if new["wake_word"] != old["wake_word"] or new["hotword"] != old["hotword"]:
+        from ovos_config import Configuration
+        print(f"[emkay] wake word: {new['wake_word']}")
+        _post("bus", json.dumps({"type": "emkay.wakeword", "data": {
+            "wake_word": new["wake_word"],
+            "hotword": Configuration().get("hotwords", {}).get(new["wake_word"] or "", {})}}))
 
 
 def _post_lang():

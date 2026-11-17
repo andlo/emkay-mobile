@@ -21,17 +21,45 @@ let phonemizer = null;      // {create, wasm, data}
 const sessions = new Map(); // voice -> Promise<{cfg, session}>
 const loaded = new Set();    // voices whose session is ready
 
-/** Bytes of `url`, from the Cache API when we have them. */
-async function cached(url) {
+/** A model download's progress, for the page (worker.js emkayModelProgress). */
+const modelProgress = (what, name, progress, state = "loading") =>
+  globalThis.emkayModelProgress?.(what, name, progress, state);
+
+/**
+ * Bytes of `url`, from the Cache API when we have them. `onProgress(f)`, if
+ * given, hears how much of a download has come (0..1); a cache hit is quiet.
+ */
+async function cached(url, onProgress) {
   let cache = null;
   try { cache = await caches.open(CACHE); } catch {}
   let res = cache && (await cache.match(url));
-  if (!res) {
-    res = await fetch(url);
-    if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-    if (cache) await cache.put(url, res.clone()).catch(() => {});
+  if (res) return new Uint8Array(await res.arrayBuffer());
+  res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  const total = Number(res.headers.get("content-length")) || 0;
+  let bytes;
+  if (onProgress && total && res.body) {
+    bytes = new Uint8Array(total);
+    const reader = res.body.getReader();
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (got + value.length > bytes.length) {          // a wrong length: grow
+        const more = new Uint8Array(got + value.length); more.set(bytes); bytes = more;
+      }
+      bytes.set(value, got);
+      got += value.length;
+      onProgress(Math.min(got / total, 1));
+    }
+    bytes = bytes.subarray(0, got);
+  } else {
+    bytes = new Uint8Array(await res.arrayBuffer());
   }
-  return new Uint8Array(await res.arrayBuffer());
+  if (cache) {
+    await cache.put(url, new Response(bytes, { headers: res.headers })).catch(() => {});
+  }
+  return bytes;
 }
 
 function ort() {
@@ -91,14 +119,19 @@ function session(voice) {
     const p = (async () => {
       const o = await ort();
       const url = VOICES + voicePath(voice) + ".onnx";
-      const [cfgBytes, model] = await Promise.all([cached(url + ".json"), cached(url)]);
+      const [cfgBytes, model] = await Promise.all([
+        cached(url + ".json"), cached(url, (f) => modelProgress("tts", voice, f))]);
       const cfg = JSON.parse(new TextDecoder().decode(cfgBytes));
       const s = await o.InferenceSession.create(model, { executionProviders: ["wasm"] });
       await loadPhonemizer();
       loaded.add(voice);
+      modelProgress("tts", voice, 1, "ready");
       return { cfg, session: s };
     })();
-    p.catch(() => sessions.delete(voice));   // a failed download is tried again next time
+    p.catch(() => {                          // a failed download is tried again next time
+      sessions.delete(voice);
+      modelProgress("tts", voice, 0, "error");
+    });
     sessions.set(voice, p);
   }
   return sessions.get(voice);

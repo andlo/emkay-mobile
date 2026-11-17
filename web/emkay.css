@@ -128,3 +128,13 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
   background: #000a; border-radius: 14px; padding: 6px 10px 6px 6px; }
 .offline-shield svg { width: 26px; height: 26px; }
 .offline-shield[hidden] { display: none; }
+
+/* a model download after a settings change (app.js modelStatus) */
+.model-status { position: fixed; left: 50%; transform: translateX(-50%);
+  top: max(10px, env(safe-area-inset-top)); z-index: 31; max-width: min(86vw, 420px);
+  background: #000c; color: #dfe6ee; border-radius: 14px; padding: 8px 14px;
+  font-size: 13px; text-align: center; }
+.model-status[hidden], .model-bar[hidden], .model-interim[hidden] { display: none; }
+.model-bar { height: 4px; background: #ffffff22; border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.model-bar > div { height: 100%; width: 0; background: #22a7f0; transition: width .3s; }
+.model-interim { color: #9aa6b4; font-size: 12px; margin-top: 4px; }

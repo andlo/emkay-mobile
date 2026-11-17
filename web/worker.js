@@ -16,9 +16,20 @@ import { matchLang } from "./langs.js";
 import * as netlog from "./netlog.js";
 
 // every request this worker makes goes into the network log (netlog.js),
-// which also keeps "local only" (local_only.py switches it through emkayNet)
+// which also keeps "local only" (ovos-phal-plugin-browser switches it through emkayNet)
 netlog.install();
 globalThis.emkayNet = { setLocalOnly: netlog.setLocalOnly, isLocalOnly: netlog.isLocalOnly };
+
+// A speech model's download (whisper.js, piper.js), for the page's status
+// line (app.js onModel): what ("stt", "tts"), its name, progress 0..1 and
+// state ("loading", "ready", "error"). Progress is sent at most every 300 ms.
+const lastProgress = new Map();
+globalThis.emkayModelProgress = (what, name, progress, state = "loading") => {
+  const key = `${what}:${name}`, now = Date.now();
+  if (state === "loading" && progress > 0 && now - (lastProgress.get(key) || 0) < 300) return;
+  lastProgress.set(key, now);
+  self.postMessage({ kind: "model", payload: { what, name, progress, state } });
+};
 
 // Piper TTS (web/piper.js), for ovos-tts-plugin-piper-browser through `js`;
 // loaded the first time a Piper voice speaks

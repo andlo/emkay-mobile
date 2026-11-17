@@ -94,6 +94,13 @@
       stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span data-i18n="offline.shield"></span>
   </div>
+  <!-- a speech model or wake word being fetched after a settings change,
+       and what speaks or listens meanwhile (app.js modelStatus) -->
+  <div id="model-status" class="model-status" role="status" aria-live="polite" hidden>
+    <div id="model-status-text"></div>
+    <div class="model-bar" id="model-bar" hidden><div></div></div>
+    <div id="model-status-interim" class="model-interim" hidden></div>
+  </div>
 
   <!-- a tap the browser needs for what was asked by voice (ovos-skill-kiosk) -->
   <button id="tap-action" class="tap-action" hidden></button>

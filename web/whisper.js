@@ -18,6 +18,10 @@
 
 const BASE = new URL("./", import.meta.url).href;
 
+/** A model download's progress, for the page (worker.js emkayModelProgress). */
+const modelProgress = (what, name, progress, state = "loading") =>
+  globalThis.emkayModelProgress?.(what, name, progress, state);
+
 let lib = null;                    // the transformers.js module
 const pipes = new Map();           // model -> Promise<pipeline>
 const loaded = new Set();          // models whose pipeline is ready
@@ -46,12 +50,28 @@ function pipe(model) {
       // Røst for Danish) is one file, "model", used at 8 bit.
       const options = { device, dtype: { encoder_model: "fp32", decoder_model_merged: "q8", model: "q8" } };
       if (device === "webgpu") options.dtype.decoder_model_merged = "q4";
+      // the download, for the page's status line (app.js onModel): one
+      // model is several files; transformers.js reports each one
+      const files = new Map();
+      options.progress_callback = (p) => {
+        if (p.status !== "progress" || !p.total) return;
+        files.set(p.file, [p.loaded, p.total]);
+        let loaded = 0, total = 0;
+        for (const [l, t] of files.values()) { loaded += l; total += t; }
+        modelProgress("stt", model, loaded / total);
+      };
+      modelProgress("stt", model, 0);
       const asr = await t.pipeline("automatic-speech-recognition", model, options);
+      modelProgress("stt", model, 1, "ready");
       loaded.add(model);
       console.log(`[emkay] whisper ${model} ready on ${device}`);
       return asr;
     })();
-    p.catch((e) => { pipes.delete(model); console.warn("[emkay] whisper", e); });
+    p.catch((e) => {
+      pipes.delete(model);
+      modelProgress("stt", model, 0, "error");
+      console.warn("[emkay] whisper", e);
+    });
     pipes.set(model, p);
   }
   return pipes.get(model);

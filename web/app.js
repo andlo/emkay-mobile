@@ -87,6 +87,7 @@ worker.onmessage = ({ data }) => {
     case "core": for (const f of coreListeners) f(data.payload); return;
     case "audio": return data.payload.sound ? speaker.playSound(data.data) : speaker.enqueue(data.data, data.payload);
     case "phal": return onPhal(JSON.parse(data.payload));
+    case "model": return modelStatus.show(data.payload);   // whisper.js / piper.js downloads
     case "bus": return onBus(JSON.parse(data.payload));
   }
 };
@@ -530,6 +531,39 @@ const wake = {
     this.proc = proc;
     await this.attach();
   },
+  /** Stop listening for the wake word and let its engine go. */
+  stop() {
+    this.detach();
+    this.proc?.disconnect();
+    this.proc = null;
+    this.worker?.terminate();
+    this.worker = null;
+    this.state = "off";
+    $("mic").classList.remove("wake");
+  },
+  /**
+   * A new wake word from the settings (worker_main settings_changed): the
+   * same as at boot, without a restart. The status line shows it loading.
+   */
+  async restart(name, hotword) {
+    if (bootInfo) { bootInfo.wake_word = name; bootInfo.hotword = hotword || {}; }
+    this.stop();
+    if (!audioCtx) return;            // before the first tap: start() picks it up
+    const label = String(name || "").replace(/_/g, " ");
+    modelStatus.show({ what: "ww", name: label, progress: null, state: "loading" });
+    await this.start(name);
+    const ready = await new Promise((done) => {
+      const t0 = Date.now();
+      const poll = setInterval(() => {
+        const s = this.state;
+        if (s === "listening" || s.startsWith("error") || s.startsWith("off") || Date.now() - t0 > 30000) {
+          clearInterval(poll);
+          done(s === "listening");
+        }
+      }, 200);
+    });
+    modelStatus.show({ what: "ww", name: label, progress: 1, state: ready ? "ready" : "error" });
+  },
   /** Feed the microphone in (again, after the browser's recognition had it). */
   async attach() {
     if (!this.proc || this.source) return;
@@ -694,6 +728,75 @@ const speaker = {
   },
 };
 
+// ------------------------------------------------------- model downloads
+/**
+ * The status line at the top while a speech model or wake word is fetched
+ * after a settings change, and what speaks or listens meanwhile.
+ *
+ * show({what, name, progress, state}): what is "stt", "tts" or "ww"; state
+ * "loading" (progress 0..1, or null when unknown), "ready" or "error".
+ * Downloads come from whisper.js and piper.js (worker kind "model"), the
+ * wake word from wake.restart(). A model that loads from the cache in under
+ * 0.6 s never shows: only a real wait does.
+ * interim({what, using, module}) comes from speech.py (emkay.speech.interim):
+ * "previous" (the plugin from before the change) or "fallback" (`module`).
+ */
+const modelStatus = {
+  shown: new Set(),       // what:name keys on screen
+  pending: new Map(),     // what:name -> timer before showing
+  hideTimer: null,
+  show({ what, name, progress, state }) {
+    const key = `${what}:${name}`;
+    if (state === "loading") {
+      if (!this.shown.has(key)) {
+        if (progress !== null && !this.pending.has(key)) {
+          this.pending.set(key, setTimeout(() => {
+            this.pending.delete(key);
+            this.shown.add(key);
+            this.render(what, name, this.last?.[key] ?? progress, "loading");
+          }, 600));
+        } else if (progress === null) {
+          this.shown.add(key);
+        }
+        this.last = { ...this.last, [key]: progress };
+        if (!this.shown.has(key)) return;
+      }
+      return this.render(what, name, progress, "loading");
+    }
+    clearTimeout(this.pending.get(key));
+    this.pending.delete(key);
+    if (state === "ready") $("model-status-interim").hidden = true;   // the new one takes over now
+    if (!this.shown.has(key) && state === "ready") return;   // came from the cache: nothing to say
+    this.shown.delete(key);
+    this.render(what, name, 1, state);
+    clearTimeout(this.hideTimer);
+    this.hideTimer = setTimeout(() => {
+      if (!this.shown.size) $("model-status").hidden = true;
+      $("model-status-interim").hidden = true;
+    }, state === "error" ? 6000 : 3000);
+  },
+  render(what, name, progress, state) {
+    clearTimeout(this.hideTimer);
+    const pct = progress === null || progress === undefined ? "" : `${Math.round(progress * 100)} %`;
+    $("model-status-text").textContent = t(`model.${state}.${what}`, { name, pct });
+    $("model-bar").hidden = state !== "loading" || progress === null;
+    if (progress !== null) $("model-bar").firstChild.style.width = `${Math.round(progress * 100)}%`;
+    $("model-status").hidden = false;
+  },
+  interim({ what, using, module }) {
+    const kind = using === "previous" ? "previous" : /server/.test(module || "") ? "server" : "fallback";
+    $("model-status-interim").textContent = t(`model.interim.${kind}.${what}`, { module: module || "" });
+    $("model-status-interim").hidden = false;
+    if ($("model-status").hidden) {           // nothing downloading on screen: show it briefly
+      $("model-status-text").textContent = "";
+      $("model-bar").hidden = true;
+      $("model-status").hidden = false;
+      clearTimeout(this.hideTimer);
+      this.hideTimer = setTimeout(() => { if (!this.shown.size) $("model-status").hidden = true; }, 5000);
+    }
+  },
+};
+
 // ------------------------------------------------------------ PHAL plugin
 /**
  * A message from the browser PHAL plugin (ovos-phal-plugin-browser), which
@@ -734,6 +837,20 @@ function locate() {
 /** React to the few bus events the page itself cares about. */
 function onBus(msg) {
   if (media.onBus(msg)) return;
+  if (msg.type === "emkay.speech.interim") return modelStatus.interim(msg.data);
+  if (msg.type === "emkay.wakeword") {   // a new wake word in the settings
+    wake.restart(msg.data.wake_word, msg.data.hotword).catch((e) => { wake.state = `error: ${e.message || e}`; });
+    return;
+  }
+  if (msg.type === "emkay.lang.restart") {   // OVOS' language changed: start again in it
+    // the language's own name ("English", "dansk"); only Portuguese needs
+    // its country, as Emkay has two
+    const code = msg.data.lang, base = code.split("-")[0];
+    let name = code;
+    try { name = new Intl.DisplayNames([code], { type: "language" }).of(base === "pt" ? code : base); } catch {}
+    modelStatus.render("lang", name, null, "restart");
+    return;
+  }
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
   if (msg.type === "ovos.utterance.handled") utterancesHandled++;
   if (msg.type === "mycroft.mic.mute") mic.setMuted(true);
