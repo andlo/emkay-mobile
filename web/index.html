@@ -46,13 +46,34 @@
     <div class="menu-card">
       <h2>Emkay</h2>
       <p id="storage-state" class="small"></p>
-      <button id="menu-panel" data-i18n="menu.panel"></button>
-      <a id="menu-store" class="menu-link" href="https://store.emkay.ai/" target="_blank" rel="noopener" data-i18n="menu.store"></a>
-      <button id="menu-kiosk" data-i18n="menu.kiosk"></button>
-      <button id="menu-install" data-i18n="menu.install" hidden></button>
+      <!-- each entry: Emkay-style icon (build/icons/make_icons.py), name and
+           a line on what it is; what opens over the face returns here
+           when it closes (app.js openFromMenu) -->
+      <button id="menu-panel" class="menu-item">
+        <img src="menu/settings.svg" alt="">
+        <span><b data-i18n="menu.panel"></b><small data-i18n="menu.panel.hint"></small></span>
+      </button>
+      <a id="menu-store" class="menu-item" href="https://store.emkay.ai/" target="_blank" rel="noopener">
+        <img src="menu/store.svg" alt="">
+        <span><b data-i18n="menu.store"></b><small data-i18n="menu.store.hint"></small></span>
+      </a>
+      <button id="menu-network" class="menu-item">
+        <img src="menu/guardian.svg" alt="">
+        <span><b data-i18n="menu.network"></b><small data-i18n="menu.network.hint"></small></span>
+      </button>
+      <button id="menu-kiosk" class="menu-item">
+        <img src="menu/kiosk.svg" alt="">
+        <span><b data-i18n="menu.kiosk"></b><small data-i18n="menu.kiosk.hint"></small></span>
+      </button>
+      <button id="menu-install" class="menu-item" hidden>
+        <img src="menu/install.svg" alt="">
+        <span><b data-i18n="menu.install"></b><small data-i18n="menu.install.hint"></small></span>
+      </button>
       <p id="install-ios" class="small" data-i18n="install.ios" hidden></p>
-      <button id="menu-network" data-i18n="menu.network"></button>
-      <button id="menu-about" data-i18n="menu.about"></button>
+      <button id="menu-about" class="menu-item">
+        <img src="icon.svg" alt="">
+        <span><b data-i18n="menu.about"></b><small data-i18n="menu.about.hint"></small></span>
+      </button>
       <p class="small"><span data-i18n="about"></span> ·
         <a href="https://github.com/emkay-voice/emkay" target="_blank" rel="noopener" data-i18n="source"></a></p>
       <button id="menu-close" class="secondary" data-i18n="close"></button>
@@ -108,7 +129,9 @@
   <!-- the network log: what Emkay contacted, by day and service (netlog.js) -->
   <div id="network" class="menu" hidden>
     <div class="menu-card network-card">
-      <h2 data-i18n="network.title"></h2>
+      <h2 class="with-icon"><img src="menu/guardian.svg" alt=""><span data-i18n="network.title"></span></h2>
+      <!-- local only (#23), the same switch as "go offline" by voice -->
+      <button id="guardian-offline" class="guardian-offline"></button>
       <p class="small" data-i18n="network.intro"></p>
       <p id="network-summary" class="network-summary"></p>
       <div id="network-list" class="network-list"></div>

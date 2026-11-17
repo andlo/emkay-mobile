@@ -961,6 +961,21 @@ function languageChanged(lang) {
 }
 
 /**
+ * What the menu opened over the face (settings, store, Guardian, about):
+ * closing it goes back to the menu, as in an app. Opened another way (the
+ * setup on first start, a skill), closing just closes.
+ */
+const fromMenu = new Set();
+function openFromMenu(id, open) {
+  fromMenu.add(id);
+  open();
+}
+function closeView(id) {
+  $(id).hidden = true;
+  if (fromMenu.delete(id)) $("menu").hidden = false;
+}
+
+/**
  * A skill handed over by the store (store.emkay.ai "Get" opens
  * app.emkay.ai/?install=<package>): open the control panel's Plugins page
  * searched for that package, where the panel's own Install button (and its
@@ -976,6 +991,7 @@ function installFromStore(pkg = params.get("install")) {
   }
   if (!pkg || !PACKAGE_NAME.test(pkg)) return;
   $("store").hidden = true;
+  if (fromMenu.delete("store")) fromMenu.add("panel");   // closing the panel goes back to the menu
   const frame = $("panel-frame");
   frame.addEventListener("load", () => {
     try {
@@ -1005,7 +1021,7 @@ function receiveInstall(pkg) {
 // here instead of opening a new tab. Only the store's own origin is heard.
 addEventListener("message", (e) => {
   if (e.origin !== STORE_ORIGIN) return;
-  if (e.data?.emkayClose) { $("store").hidden = true; return; }   // its "Back to Emkay"
+  if (e.data?.emkayClose) { closeView("store"); return; }   // its "Back to Emkay"
   const pkg = e.data?.emkayInstall;
   if (typeof pkg === "string" && PACKAGE_NAME.test(pkg)) receiveInstall(pkg);
 });
@@ -1017,7 +1033,7 @@ function openStore() {
   if (!frame.getAttribute("src")) frame.src = `${STORE_ORIGIN}/?in=emkay&lang=${encodeURIComponent(ovosLang || "")}`;
   $("store").hidden = false;
 }
-$("menu-store").onclick = (e) => { e.preventDefault(); openStore(); };
+$("menu-store").onclick = (e) => { e.preventDefault(); openFromMenu("store", openStore); };
 
 /**
  * Show the OpenVoiceOS settings over the face.
@@ -1036,10 +1052,10 @@ function openPanel(page = "") {
   if (page || !frame.getAttribute("src")) frame.src = `panel/${page}`;
   $("panel").hidden = false;
 }
-$("panel-close").onclick = () => { $("panel").hidden = true; };
+$("panel-close").onclick = () => closeView("panel");
 
 // ------------------------------------------------------------------ menu
-$("menu-panel").onclick = () => openPanel();
+$("menu-panel").onclick = () => openFromMenu("panel", () => openPanel());
 $("menu-button").onclick = () => { $("menu").hidden = !$("menu").hidden; };
 $("menu-close").onclick = () => { $("menu").hidden = true; };
 $("menu-kiosk").onclick = () => { kiosk = true; enterKiosk(); $("menu").hidden = true; };
@@ -1065,8 +1081,7 @@ $("menu-install").onclick = async () => {
   installPrompt.prompt();
   await installPrompt.userChoice.catch(() => {});
   installPrompt = null;
-  $("menu-install").hidden = true;
-  $("menu").hidden = true;
+  $("menu-install").hidden = true;   // the menu stays: installing is done in the browser's dialog
 };
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !installed()) $("install-ios").hidden = false;
 
@@ -1082,6 +1097,7 @@ release.then((b) => { $("boot-version").textContent = releaseLine(b); });
 
 /** About: who made Emkay and what it stands on; version, build and date. */
 $("menu-about").onclick = async () => {
+  fromMenu.add("about");
   $("menu").hidden = true;
   $("about").hidden = false;
   const b = await release;
@@ -1094,7 +1110,7 @@ $("menu-about").onclick = async () => {
   $("about-version").textContent = b.built
     ? t("about.version", { date: new Date(b.built).toLocaleDateString() }) : "";
 };
-$("about-close").onclick = () => { $("about").hidden = true; };
+$("about-close").onclick = () => closeView("about");
 
 // ---------------------------------------------------------- kiosk by voice
 /**
@@ -1214,8 +1230,10 @@ function download(name, type, text) {
 
 let networkEntries = [];
 $("menu-network").onclick = async () => {
+  fromMenu.add("network");
   $("menu").hidden = true;
   $("network").hidden = false;
+  guardianButton();
   networkEntries = await call("net_log").catch(() => []);
   renderNetwork(networkEntries);
 };
@@ -1240,6 +1258,21 @@ $("network-clear").onclick = async () => {
   networkEntries = [];
   renderNetwork(networkEntries);
 };
-$("network-close").onclick = () => { $("network").hidden = true; };
+$("network-close").onclick = () => closeView("network");
+
+/**
+ * The offline switch in Guardian: the same bus message as "go offline" by
+ * voice (ovos-skill-guardian), answered by the PHAL plugin, which shows the
+ * shield; the button follows the shield.
+ */
+function guardianButton() {
+  const on = !$("offline-shield").hidden;
+  $("guardian-offline").textContent = t(on ? "guardian.go_online" : "guardian.go_offline");
+  $("guardian-offline").classList.toggle("on", on);
+}
+$("guardian-offline").onclick = () => {
+  busSend("ovos.local_only", { enabled: $("offline-shield").hidden });
+};
+new MutationObserver(guardianButton).observe($("offline-shield"), { attributes: true });
 
 window.emkay = { call, mic, speaker, media, wake, stt: () => sttModule };
