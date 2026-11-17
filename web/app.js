@@ -12,6 +12,7 @@ import { t, apply, setLang, onLangChange, matchLang } from "./i18n.js";
 import { onRequest as deviceRequest, startDevice } from "./device.js";
 import { createMediaPlayer } from "./media.js";
 import { createBrain, chosenBrain } from "./brains/brain.js";
+import { haLinkWanted, startHaDevice } from "./ha-device.js";
 import { chooseBrain, brainHint } from "./brains/choose.js";
 
 const $ = (id) => document.getElementById(id);
@@ -268,6 +269,11 @@ async function keepStorage() {
     if (brain.kind === "local") bootStatus("boot.skills", 1, { n: info.skills.length });
     offerSetup();
     startDevice(call);   // the phone's sensors and connectivity, for PHAL
+    // Emkay with its own OVOS, connected to Home Assistant (ha-device.js)
+    if (brain.kind === "local" && haLinkWanted()) {
+      startHaDevice(brain, { lang: info.lang, version: info.version,
+                             onStatus: (key, vars) => console.log(`[emkay] ${t(key, vars)}`) });
+    }
     $("start").hidden = false;
   } catch (e) {
     bootStatus("boot.error", undefined, { msg: e.message });

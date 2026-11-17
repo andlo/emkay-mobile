@@ -1,4 +1,5 @@
-// The Home Assistant brain (#29) in headless Chromium: log in to HA the way
+// Emkay with its OWN OVOS, connected to Home Assistant (ha-device.js), in
+// headless Chromium – with LINK=1. Otherwise: the Home Assistant brain (#29): log in to HA the way
 // Emkay does (HA's login flow with Emkay's address as client_id – the code
 // is fetched here instead of typed on HA's page, then handed to Emkay as HA
 // would, ?code=…&state=…), tap start, ask by typing (or speak with
@@ -23,7 +24,8 @@ let flow = await post("/auth/login_flow", { client_id: `${origin}/`, handler: ["
 flow = await post(`/auth/login_flow/${flow.flow_id}`, { client_id: `${origin}/`,
   username: process.env.HA_USER, password: process.env.HA_PASSWORD });
 if (!flow.result) throw new Error(`HA login: ${JSON.stringify(flow.errors)}`);
-const state = "emkay-ha.probe";
+const LINK = process.env.LINK === "1";
+const state = LINK ? "emkay-ha-link.probe" : "emkay-ha.probe";
 const url = `${base}?code=${flow.result}&state=${state}`;
 const port = 9399;
 const chrome = spawn(process.env.CHROME, ["--headless=new", `--remote-debugging-port=${port}`,
@@ -73,12 +75,12 @@ try {
   // what Emkay keeps before it sends you to HA's login page
   await send("Page.navigate", { url: `${base}manifest.webmanifest` });
   await sleep(500);
-  await js(`localStorage.clear(); localStorage.setItem("emkay-brain", "homeassistant");
-    localStorage.setItem("emkay-ha", JSON.stringify({ url: ${JSON.stringify(ha)}, name: "Emkay probe", device_id: ${JSON.stringify(process.env.DEVICE_ID || "emkay-probe-device")}${process.env.SPEECH_WAV ? ', wakeWord: "hey_mycroft"' : ""} }));
+  await js(`localStorage.clear(); localStorage.setItem("emkay-brain", ${JSON.stringify(LINK ? "local" : "homeassistant")});
+    localStorage.setItem("emkay-ha", JSON.stringify({ url: ${JSON.stringify(ha)}, name: "Emkay probe", link: ${LINK}, device_id: ${JSON.stringify(process.env.DEVICE_ID || "emkay-probe-device")}${process.env.SPEECH_WAV ? ', wakeWord: "hey_mycroft"' : ""} }));
     sessionStorage.setItem("emkay-ha-login", "${state}"); true`);
   await send("Page.navigate", { url });
   // boot is done when the visage's frame is on the page (app.js showVisage)
-  await until(`!!document.getElementById("visage2") && !document.getElementById("start").hidden`, 60, "the start button");
+  await until(`!!document.getElementById("visage2") && !document.getElementById("start").hidden`, LINK ? 300 : 60, "the start button");
   log(`boot: ${await js(`document.getElementById("boot-text").textContent`)}`);
   log(`code gone: ${await js(`!location.search`)}, refresh token kept: ${await js(`!!JSON.parse(localStorage.getItem("emkay-ha")).refresh`)}`);
   log(`menu: panel ${await js(`!document.getElementById("menu-panel").hidden`)}, store ${await js(`!document.getElementById("menu-store").hidden`)}, network ${await js(`!document.getElementById("menu-network").hidden`)}`);

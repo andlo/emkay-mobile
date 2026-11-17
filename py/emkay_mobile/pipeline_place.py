@@ -24,6 +24,12 @@ unused stay unused, and a stage the user took out is not put back.
 #: "after": right after the first anchor found; "before": right before it;
 #: "skip": that stage is left out (a plugin that only uses some of its three).
 OVERRIDES = {
+    # one stage: right after OVOS' sure matches (the last high stage), before
+    # common query, persona and the fallbacks - what Home Assistant's Assist
+    # recognizes is HA's before a solver or a chatbot answers it (its README)
+    "ovos-assist-pipeline-plugin": {
+        None: ("after", ["ovos-adapt-pipeline-plugin-high", "adapt_high"]),
+    },
     # its README: "-high" right after the stop matcher (so "stop" and
     # "continue" reach a reading in progress), "-low" after padatious/adapt,
     # before common query and the fallbacks

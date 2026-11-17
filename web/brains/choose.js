@@ -9,6 +9,7 @@ import { t, apply } from "../i18n.js";
 import { setBrain } from "./brain.js";
 import { askHivemindSettings, hivemindSettings, saveHivemindSettings } from "./hivemind-brain.js";
 import { askHaUrl, haSettings, saveHaSettings } from "./homeassistant-brain.js";
+import { dropHaLink, wantHaLink } from "../ha-device.js";
 
 const OPTIONS = [
   { kind: "local", icon: "icon.svg" },
@@ -62,6 +63,7 @@ export function chooseBrain(current, onClose = () => {}) {
       switchTo(o.kind);
     };
     card.append(b);
+    if (o.kind === "local") card.append(haLinkRow(box));
   }
   const close = document.createElement("button");
   close.className = "secondary";
@@ -73,10 +75,35 @@ export function chooseBrain(current, onClose = () => {}) {
   apply(box);
 }
 
+/**
+ * Under "on this device": connect Emkay's own OVOS to Home Assistant (one
+ * login with the Home Assistant brain, ha-link.js): Emkay shows up in HA,
+ * and what HA's Assist recognizes – lights, heating – goes to HA.
+ */
+function haLinkRow(box) {
+  const row = document.createElement("label");
+  row.className = "check brain-sub";
+  const on = !!haSettings().link;
+  row.innerHTML = `<input type="checkbox" ${on ? "checked" : ""}>` +
+    `<span><b data-i18n="ha.link"></b><small data-i18n="ha.link.hint"></small></span>`;
+  row.querySelector("input").onchange = async (e) => {
+    if (!e.target.checked) return dropHaLink();
+    box.hidden = true;
+    const url = await askHaUrl(haSettings().url || "", "", { back: true });
+    if (!url) { e.target.checked = false; box.hidden = false; return; }
+    setBrain("local");          // the link is for Emkay with its own OVOS
+    wantHaLink(url);            // HA's login page, then back here
+  };
+  return row;
+}
+
 /** The menu entry's line: what Emkay thinks with now. */
 export function brainHint(current) {
   if (current === "hivemind") return t("menu.brain.hint.hivemind", { host: hivemindSettings()?.host || "" });
   if (current === "homeassistant") return t("menu.brain.hint.homeassistant", { host: (haSettings().url || "").replace(/^https?:\/\//, "") });
+  if (current === "local" && haSettings().link) {
+    return t("menu.brain.hint.local_ha", { host: (haSettings().url || "").replace(/^https?:\/\//, "") });
+  }
   return t(`menu.brain.hint.${current}`);
 }
 
