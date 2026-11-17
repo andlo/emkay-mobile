@@ -194,6 +194,31 @@ class HaSocket extends EventTarget {
 
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 
+/** The site's build info (wake words, models), fetched once. */
+let buildInfo = null;
+const getBuild = async () => (buildInfo ??= await fetch("build.json", { cache: "no-cache" })
+  .then((r) => r.json()).catch(() => ({})));
+
+/** "hey_emkay" -> "Hey Emkay" (as HA shows it in the wake word choice) */
+const phrase = (id) => id === "hey_emkay" ? "Hey Emkay"
+  : id.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+
+/**
+ * The wake words this site has, the one in use (saved choice, else Emkay's
+ * own "hey M K" where there is one, else "hey mycroft"), and how to load it.
+ */
+function wakeWords(build, chosen) {
+  const ids = build.wake_words || [];
+  const precise = build.precise_models || {};
+  const heyMycroft = Object.keys(precise).find((u) => /hey_mycroft/.test(u));
+  const current = (chosen && ids.includes(chosen) && chosen)
+    || (ids.includes("hey_emkay") ? "hey_emkay" : "hey_mycroft");
+  const hotword = (ww) => ww === "hey_mycroft" && heyMycroft
+    ? { module: "ovos-ww-plugin-precise-onnx", model: heyMycroft }
+    : { module: "ovos-ww-plugin-openwakeword", threshold: ww === "hey_emkay" ? 0.8 : 0.5 };
+  return { ids, current, hotword, precise };
+}
+
 /**
  * @param {object} [opts]
  * @param {typeof askHaUrl} [opts.ask]  how to ask for HA's address
@@ -318,7 +343,8 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
       settings = { ...settings, device_id: `emkay-${crypto.randomUUID()}` };
       saveHaSettings(settings);
     }
-    const build = await fetch("build.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({}));
+    const build = await getBuild();
+    const ww = wakeWords(build, settings.wakeWord);
     try {
       await ha.subscribe({
         type: "ovos/connect", protocol: PROTOCOL,
@@ -326,6 +352,9 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
         name: settings.name || "Emkay",
         model: "Emkay", manufacturer: "Emkay",
         satellite: true,          // audio goes to HA: an Assist satellite there
+        // its wake word is chosen in HA too (the satellite's configuration)
+        wake_words: ww.ids.map((id) => ({ id, wake_word: phrase(id) })),
+        wake_word: ww.current,
         sw_version: build.version || undefined,
         lang,
       }, onDeviceEvent);
@@ -354,6 +383,16 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
         break;
       case "announce":
         announce(ev);
+        break;
+      case "wake_word": {           // chosen in HA
+        const ww = wakeWords(buildInfo || {}, ev.id);
+        settings = { ...settings, wakeWord: ww.current };
+        saveHaSettings(settings);
+        local("emkay.wakeword", { wake_word: ww.current, hotword: ww.hotword(ww.current) });
+        break;
+      }
+      case "media":
+        media(ev);
         break;
       case "timer":
         if (ev.event === "finished") {
@@ -387,6 +426,30 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
       .then((b) => b.duration).catch(() => text.length * 0.07);
   }
 
+  // ---------------------------------------------------- the media player
+  // HA's media_player for Emkay: sounds, radio, music from HA. An audio
+  // element (a URL on HA needs no CORS for it), at Emkay's volume.
+  let mediaEl = null;
+  function mediaState() {
+    const state = !mediaEl?.src || mediaEl.ended ? "idle" : mediaEl.paused ? "paused" : "playing";
+    ha?.command({ type: "ovos/satellite/media", device_id: settings.device_id, state,
+                  url: state === "idle" ? null : mediaEl.dataset.url }).catch(() => {});
+  }
+  function media({ command, url }) {
+    if (!mediaEl) {
+      mediaEl = new Audio();
+      for (const e of ["playing", "pause", "ended", "emptied", "error"]) mediaEl.addEventListener(e, mediaState);
+    }
+    mediaEl.volume = level.muted ? 0 : level.volume;
+    if (command === "play" && url) {
+      mediaEl.dataset.url = url;
+      mediaEl.src = new URL(url, settings.url).href;
+      mediaEl.play().catch((e) => console.warn("[emkay] ha media", e));
+    } else if (command === "pause") mediaEl.pause();
+    else if (command === "resume") mediaEl.play().catch(() => {});
+    else if (command === "stop") { mediaEl.pause(); mediaEl.removeAttribute("src"); mediaEl.load(); mediaState(); }
+  }
+
   /** An announcement (or the start of a conversation) from an automation. */
   async function announce({ id, message, media_url: url, start_conversation }) {
     const done = () => {
@@ -411,6 +474,7 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
     level.volume = Math.max(0, Math.min(1, level.volume));
     try { localStorage.setItem("emkay-ha-volume", JSON.stringify(level)); } catch {}
     fire("phal", { payload: JSON.stringify({ volume: level.volume, muted: level.muted }) });
+    if (mediaEl) mediaEl.volume = level.muted ? 0 : level.volume;
     toHA("mycroft.volume.get.response", { percent: level.volume, muted: level.muted });
   }
 
@@ -588,21 +652,15 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
           }
         }
       }
-      const build = await fetch("build.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({}));
-      const precise = build.precise_models || {};
-      const heyMycroft = Object.keys(precise).find((u) => /hey_mycroft/.test(u));
-      const wakeWords = build.wake_words || [];
-      const wakeWord = (settings.wakeWord && wakeWords.includes(settings.wakeWord) && settings.wakeWord)
-        || (wakeWords.includes("hey_emkay") ? "hey_emkay" : "hey_mycroft");
-      const hotword = wakeWord === "hey_mycroft" && heyMycroft
-        ? { module: "ovos-ww-plugin-precise-onnx", model: heyMycroft }
-        : { module: "ovos-ww-plugin-openwakeword", threshold: wakeWord === "hey_emkay" ? 0.8 : 0.5 };
+      const build = await getBuild();
+      const ww = wakeWords(build, settings.wakeWord);
+      const wakeWord = ww.current, hotword = ww.hotword(wakeWord), precise = ww.precise, wakeWordList = ww.ids;
       if (!pipeline?.stt_engine) import("../whisper.js").then((w) => w.ready(sttModelFor(lang))).catch(() => {});
       if (!pipeline?.tts_engine && voiceFor(lang)) import("../piper.js").then((p) => p.ready(voiceFor(lang))).catch(() => {});
       fire("phal", { payload: JSON.stringify({ volume: level.volume, muted: level.muted }) });
       return {
         brain: "homeassistant", lang, skills: [], stt_module: WHISPER_STT,
-        wake_word: wakeWord, hotword, precise_models: precise, wake_words: wakeWords,
+        wake_word: wakeWord, hotword, precise_models: precise, wake_words: wakeWordList,
         site_langs: [lang], intent_langs: [lang], listener: {}, confirm_listening: false,
         pipeline: pipeline?.name,
       };

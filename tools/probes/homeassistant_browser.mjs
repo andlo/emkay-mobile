@@ -119,7 +119,7 @@ try {
   // HOLD=<seconds>: stay connected, for trying HA's side (the device's
   // entities) by hand; shows what HA changes on the page
   for (let i = 0, last = ""; i < +(process.env.HOLD || 0); i += 2) {
-    const now = await js(`JSON.stringify({ level: window.emkay.speaker.level,
+    const now = await js(`JSON.stringify({ level: window.emkay.speaker.level, wake: window.emkay.wake.engineName,
       mic: document.getElementById("mic").className, said: window.__said })`);
     if (now !== last) log(`page: ${(last = now)}`);
     await sleep(2000);
