@@ -8,11 +8,12 @@
 import { t, apply } from "../i18n.js";
 import { setBrain } from "./brain.js";
 import { askHivemindSettings, hivemindSettings, saveHivemindSettings } from "./hivemind-brain.js";
+import { askHaUrl, haSettings, saveHaSettings } from "./homeassistant-brain.js";
 
 const OPTIONS = [
   { kind: "local", icon: "icon.svg" },
   { kind: "hivemind", icon: "menu/brain.svg" },
-  { kind: "homeassistant", icon: "menu/brain.svg", soon: true },   // #29
+  { kind: "homeassistant", icon: "menu/brain.svg" },   // #29
 ];
 
 /** Start again in `kind` (a reload: one brain per page). */
@@ -48,6 +49,15 @@ export function chooseBrain(current, onClose = () => {}) {
         saveHivemindSettings(s);
         return switchTo("hivemind");
       }
+      if (o.kind === "homeassistant" && o.kind !== current) {
+        box.hidden = true;
+        const url = await askHaUrl(haSettings().url || "", "", { back: true });
+        if (!url) { box.hidden = false; return; }
+        // a new address: log in there (the brain sends the page to HA's login)
+        const s = haSettings();
+        saveHaSettings(url === s.url ? s : { ...s, url, refresh: null });
+        return switchTo("homeassistant");
+      }
       if (o.kind === current) { box.remove(); return onClose(); }
       switchTo(o.kind);
     };
@@ -66,6 +76,7 @@ export function chooseBrain(current, onClose = () => {}) {
 /** The menu entry's line: what Emkay thinks with now. */
 export function brainHint(current) {
   if (current === "hivemind") return t("menu.brain.hint.hivemind", { host: hivemindSettings()?.host || "" });
+  if (current === "homeassistant") return t("menu.brain.hint.homeassistant", { host: (haSettings().url || "").replace(/^https?:\/\//, "") });
   return t(`menu.brain.hint.${current}`);
 }
 

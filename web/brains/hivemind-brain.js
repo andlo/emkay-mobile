@@ -33,10 +33,10 @@ const VOICES = {
   "it-it": "it_IT-paola-medium", "nl-nl": "nl_NL-pim-medium", "pt-pt": "pt_PT-tugão-medium",
   "pt-br": "pt_BR-faber-medium", "ca-es": "ca_ES-upc_ona-medium", "eu-es": "eu_ES-antton-medium",
 };
-const voiceFor = (lang) => VOICES[lang.toLowerCase()]
+export const voiceFor = (lang) => VOICES[lang.toLowerCase()]
   || Object.entries(VOICES).find(([k]) => k.split("-")[0] === lang.split("-")[0].toLowerCase())?.[1];
 const STT_MODELS = { en: "onnx-community/whisper-base.en", da: "emkay-voice/roest-wav2vec2-315m-onnx" };
-const sttModelFor = (lang) => STT_MODELS[lang.split("-")[0].toLowerCase()] || "onnx-community/whisper-base";
+export const sttModelFor = (lang) => STT_MODELS[lang.split("-")[0].toLowerCase()] || "onnx-community/whisper-base";
 
 /**
  * The mouth: visemes from the text, spread evenly over the audio – as
@@ -59,7 +59,7 @@ export function textVisemes(text, seconds) {
 }
 
 /** Seconds of a 16-bit PCM WAV (as piper.js makes them). */
-function wavSeconds(wav) {
+export function wavSeconds(wav) {
   const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
   const byteRate = v.getUint32(28, true), dataBytes = v.getUint32(40, true);
   return byteRate ? dataBytes / byteRate : 0;

@@ -5,8 +5,8 @@
 //
 //   local          OVOS in this browser (worker.js + Pyodide) – today's Emkay
 //   hivemind       a hivemind-core in the house (#11)
-//   homeassistant  Home Assistant's Assist, through the general
-//                  OVOS integration (andlo/ha-ovos-integration) – not yet
+//   homeassistant  Home Assistant's Assist, with Emkay as a device through
+//                  the general OVOS integration (andlo/ha-ovos-integration, #29)
 //
 // The language between body and brain is the OVOS bus. Every brain hands
 // the page bus messages (onMessage) and takes bus messages from it (emit),
@@ -37,11 +37,12 @@
 
 import { createLocalBrain } from "./local.js";
 import { createHiveMindBrain } from "./hivemind-brain.js";
+import { createHomeAssistantBrain } from "./homeassistant-brain.js";
 
 import { savedBrain, setBrain } from "./saved.js";
 export { savedBrain, setBrain };
 
-export const BRAINS = ["local", "hivemind"];   // "homeassistant" when it exists
+export const BRAINS = ["local", "hivemind", "homeassistant"];
 
 /**
  * Which brain this start uses: ?brain=… for this start, else a pairing
@@ -52,6 +53,8 @@ export const BRAINS = ["local", "hivemind"];   // "homeassistant" when it exists
  */
 export function chosenBrain(params) {
   if (/[#&]hivemind=/.test(location.hash)) setBrain("hivemind");
+  // back from Home Assistant's login page
+  if (/^emkay-ha\./.test(params.get("state") || "") && params.get("code")) setBrain("homeassistant");
   const want = params.get("brain") || savedBrain() || "local";
   if (BRAINS.includes(want)) return want;
   console.warn(`[emkay] brain "${want}" isn't there yet; using local`);
@@ -63,6 +66,7 @@ export function createBrain(kind) {
   switch (kind) {
     case "local": return createLocalBrain();
     case "hivemind": return createHiveMindBrain();
+    case "homeassistant": return createHomeAssistantBrain();
   }
   throw new Error(`no brain "${kind}"`);
 }
