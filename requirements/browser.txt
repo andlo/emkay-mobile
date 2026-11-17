@@ -57,6 +57,11 @@ ovos-skill-guardian
 ovos-skill-store
 # "full screen", "keep the screen on", "install as an app" (ovos-phal-plugin-browser does it)
 ovos-skill-kiosk
+# Home Assistant's Assist in the intent pipeline ("turn off the light on the
+# stairs"), placed after adapt high by pipeline_place.py. It stays silent
+# until the Home Assistant link (Settings > brain, "Connect to my Home
+# Assistant") says HA is there, so without HA it costs nothing
+ovos-assist-pipeline-plugin
 
 # the setup page: the stock OpenVoiceOS control panel
 ovos-control-panel
