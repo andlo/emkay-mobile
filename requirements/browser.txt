@@ -41,6 +41,11 @@ ovos-skill-icanhazdadjokes
 ovos-common-reading-pipeline-plugin
 ovos-skill-ovosblog
 ovos-skill-horoscope-readings
+# something to play: OCP's media providers whose sources a browser may read
+# and play (tried in Emkay on 2026-11-17: "play jazz radio", "play the
+# news"); radio-browser stations through pyradios, and the news bulletins
+ovos-media-provider-pyradios
+ovos-media-provider-news
 
 # who the assistant is, as Emkay: takes the place of ovos-skill-personal,
 # which boot.py blacklists (REPLACED_SKILLS)
