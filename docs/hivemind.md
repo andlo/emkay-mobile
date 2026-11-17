@@ -72,9 +72,27 @@ Optional fields: `lang` (default: the browser's language), `stt`
 (`"whisper"`, the default, or `"browser"`), `wakeWord` (e.g. `"hey_mycroft"`),
 `path` (hivemind-core behind a reverse proxy, e.g. `"/hivemind"`), `siteId`.
 
-In this mode the ⚙ menu has no control panel, skill store or network log:
-those belong to the OVOS in the browser. Skills are installed on the OVOS
-in the house.
+## Speech in the house
+
+An [Emkay Home](https://github.com/emkay-voice/emkay-home) on a strong
+machine can hear and speak for its Emkays (emkay-voice/emkay-home#13): the
+stock `ovos-stt-server` with Whisper and `ovos-tts-server` with Piper. Then
+the recording goes to the house's STT and the answer comes back as the
+house's voice; the wake word stays on the phone. Emkay learns where from the
+pairing link (`speech: {"stt": "https://…/speech/stt/stt", "tts":
+"https://…/speech/tts"}`) and asks again at every start
+(`/api/house-info`), so a phone paired earlier finds out too. The HiveMind
+key is the Bearer token. If the house doesn't answer within 20 s, the phone
+does it itself, as before.
+
+"Use the house for speech" under the house in "Where should Emkay think?"
+turns it off for this phone (`houseSpeech: false`). With speech in the house
+the phone's own Whisper and Piper are not downloaded until they are needed.
+
+In this mode the ⚙ menu has no skill store or network log: those belong to
+the OVOS in the browser. Skills are installed on the OVOS in the house. With
+an Emkay Home, ⚙ → Settings opens the house's own control panel (`panel` in
+the pairing link and at `/api/house-info`), behind the house's password.
 
 ## Testing
 
