@@ -21,12 +21,13 @@ netlog.install();
 globalThis.emkayNet = { setLocalOnly: netlog.setLocalOnly, isLocalOnly: netlog.isLocalOnly };
 
 // A speech model's download (whisper.js, piper.js), for the page's status
-// line (app.js onModel): what ("stt", "tts"), its name, progress 0..1 and
-// state ("loading", "ready", "error"). Progress is sent at most every 300 ms.
+// line (app.js modelStatus): what ("stt", "tts"), its name, progress 0..1 and
+// state ("loading" = fetched, "reading" = from the phone's cache, "ready", "error"). Progress is sent at most every 300 ms.
 const lastProgress = new Map();
 globalThis.emkayModelProgress = (what, name, progress, state = "loading") => {
   const key = `${what}:${name}`, now = Date.now();
-  if (state === "loading" && progress > 0 && now - (lastProgress.get(key) || 0) < 300) return;
+  const busy = state === "loading" || state === "reading";   // fetched, or read from the phone
+  if (busy && progress > 0 && now - (lastProgress.get(key) || 0) < 300) return;
   lastProgress.set(key, now);
   self.postMessage({ kind: "model", payload: { what, name, progress, state } });
 };

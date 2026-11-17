@@ -67,6 +67,10 @@ def start(js_post, user_config=None) -> str:
     phal.start(bus, lambda raw: _post("phal", raw), reload_speech=speech.reload)
     _report_status(bus)
     remember_speech_settings()   # later changes apply without a restart (_settings_changed)
+    # a local STT/TTS (Whisper, Røst, Piper) starts loading its model now, from
+    # the phone's cache, so the first question does not wait for it; for
+    # server plugins this does nothing
+    speech.prewarm()
     bus.on("message", _watch)
     # a pipeline plugin installed in the panel is placed in the pipeline
     # and loaded at once (pipeline_place.py)

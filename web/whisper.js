@@ -38,6 +38,19 @@ async function transformers() {
   return lib;
 }
 
+/**
+ * Whether `model` is already in the browser (transformers.js' Cache API):
+ * then it is read from the phone, not fetched, and the page says so.
+ */
+async function inCache(model) {
+  try {
+    const cache = await caches.open(lib ? (await lib).env.cacheKey : "transformers-cache");
+    return (await cache.keys()).some((r) => r.url.includes(`/${model}/`));
+  } catch {
+    return false;
+  }
+}
+
 /** The ASR pipeline for `model`, made once. */
 function pipe(model) {
   if (!pipes.has(model)) {
@@ -53,14 +66,15 @@ function pipe(model) {
       // the download, for the page's status line (app.js onModel): one
       // model is several files; transformers.js reports each one
       const files = new Map();
+      const state = (await inCache(model)) ? "reading" : "loading";   // from the phone, or fetched
       options.progress_callback = (p) => {
         if (p.status !== "progress" || !p.total) return;
         files.set(p.file, [p.loaded, p.total]);
         let loaded = 0, total = 0;
         for (const [l, t] of files.values()) { loaded += l; total += t; }
-        modelProgress("stt", model, loaded / total);
+        modelProgress("stt", model, loaded / total, state);
       };
-      modelProgress("stt", model, 0);
+      modelProgress("stt", model, 0, state);
       const asr = await t.pipeline("automatic-speech-recognition", model, options);
       modelProgress("stt", model, 1, "ready");
       loaded.add(model);

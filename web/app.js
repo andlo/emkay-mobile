@@ -745,13 +745,13 @@ const modelStatus = {
   hideTimer: null,
   show({ what, name, progress, state }) {
     const key = `${what}:${name}`;
-    if (state === "loading") {
+    if (state === "loading" || state === "reading") {
       if (!this.shown.has(key)) {
         if (progress !== null && !this.pending.has(key)) {
           this.pending.set(key, setTimeout(() => {
             this.pending.delete(key);
             this.shown.add(key);
-            this.render(what, name, this.last?.[key] ?? progress, "loading");
+            this.render(what, name, this.last?.[key] ?? progress, state);
           }, 600));
         } else if (progress === null) {
           this.shown.add(key);
@@ -759,7 +759,7 @@ const modelStatus = {
         this.last = { ...this.last, [key]: progress };
         if (!this.shown.has(key)) return;
       }
-      return this.render(what, name, progress, "loading");
+      return this.render(what, name, progress, state);
     }
     clearTimeout(this.pending.get(key));
     this.pending.delete(key);
@@ -777,7 +777,7 @@ const modelStatus = {
     clearTimeout(this.hideTimer);
     const pct = progress === null || progress === undefined ? "" : `${Math.round(progress * 100)} %`;
     $("model-status-text").textContent = t(`model.${state}.${what}`, { name, pct });
-    $("model-bar").hidden = state !== "loading" || progress === null;
+    $("model-bar").hidden = !(state === "loading" || state === "reading") || progress === null;
     if (progress !== null) $("model-bar").firstChild.style.width = `${Math.round(progress * 100)}%`;
     $("model-status").hidden = false;
   },
@@ -1177,9 +1177,12 @@ function renderNetwork(entries) {
   const list = $("network-list");
   list.replaceChildren();
   const today = new Date().toDateString();
+  // what went out today; requests refused in local only are counted apart
   const todays = entries.filter((e) => new Date(e.t).toDateString() === today);
+  const sent = todays.filter((e) => !e.blocked), refused = todays.length - sent.length;
   $("network-summary").textContent = t("network.summary", {
-    services: new Set(todays.map(serviceName)).size, calls: todays.length, size: kB(sum(todays)) || "0 B" });
+    services: new Set(sent.map(serviceName)).size, calls: sent.length, size: kB(sum(sent)) || "0 B" })
+    + (refused ? ` · ${t("network.summary.blocked", { count: refused })}` : "");
   if (!entries.length) { list.append(el("p", { className: "small", textContent: t("network.empty") })); return; }
   const days = groupBy([...entries].reverse(), (e) => new Date(e.t).toDateString());
   let first = true;
@@ -1192,15 +1195,19 @@ function renderNetwork(entries) {
     for (const [name, calls] of services) {
       const hosts = [...new Set(calls.map((e) => e.host))].join(", ");
       const who = [...new Set(calls.map((e) => e.who))].join(", ");
+      const stopped = calls.filter((e) => e.blocked).length;
+      const count = `${calls.length - stopped} · ${kB(sum(calls))}` + (stopped ? ` · 🛡 ${stopped}` : "");
       const box = el("details", {},
-        el("summary", { title: hosts }, name, el("span", { className: "count", textContent: `${calls.length} · ${kB(sum(calls))}` })),
+        el("summary", { title: hosts }, name, el("span", { className: "count", textContent: count })),
         el("p", { className: "small", textContent: `${hosts} – ${t("network.who")}: ${who}` }));
       const table = el("table");
       for (const e of calls.slice(0, 200)) {
         table.append(el("tr", {},
           el("td", { textContent: new Date(e.t).toLocaleTimeString() }),
           el("td", { textContent: e.who }),
-          el("td", { textContent: `${e.method} ${e.status || "–"}`, className: e.status && e.status < 400 ? "" : "fail" }),
+          e.blocked   // refused in local only: never sent
+            ? el("td", { textContent: `${e.method} 🛡 ${t("network.blocked")}`, className: "blocked" })
+            : el("td", { textContent: `${e.method} ${e.status || "–"}`, className: e.status && e.status < 400 ? "" : "fail" }),
           el("td", { textContent: kB(e.bytes) })));
       }
       box.append(table);

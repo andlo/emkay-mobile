@@ -178,3 +178,4 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 /* first start: the quiet way to an assistant in the house */
 #first-house { margin-top: 10px; background: none; border: 0; color: #9cd3f5; font-size: 15px; padding: 8px; }
 #first-house[hidden] { display: none; }
+.network-list td.blocked { color: #7d7; }   /* refused in local only (netlog.js) */
