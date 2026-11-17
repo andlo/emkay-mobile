@@ -29,6 +29,9 @@ ovos-skill-geography
 ovos-skill-geometry
 ovos-skill-nato-alphabet
 ovos-skill-morse-code
+# "tell me a joke" is among the first things people try (the default skills
+# have no jokes); works in a browser (the store's test)
+ovos-skill-icanhazdadjokes
 # not ovos-skill-convert (yet): in Danish its "{x} i {y}" intent takes
 # "hvilken dag er det i dag", and its 210 unit names make padaos' warm-up
 # the longest of all; installable from the control panel

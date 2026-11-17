@@ -33,6 +33,19 @@ REPLACED_SKILLS = ("ovos-skill-personal.openvoiceos",)
 #: Wolfram Alpha needs an app id. Asked in turn by common query and the
 #: fallbacks, each would add seconds to every unanswered question.
 BROWSERLESS_SKILLS = ("ovos-skill-ddg.openvoiceos", "ovos-skill-wolfie.openvoiceos")
+#: skills from ovos-core's default groups that make no sense in a browser
+#: (defaults v12), tried in Emkay on 2026-11-17:
+#: - speedtest: speedtest.net cannot be measured from a web page ("there was
+#:   an error")
+#: - audio-recording, dictation: they record to files on the device, which
+#:   a browser user cannot reach; dictation also takes every sentence until
+#:   "stop dictation", and Emkay shows each as unanswered meanwhile
+#: - ip: a web page cannot see the device's network address
+#: - diagnostics: needs psutil, which Pyodide does not have
+#: The control panel can take any of them off the list again.
+NO_USE_IN_BROWSER = ("ovos-skill-speedtest.openvoiceos", "ovos-skill-audio-recording.openvoiceos",
+                     "ovos-skill-dictation.openvoiceos", "ovos-skill-ip.openvoiceos",
+                     "ovos-skill-diagnostics.openvoiceos")
 
 #: Emkay's own wake word, "hey M K" (defaults v11): the openWakeWord model
 #: trained in emkay-voice/hey-emkay-wakeword, which the site already ships as
@@ -67,7 +80,7 @@ INSTALLER_PIPELINE = (
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 11
+DEFAULTS_VERSION = 12
 #: the package index the control panel searches (defaults v7)
 STORE_INDEX = "https://store.emkay.ai"
 
@@ -211,6 +224,8 @@ def _browser_defaults(done: int) -> dict:
      11. Emkay's own wake word "hey M K" is in `hotwords` (HEY_EMKAY), so
          the control panel offers "hey_emkay"; the wake word in use does
          not change
+     12. the default skills that make no sense in a browser are
+         blacklisted (NO_USE_IN_BROWSER)
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -280,6 +295,8 @@ def _browser_defaults(done: int) -> dict:
     if done < 11:
         # offered, not chosen: listener.wake_word is left alone
         out.setdefault("hotwords", {})["hey_emkay"] = HEY_EMKAY
+    if done < 12:
+        _blacklist(out, NO_USE_IN_BROWSER)
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes

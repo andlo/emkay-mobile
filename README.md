@@ -26,7 +26,7 @@ device gets, on the **alpha** channel, compiled to WebAssembly with
 | Part | What runs |
 |---|---|
 | Core | `ovos-core[plugins]` – SkillManager, IntentService and the pipeline plugins (m2v, padatious, adapt, …) on an in-process bus |
-| Skills | the installer defaults: `ovos-core[skills-essential,skills-internet,skills-audio]` |
+| Skills | the installer defaults: `ovos-core[skills-essential,skills-internet,skills-audio]`, plus skills that answer without servers (calculator, geography, geometry, NATO alphabet, morse code), jokes, reading aloud and Emkay's own (about Emkay, Guardian, the skill store, kiosk). Defaults that cannot work in a browser are switched off, and can be switched on again in the settings: DuckDuckGo and Wolfram Alpha (servers a web page may not read), speedtest, audio recording, dictation, IP address, diagnostics and boot-finished (they need the device itself). See [`requirements/browser.txt`](requirements/browser.txt) and `boot.py`. |
 | Speech | the installer default (public servers): `ovos-stt-plugin-server`, `ovos-tts-plugin-server` |
 | Screen | `ovos-gui` + `ovos-skill-homescreen`, drawn by ovos-gui-visage (the Mark II face, Flutter web build) |
 | Setup | the stock `ovos-control-panel`, in the ⚙ menu |
