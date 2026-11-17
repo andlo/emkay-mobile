@@ -20,7 +20,12 @@ back and the phone makes the voice (Piper in the browser).
 
 ## In the house
 
-A hivemind-core next to your OVOS, and a client for Emkay:
+The easy way: [Emkay Home](https://github.com/emkay-voice/emkay-home) – OVOS,
+hivemind-core and a page that pairs an Emkay with a QR code, behind one https
+address with the house's own certificate, and Emkay served from the house.
+No keys or passwords to type.
+
+By hand: a hivemind-core next to your OVOS, and a client for Emkay:
 
 ```sh
 hivemind-core add-client --name kitchen-tablet
@@ -32,8 +37,9 @@ It prints an access key and a password; Emkay needs both.
 a secure WebSocket to your LAN, so hivemind-core must have TLS: its own
 certificate (`ssl: true` and `cert_dir` in its config), or a reverse proxy
 in front of it (Caddy, Nginx Proxy Manager, …) with a certificate the phone
-trusts. Emkay served from the house over plain http
-([#30](https://github.com/emkay-voice/emkay/issues/30)) can use `ws://`.
+trusts. Emkay served from the house over plain http could use `ws://`, but
+the browser then gives it no microphone – https it is. Behind a reverse proxy
+at a path, put it in the pairing link: `"path": "/hivemind"`.
 
 ## On the phone
 
