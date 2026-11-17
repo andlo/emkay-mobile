@@ -508,8 +508,14 @@ const wake = {
     const chunk = new Int16Array(1280);
     let fill = 0, acc = 0, n = 0, due = ratio;
     const proc = audioCtx.createScriptProcessor(4096, 1, 1);
+    // The engine keeps the last ~1.3 s it heard. After a pause (recording,
+    // speaking, muted, hidden) that is the wake word itself or the end of
+    // the answer, which scored with the first new audio would wake Emkay
+    // again by itself: so it starts afresh each time listening resumes.
+    let listening = false;
     proc.onaudioprocess = (e) => {
-      if (!this.active()) { fill = 0; return; }
+      if (!this.active()) { fill = 0; listening = false; return; }
+      if (!listening) { this.worker.postMessage({ cmd: "reset" }); listening = true; }
       const x = e.inputBuffer.getChannelData(0);
       for (let i = 0; i < x.length; i++) {
         acc += x[i]; n++;

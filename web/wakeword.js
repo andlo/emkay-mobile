@@ -187,7 +187,8 @@ if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScop
           else if (score >= 0.05) self.postMessage({ score });   // near misses, for diagnostics
         }).catch((e) => self.postMessage({ error: e.message || String(e) }));
       } else if (data.cmd === "reset" && engine) {
-        engine.reset();
+        // after the chunks already queued, so none of them lands after it
+        busy = busy.then(() => engine.reset());
       }
     } catch (e) {
       self.postMessage({ error: e.message || String(e) });
