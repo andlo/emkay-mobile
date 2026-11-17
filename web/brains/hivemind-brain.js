@@ -38,6 +38,33 @@ const voiceFor = (lang) => VOICES[lang.toLowerCase()]
 const STT_MODELS = { en: "onnx-community/whisper-base.en", da: "emkay-voice/roest-wav2vec2-315m-onnx" };
 const sttModelFor = (lang) => STT_MODELS[lang.split("-")[0].toLowerCase()] || "onnx-community/whisper-base";
 
+/**
+ * The mouth: visemes from the text, spread evenly over the audio – as
+ * py/emkay_mobile/speech.py text_visemes does for a TTS without phonemes.
+ * [[code, end seconds], …], the form enclosure.mouth.viseme_list carries.
+ */
+const VISEME_OF = [[/[bpm]/, "4"], [/[fv]/, "5"], [/[ouw]/, "2"], [/[aei]/, "0"], [/[a-z]/, "3"]];
+export function textVisemes(text, seconds) {
+  const letters = [...String(text).toLowerCase()].filter((c) => /\p{L}/u.test(c) || " ,.!?".includes(c));
+  if (!letters.length || seconds <= 0) return [];
+  const step = seconds / letters.length, out = [];
+  let t = 0;
+  for (const c of letters) {
+    t += step;
+    const code = VISEME_OF.find(([re]) => re.test(c))?.[1] ?? "4";
+    if (out.length && out.at(-1)[0] === code) out.at(-1)[1] = +t.toFixed(3);
+    else out.push([code, +t.toFixed(3)]);
+  }
+  return out;
+}
+
+/** Seconds of a 16-bit PCM WAV (as piper.js makes them). */
+function wavSeconds(wav) {
+  const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+  const byteRate = v.getUint32(28, true), dataBytes = v.getUint32(40, true);
+  return byteRate ? dataBytes / byteRate : 0;
+}
+
 /** Settings from the address (once) or localStorage; null when there are none. */
 export function hivemindSettings() {
   const m = location.hash.match(/[#&]hivemind=([^&]+)/);
@@ -176,7 +203,8 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
     try {
       const piper = await import("../piper.js");
       const wav = await piper.synth(text, voice);
-      fire("audio", { payload: { ident: `hm-${nextIdent++}`, utterance: text, visemes: [] }, data: wav.buffer });
+      const visemes = textVisemes(text, wavSeconds(wav));
+      fire("audio", { payload: { ident: `hm-${nextIdent++}`, utterance: text, visemes }, data: wav.buffer });
     } catch (e) {
       console.warn("[emkay] speak", e);
     }
@@ -196,15 +224,23 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
       const build = await fetch("build.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({}));
       const precise = build.precise_models || {};
       const heyMycroft = Object.keys(precise).find((u) => /hey_mycroft/.test(u));
+      // Emkay's own "hey M K" where the site has it, as the local brain
+      // (boot.py EMKAY_WAKE_WORD, defaults v13); "hey mycroft" otherwise;
+      // settings.wakeWord picks another of the site's wake words
+      const wakeWords = build.wake_words || [];
+      const wakeWord = (settings.wakeWord && wakeWords.includes(settings.wakeWord) && settings.wakeWord)
+        || (wakeWords.includes("hey_emkay") ? "hey_emkay" : "hey_mycroft");
+      const hotword = wakeWord === "hey_mycroft" && heyMycroft
+        ? { module: "ovos-ww-plugin-precise-onnx", model: heyMycroft }
+        : { module: "ovos-ww-plugin-openwakeword", threshold: wakeWord === "hey_emkay" ? 0.8 : 0.5 };
       const stt = settings.stt === "browser" ? BROWSER_STT : WHISPER_STT;
       if (stt === WHISPER_STT) import("../whisper.js").then((w) => w.ready(sttModelFor(lang))).catch(() => {});
       const voice = voiceFor(lang);
       if (voice) import("../piper.js").then((p) => p.ready(voice)).catch(() => {});
       return {
         brain: "hivemind", node: client.nodeId, lang, skills: [], stt_module: stt,
-        wake_word: "hey_mycroft",
-        hotword: heyMycroft ? { module: "ovos-ww-plugin-precise-onnx", model: heyMycroft } : { module: "ovos-ww-plugin-openwakeword" },
-        precise_models: precise, wake_words: build.wake_words || [],
+        wake_word: wakeWord, hotword,
+        precise_models: precise, wake_words: wakeWords,
         site_langs: [lang], intent_langs: [lang], listener: {}, confirm_listening: false,
       };
     },
@@ -219,7 +255,11 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
     say: ({ text }) => ask_(text),
     record_begin: () => local("recognizer_loop:record_begin"),
     wakeword: ({ name }) => local("recognizer_loop:wakeword", { hotword: name }),
-    playback_started: () => local("recognizer_loop:audio_output_start"),
+    playback_started: ({ visemes }) => {
+      local("recognizer_loop:audio_output_start");
+      // the face's mouth, as the local OVOS does it (speech.py playback_started)
+      if (visemes?.length) local("enclosure.mouth.viseme_list", { start: Date.now() / 1000, visemes });
+    },
     playback_ended: () => local("recognizer_loop:audio_output_end"),
     // the visage's bus socket: what it says goes to the house
     core_open: () => null,
