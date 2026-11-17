@@ -197,6 +197,52 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/site
+      # the same site as one download, for serving Emkay yourself (Emkay
+      # Home, issue #30); published by the bundle job once it is deployed
+      - name: Pack the site for self-hosting
+        run: |
+          tar -czf build/emkay-site.tar.gz -C build/site .
+          cp build/site/build.json build/emkay-site.json
+          (cd build && sha256sum emkay-site.tar.gz > emkay-site.tar.gz.sha256)
+          ls -l build/emkay-site.*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emkay-site
+          path: |
+            build/emkay-site.tar.gz
+            build/emkay-site.tar.gz.sha256
+            build/emkay-site.json
+          retention-days: 3
+          compression-level: 0
+
+  # What app.emkay.ai runs, as the release "site" (a moving tag on the
+  # deployed commit): emkay-site.tar.gz, its .sha256 and emkay-site.json
+  # (the site's build.json, to see whether there is a newer one). Emkay Home
+  # downloads it to serve Emkay from the house.
+  bundle:
+    needs: [site, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: emkay-site
+          path: bundle
+      - name: Publish the release "site"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag -f site "$GITHUB_SHA"
+          git push -f origin refs/tags/site
+          notes="The newest build of main – the same as https://app.emkay.ai – as one download, for serving Emkay yourself (e.g. with [Emkay Home](https://github.com/emkay-voice/emkay-home)). Built from ${GITHUB_SHA::7}; replaced by every deploy."
+          if gh release view site >/dev/null 2>&1; then
+            gh release edit site --prerelease --latest=false --title "Emkay site (newest build)" --notes "$notes"
+          else
+            gh release create site --verify-tag --prerelease --latest=false --title "Emkay site (newest build)" --notes "$notes"
+          fi
+          gh release upload site bundle/emkay-site.tar.gz bundle/emkay-site.tar.gz.sha256 bundle/emkay-site.json --clobber
 
   deploy:
     needs: site

@@ -275,6 +275,13 @@ A release names a tested point: set VERSION, tag `vX.Y.Z` and push; the
 release workflow makes the GitHub release with the commits since the last
 tag as notes.
 
+Every deploy also publishes the site as one download, the release
+[`site`](https://github.com/emkay-voice/emkay/releases/tag/site):
+`emkay-site.tar.gz` (with its `.sha256`) and `emkay-site.json` (its
+`build.json`). It is a static site – any https server can serve it, at any
+path. [Emkay Home](https://github.com/emkay-voice/emkay-home) uses it to
+serve Emkay from the house.
+
 ## Developing
 
 ```bash
