@@ -842,15 +842,6 @@ function onBus(msg) {
     wake.restart(msg.data.wake_word, msg.data.hotword).catch((e) => { wake.state = `error: ${e.message || e}`; });
     return;
   }
-  if (msg.type === "emkay.lang.restart") {   // OVOS' language changed: start again in it
-    // the language's own name ("English", "dansk"); only Portuguese needs
-    // its country, as Emkay has two
-    const code = msg.data.lang, base = code.split("-")[0];
-    let name = code;
-    try { name = new Intl.DisplayNames([code], { type: "language" }).of(base === "pt" ? code : base); } catch {}
-    modelStatus.render("lang", name, null, "restart");
-    return;
-  }
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
   if (msg.type === "ovos.utterance.handled") utterancesHandled++;
   if (msg.type === "mycroft.mic.mute") mic.setMuted(true);

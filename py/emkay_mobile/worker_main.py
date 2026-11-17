@@ -186,9 +186,9 @@ def _settings_changed():
     apply what it did to speech without a restart, as ovos-dinkum-listener
     and ovos-audio do on a device.
 
-    - another language: skills, intents and models are loaded for the
-      language at boot, as on a device, so Emkay starts again in it; the page
-      says so first
+    - another language: skills and intents load for the language at boot, as
+      on a device; the page offers the restart (app.js languageChanged), and
+      speech reloads now so the new language's models download meanwhile
     - another STT or TTS: speech.reload() keeps the ones in use until the new
       ones work, and prewarm() starts their download now (the page shows it)
     - another wake word, or its settings: the page starts its engine again
@@ -199,15 +199,15 @@ def _settings_changed():
     new = _speech_settings()
     old, _applied = _applied, new
     if new["lang"] != old["lang"]:
-        print(f"[emkay] language {old['lang']} -> {new['lang']}: starting again")
-        _post("bus", json.dumps({"type": "emkay.lang.restart", "data": {"lang": new["lang"]}}))
-        import asyncio
-        from ovos_bus_client.message import Message
-        # the PHAL plugin saves to disk, then reloads the page (system.reboot)
-        asyncio.get_event_loop().call_later(
-            2.5, lambda: boot.bus().emit(Message("system.reboot", {"display": False})))
-        return
-    if new["stt"] != old["stt"] or new["tts"] != old["tts"]:
+        # skills and intents follow at the next start, which the page offers
+        # (app.js languageChanged: the "restart to use" button); speech is
+        # reloaded now, so the new language's voice and recognition models
+        # are fetched meanwhile
+        print(f"[emkay] language {old['lang']} -> {new['lang']}")
+        # not the previous voice meanwhile: it speaks the old language
+        speech.reload(keep_previous=False)
+        speech.prewarm()
+    elif new["stt"] != old["stt"] or new["tts"] != old["tts"]:
         print("[emkay] speech settings changed: new STT/TTS from the next use")
         speech.reload(keep_previous=True)
         speech.prewarm()

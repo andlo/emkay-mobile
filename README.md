@@ -32,7 +32,7 @@ device gets, on the **alpha** channel, compiled to WebAssembly with
 | Setup | the stock `ovos-control-panel`, in the ⚙ menu |
 | Network | a log of everything Emkay contacts, by day and service, in the ⚙ menu ([docs/network-log.md](docs/network-log.md)) |
 | Local only | "go offline": speech and voice on the phone, nothing you say leaves it, a shield on the screen ([docs/local-only.md](docs/local-only.md)) |
-| Settings | speech recognition, voice and wake word change without a restart, with the download shown on screen; a new language starts Emkay again ([docs/settings-live.md](docs/settings-live.md)) |
+| Settings | speech recognition, voice and wake word change without a restart, with the download shown on screen; a new language offers a restart for its skills ([docs/settings-live.md](docs/settings-live.md)) |
 
 See [`requirements/`](requirements) for the exact lists.
 

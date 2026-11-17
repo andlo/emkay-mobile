@@ -9,7 +9,7 @@ and the screen shows what is going on.
 |---|---|
 | Speech recognition (STT) or voice (TTS) | The new plugin is used from the next sentence. If it has a model to fetch (Whisper, Røst, Piper), the download starts at once, and a line at the top shows it: "Fetching the voice … 45 %", then "The voice is ready". |
 | Wake word, or its settings | The page stops the old wake word and starts the new one: "Loading the wake word "hey emkay" …", then "… is ready". |
-| Language | Skills, intents and models are loaded for the language when Emkay starts, as on a device, so Emkay says "Switching to English – starting again …" and reloads. |
+| Language | Emkay's own texts change at once, and speech reloads so the new language's voice and recognition models download meanwhile (the server speaks until then). Skills and intents are loaded for the language when Emkay starts, as on a device, so if this start has no intents for it, a button offers the restart ("Restart to use English"); nothing restarts by itself, so the setup can go on. |
 
 ## Meanwhile
 
@@ -42,5 +42,5 @@ nothing.
 - [`whisper.js`](../web/whisper.js) and [`piper.js`](../web/piper.js) report
   their downloads (`emkayModelProgress`, worker kind `"model"`).
 - [`app.js`](../web/app.js) `modelStatus` draws the status line; `wake.restart()`
-  starts the new wake word; a language change goes through `system.reboot`,
-  so the PHAL plugin saves to disk before the page reloads.
+  starts the new wake word; `languageChanged()` shows the restart button
+  when the new language's intents are not loaded yet.
