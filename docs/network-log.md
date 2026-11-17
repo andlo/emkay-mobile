@@ -2,7 +2,7 @@
 
 Emkay keeps a log of everything it contacts on the network, so what goes out
 is something you can look at, not just a promise. It is in the menu
-(⚙ → Network), and a skill can read it ("what did you send out today?").
+(⚙ → Guardian), and a skill can read it ("what did you send out today?").
 
 ## What is logged
 
