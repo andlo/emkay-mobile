@@ -16,7 +16,7 @@
 // strong machine can hear and speak for its Emkays (Whisper, Piper). Then
 // the recording goes to the house's STT and the answer is spoken with its
 // TTS; the wake word stays here. The house says where in the pairing link
-// (`speech: {stt, tts}`) and at /api/speech-info, asked at every start; the
+// (`speech: {stt, tts}`) and at /api/house-info, asked at every start; the
 // key is the HiveMind key. If the house doesn't answer, the phone does it
 // itself, as before – Emkay never goes quiet because the house is busy.
 // `houseSpeech: false` in the settings keeps speech on the phone.
@@ -190,15 +190,16 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
     }
   }
 
-  /** What the house offers now (an Emkay Home; any other HiveMind says nothing). */
-  async function refreshSpeech() {
+  /** What the house offers now – speech, its control panel (an Emkay Home;
+   * any other HiveMind says nothing). */
+  async function refreshHouse() {
     if (!settings.ssl) return;
     const port = settings.port && +settings.port !== 443 ? `:${settings.port}` : "";
     try {
-      const r = await house(`https://${settings.host}${port}/api/speech-info`, {}, 5000);
-      const { speech } = await r.json();
-      if (JSON.stringify(speech || null) !== JSON.stringify(settings.speech || null)) {
-        settings = { ...settings, speech: speech || null };
+      const r = await house(`https://${settings.host}${port}/api/house-info`, {}, 5000);
+      const { speech = null, panel = null } = await r.json();
+      if (JSON.stringify([speech, panel]) !== JSON.stringify([settings.speech || null, settings.panel || null])) {
+        settings = { ...settings, speech, panel };
         saveHivemindSettings(settings);
       }
     } catch { /* not an Emkay Home, or it can't say: keep what we know */ }
@@ -297,7 +298,7 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
     async boot() {
       fire("status", { key: "boot.loading" });
       await connect();
-      await refreshSpeech();
+      await refreshHouse();
       fire("status", { key: "hivemind.connected", progress: 1, vars: { node: client.nodeId } });
       const build = await fetch("build.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({}));
       const precise = build.precise_models || {};
@@ -325,6 +326,8 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
         precise_models: precise, wake_words: wakeWords,
         site_langs: [lang], intent_langs: [lang], listener: {}, confirm_listening: false,
         speech: sp ? "house" : "phone",
+        // the house's own control panel (Emkay Home), for ⚙ → Settings
+        house_panel: settings.panel || null,
       };
     },
     async heard({ pcm, rate }) {

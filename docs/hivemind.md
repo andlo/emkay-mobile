@@ -81,7 +81,7 @@ the recording goes to the house's STT and the answer comes back as the
 house's voice; the wake word stays on the phone. Emkay learns where from the
 pairing link (`speech: {"stt": "https://…/speech/stt/stt", "tts":
 "https://…/speech/tts"}`) and asks again at every start
-(`/api/speech-info`), so a phone paired earlier finds out too. The HiveMind
+(`/api/house-info`), so a phone paired earlier finds out too. The HiveMind
 key is the Bearer token. If the house doesn't answer within 20 s, the phone
 does it itself, as before.
 
@@ -89,9 +89,10 @@ does it itself, as before.
 turns it off for this phone (`houseSpeech: false`). With speech in the house
 the phone's own Whisper and Piper are not downloaded until they are needed.
 
-In this mode the ⚙ menu has no control panel, skill store or network log:
-those belong to the OVOS in the browser. Skills are installed on the OVOS
-in the house.
+In this mode the ⚙ menu has no skill store or network log: those belong to
+the OVOS in the browser. Skills are installed on the OVOS in the house. With
+an Emkay Home, ⚙ → Settings opens the house's own control panel (`panel` in
+the pairing link and at `/api/house-info`), behind the house's password.
 
 ## Testing
 

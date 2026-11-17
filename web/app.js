@@ -267,6 +267,12 @@ async function keepStorage() {
     ovosReady();
     showVisage();
     if (brain.kind === "local") bootStatus("boot.skills", 1, { n: info.skills.length });
+    // a satellite of an Emkay Home: ⚙ → Settings is the house's control panel
+    // (its own page, behind the house's password – it can't be framed here)
+    if (!brain.can.panel && info.house_panel) {
+      $("menu-panel").hidden = false;
+      $("menu-panel").onclick = () => { $("menu").hidden = true; window.open(info.house_panel, "_blank", "noopener"); };
+    }
     offerSetup();
     startDevice(call);   // the phone's sensors and connectivity, for PHAL
     // Emkay with its own OVOS, connected to Home Assistant (ha-device.js)
