@@ -211,6 +211,10 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
   let forward = new Set();  // bus message types HA wants (ready event)
   let haDeviceId = null;    // HA's id for this device (ready event)
   let ready = false;
+  let satellite = false;    // the integration runs Assist for Emkay as a satellite (#11)
+  // what to do when each queued sound has finished playing, in order
+  // (playback_ended): tell HA an answer or announcement is done, listen…
+  const afterPlayback = [];
   let conversation = { id: null, at: 0 };
   let listenAgain = false;  // the agent asked a question back
   let nextIdent = 1;
@@ -321,6 +325,7 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
         device_id: settings.device_id,
         name: settings.name || "Emkay",
         model: "Emkay", manufacturer: "Emkay",
+        satellite: true,          // audio goes to HA: an Assist satellite there
         sw_version: build.version || undefined,
         lang,
       }, onDeviceEvent);
@@ -340,17 +345,64 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
       case "ready":
         forward = new Set(ev.forward || []);
         haDeviceId = ev.device_id || null;
+        satellite = (ev.features || []).includes("satellite");
         ready = true;
         fire("status", { key: "ha.connected", progress: 1, vars: { url: settings.url } });
         break;
       case "bus":
         fromHA(ev.message);
         break;
+      case "announce":
+        announce(ev);
+        break;
+      case "timer":
+        if (ev.event === "finished") {
+          const name = ev.timer?.name;
+          speak(name ? t("ha.timer_done_named", { name }) : t("ha.timer_done"), lang);
+        }
+        break;
       case "displaced":
       case "removed":
         ready = false;
         console.warn(`[emkay] ha: device ${ev.type}`);
         break;
+    }
+  }
+
+  /** A sound for app.js' speaker, and what to do once it has played. */
+  function play(payload, data, after = null) {
+    afterPlayback.push(after);
+    fire("audio", { payload, data });
+  }
+
+  /** HA's own sound (TTS, announcements) through the integration's CORS path. */
+  async function fetchHA(url) {
+    const r = await fetch(new URL(url, settings.url));
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.arrayBuffer();
+  }
+
+  async function duration(data, text) {
+    return new OfflineAudioContext(1, 1, 44100).decodeAudioData(data.slice(0))
+      .then((b) => b.duration).catch(() => text.length * 0.07);
+  }
+
+  /** An announcement (or the start of a conversation) from an automation. */
+  async function announce({ id, message, media_url: url, start_conversation }) {
+    const done = () => {
+      ha.command({ type: "ovos/satellite/done", device_id: settings.device_id, what: "announce", announce_id: id })
+        .catch(() => {});
+      if (start_conversation) local("mycroft.mic.listen");   // the answer, without the wake word
+    };
+    if (message) local("speak", { utterance: message, lang });
+    try {
+      if (!url) throw new Error("no audio");
+      const data = await fetchHA(url);
+      const visemes = textVisemes(message || "", await duration(data, message || ""));
+      play({ ident: `ha-${nextIdent++}`, utterance: message, visemes }, data, done);
+    } catch {
+      if (message) speak(message, lang, done);
+      else done();
     }
   }
 
@@ -407,7 +459,7 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
     if (Date.now() - conversation.at > CONVERSATION_KEEP_MS) conversation.id = null;
     const end = pipeline?.tts_engine ? "tts" : "intent";
     return new Promise((resolveHeard) => {
-      let heard = text ?? "", answer = "", subId = null, done = false;
+      let heard = text ?? "", answer = "", subId = null, done = false, voiced = false;
       const finish = () => {
         if (done) return;
         done = true;
@@ -415,16 +467,22 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
         if (subId !== null) ha.unsubscribe(subId);
         local("ovos.utterance.handled");    // unanswered() waits for this
       };
+      const sendAudio = (handler) => {
+        // the whole recording at once (app.js' VAD already ended it), then the end
+        const bytes = new Uint8Array(pcm);
+        for (let i = 0; i < bytes.length; i += 32000) ha.sendAudio(handler, bytes.subarray(i, i + 32000));
+        ha.sendAudio(handler, null);
+      };
       const onEvent = async (ev) => {
         const data = ev.data || {};
         switch (ev.type) {
+          case "init":   // ovos/satellite/run: where the audio goes
+            if (start === "stt" && ev.handler_id != null) sendAudio(ev.handler_id);
+            break;
           case "run-start": {
             const handler = data.runner_data?.stt_binary_handler_id;
-            if (start === "stt" && handler != null) {
-              // the whole recording at once (app.js' VAD already ended it), then the end
-              const bytes = new Uint8Array(pcm);
-              for (let i = 0; i < bytes.length; i += 32000) ha.sendAudio(handler, bytes.subarray(i, i + 32000));
-              ha.sendAudio(handler, null);
+            if (!viaSatellite && start === "stt" && handler != null) {
+              sendAudio(handler);
             }
             break;
           }
@@ -439,61 +497,70 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
             listenAgain = !!out.continue_conversation;
             answer = out.response?.speech?.plain?.speech || "";
             if (answer) local("speak", { utterance: answer, lang });
-            if (answer && end === "intent") speak(answer, lang);
+            if (answer && end === "intent" && !viaSatellite) { voiced = true; speak(answer, lang, ttsDone); }
             break;
           }
           case "tts-end":
-            if (answer) playHA(data.tts_output, answer);
+            voiced = true;
+            if (answer) playHA(data.tts_output, answer, ttsDone);
+            else ttsDone();
             break;
           case "error":
             console.warn("[emkay] assist", data.code, data.message);
             finish();
             break;
           case "run-end":
+            // the pipeline HA chose for the satellite has no text-to-speech
+            if (answer && !voiced) speak(answer, lang, ttsDone);
             finish();
             break;
         }
       };
-      const msg = {
-        type: "assist_pipeline/run", start_stage: start, end_stage: end,
-        input: start === "stt" ? { sample_rate: rate } : { text },
-        conversation_id: conversation.id,
+      // as a satellite, HA runs the pipeline chosen for Emkay in HA and keeps
+      // the conversation; else Emkay runs its pipeline itself
+      const viaSatellite = satellite && ready;
+      const ttsDone = () => {
+        if (viaSatellite) ha.command({ type: "ovos/satellite/done", device_id: settings.device_id, what: "tts" }).catch(() => {});
       };
-      if (pipeline) msg.pipeline = pipeline.id;
-      if (haDeviceId) msg.device_id = haDeviceId;
+      const msg = viaSatellite
+        ? { type: "ovos/satellite/run", device_id: settings.device_id, start_stage: start,
+            ...(start === "stt" ? {} : { text }) }
+        : { type: "assist_pipeline/run", start_stage: start, end_stage: end,
+            input: start === "stt" ? { sample_rate: rate } : { text },
+            conversation_id: conversation.id,
+            ...(pipeline ? { pipeline: pipeline.id } : {}),
+            ...(haDeviceId ? { device_id: haDeviceId } : {}) };
       ha.subscribe(msg, onEvent).then((id) => { subId = id; if (done) ha.unsubscribe(id); })
         .catch((e) => { console.warn("[emkay] assist", e); finish(); });
     });
   }
 
   /** HA's own voice: its TTS audio, through the integration's CORS-able path. */
-  async function playHA(out, text) {
+  async function playHA(out, text, after = null) {
     try {
       const tok = out?.token || out?.url?.split("/").pop();
       if (!tok) throw new Error("no tts token");
-      let r = await fetch(`${settings.url}/api/ovos/tts/${tok}`).catch(() => null);
-      if (!r?.ok && out?.url) r = await fetch(new URL(out.url, settings.url));   // same site / CORS proxy
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.arrayBuffer();
-      const seconds = await new OfflineAudioContext(1, 1, 44100).decodeAudioData(data.slice(0))
-        .then((b) => b.duration).catch(() => text.length * 0.07);
-      fire("audio", { payload: { ident: `ha-${nextIdent++}`, utterance: text, visemes: textVisemes(text, seconds) }, data });
+      const data = await fetchHA(`/api/ovos/tts/${tok}`)
+        .catch(() => (out?.url ? fetchHA(out.url) : Promise.reject(new Error("no tts url"))));
+      const visemes = textVisemes(text, await duration(data, text));
+      play({ ident: `ha-${nextIdent++}`, utterance: text, visemes }, data, after);
     } catch (e) {
       console.warn("[emkay] ha tts, speaking on the phone instead:", e.message || e);
-      speak(text, lang);
+      speak(text, lang, after);
     }
   }
 
   /** The phone's own voice (piper.js), as the HiveMind brain. */
-  async function speak(text, l) {
+  async function speak(text, l, after = null) {
     const voice = voiceFor(l) || voiceFor(lang);
-    if (!voice) return console.warn(`[emkay] no Piper voice for ${l}`);
     try {
+      if (!voice) throw new Error(`no Piper voice for ${l}`);
       const piper = await import("../piper.js");
       const wav = await piper.synth(text, voice);
-      fire("audio", { payload: { ident: `ha-${nextIdent++}`, utterance: text, visemes: textVisemes(text, wavSeconds(wav)) }, data: wav.buffer });
+      play({ ident: `ha-${nextIdent++}`, utterance: text, visemes: textVisemes(text, wavSeconds(wav)) }, wav.buffer, after);
     } catch (e) {
       console.warn("[emkay] speak", e);
+      after?.();   // nothing to wait for
     }
   }
 
@@ -559,6 +626,7 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
     },
     playback_ended: () => {
       local("recognizer_loop:audio_output_end");
+      afterPlayback.shift()?.();
       // the agent asked something back: listen for the answer
       if (listenAgain) { listenAgain = false; local("mycroft.mic.listen"); }
     },

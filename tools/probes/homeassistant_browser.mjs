@@ -74,7 +74,7 @@ try {
   await send("Page.navigate", { url: `${base}manifest.webmanifest` });
   await sleep(500);
   await js(`localStorage.clear(); localStorage.setItem("emkay-brain", "homeassistant");
-    localStorage.setItem("emkay-ha", JSON.stringify({ url: ${JSON.stringify(ha)}, name: "Emkay probe"${process.env.SPEECH_WAV ? ', wakeWord: "hey_mycroft"' : ""} }));
+    localStorage.setItem("emkay-ha", JSON.stringify({ url: ${JSON.stringify(ha)}, name: "Emkay probe", device_id: ${JSON.stringify(process.env.DEVICE_ID || "emkay-probe-device")}${process.env.SPEECH_WAV ? ', wakeWord: "hey_mycroft"' : ""} }));
     sessionStorage.setItem("emkay-ha-login", "${state}"); true`);
   await send("Page.navigate", { url });
   // boot is done when the visage's frame is on the page (app.js showVisage)
