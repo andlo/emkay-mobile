@@ -55,6 +55,20 @@ NO_USE_IN_BROWSER = ("ovos-skill-speedtest.openvoiceos", "ovos-skill-audio-recor
 #: stays as it is.
 HEY_EMKAY = {"module": "ovos-ww-plugin-openwakeword", "threshold": 0.8, "listen": True}
 
+#: Emkay's own defaults as a device (defaults v13): speech on the device and
+#: its own wake word. Speech recognition (Whisper, Røst for Danish) and the
+#: voice (Piper) run in the browser, so what is said stays on the device and
+#: OpenVoiceOS' public servers are not used for every sentence; they stay the
+#: fallback (`fallback_module`), which speaks and listens while a model
+#: downloads the first time, and for a language a local plugin cannot do.
+#: Only a setting still at the installer's default is changed; everything
+#: can be set back in the control panel.
+LOCAL_STT = "ovos-stt-plugin-whisper-browser"
+LOCAL_TTS = "ovos-tts-plugin-piper-browser"
+SERVER_STT = "ovos-stt-plugin-server"
+SERVER_TTS = "ovos-tts-plugin-server"
+EMKAY_WAKE_WORD = "hey_emkay"
+
 #: The intent pipeline ovos-installer writes (defaults v10), so Emkay matches
 #: an installed device rather than ovos-config's bare default: it adds
 #: common query (knowledge skills compete, e.g. Wikipedia and
@@ -80,7 +94,7 @@ INSTALLER_PIPELINE = (
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 12
+DEFAULTS_VERSION = 13
 #: the package index the control panel searches (defaults v7)
 STORE_INDEX = "https://store.emkay.ai"
 
@@ -226,6 +240,9 @@ def _browser_defaults(done: int) -> dict:
          not change
      12. the default skills that make no sense in a browser are
          blacklisted (NO_USE_IN_BROWSER)
+     13. speech runs on the device and "hey M K" wakes it (LOCAL_STT,
+         LOCAL_TTS, EMKAY_WAKE_WORD), where those settings are still the
+         installer's defaults; the servers stay the fallback
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -297,6 +314,15 @@ def _browser_defaults(done: int) -> dict:
         out.setdefault("hotwords", {})["hey_emkay"] = HEY_EMKAY
     if done < 12:
         _blacklist(out, NO_USE_IN_BROWSER)
+    if done < 13:
+        cfg = Configuration()
+        if cfg.get("stt", {}).get("module") in (None, SERVER_STT):
+            out.setdefault("stt", {}).update({"module": LOCAL_STT, "fallback_module": SERVER_STT})
+        if cfg.get("tts", {}).get("module") in (None, SERVER_TTS):
+            out.setdefault("tts", {}).update({"module": LOCAL_TTS, "fallback_module": SERVER_TTS})
+        if cfg.get("listener", {}).get("wake_word") in (None, "hey_mycroft"):
+            out.setdefault("listener", {})["wake_word"] = EMKAY_WAKE_WORD
+            out.setdefault("hotwords", {})[EMKAY_WAKE_WORD] = HEY_EMKAY
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes

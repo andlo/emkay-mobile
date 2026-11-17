@@ -9,9 +9,13 @@ state is kept, so it lasts across restarts. (#23)
 
 | | online (default) | local only |
 |---|---|---|
-| speech recognition | `ovos-stt-plugin-server` (OpenVoiceOS' public servers), or what you chose | `ovos-stt-plugin-whisper-browser`: Whisper, or Røst for Danish, in the phone |
-| voice | `ovos-tts-plugin-server`, or what you chose | `ovos-tts-plugin-piper-browser`: Piper in the phone |
-| network | everything | refused, except Emkay's own site and GET downloads of the models and voices above |
+| speech recognition | what you chose; by default `ovos-stt-plugin-whisper-browser` (Whisper, or Røst for Danish, in the phone), with OpenVoiceOS' servers as the fallback | `ovos-stt-plugin-whisper-browser`, no fallback: it waits for its model |
+| voice | what you chose; by default `ovos-tts-plugin-piper-browser` (Piper in the phone), with the servers as the fallback | `ovos-tts-plugin-piper-browser`, no fallback |
+| network | everything (skills reach their services) | refused, except Emkay's own site and GET downloads of the models and voices above |
+
+With the defaults, speech already stays on the phone; local only also
+closes the network for everything else (Wikipedia, the weather, …), and
+takes the servers away as a fallback.
 
 The first time, the speech model and the voice are downloaded once (that is
 the one thing still allowed out, and it carries nothing you said); after

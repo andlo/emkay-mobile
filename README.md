@@ -27,7 +27,7 @@ device gets, on the **alpha** channel, compiled to WebAssembly with
 |---|---|
 | Core | `ovos-core[plugins]` – SkillManager, IntentService and the pipeline plugins (m2v, padatious, adapt, …) on an in-process bus |
 | Skills | the installer defaults: `ovos-core[skills-essential,skills-internet,skills-audio]`, plus skills that answer without servers (calculator, geography, geometry, NATO alphabet, morse code), jokes, reading aloud, internet radio and the news and Emkay's own (about Emkay, Guardian, the skill store, kiosk). Defaults that cannot work in a browser are switched off, and can be switched on again in the settings: DuckDuckGo and Wolfram Alpha (servers a web page may not read), speedtest, audio recording, dictation, IP address, diagnostics and boot-finished (they need the device itself). See [`requirements/browser.txt`](requirements/browser.txt) and `boot.py`. |
-| Speech | the installer default (public servers): `ovos-stt-plugin-server`, `ovos-tts-plugin-server` |
+| Speech | on the device: `ovos-stt-plugin-whisper-browser` (Whisper, Røst for Danish) and `ovos-tts-plugin-piper-browser` (Piper), with OpenVoiceOS' public servers (`ovos-stt-plugin-server`, `ovos-tts-plugin-server`) as the fallback while the models download the first time; "Hey Emkay" as the wake word. Emkay's choice as a device (defaults v13, `boot.py`): what is said stays on the device, and the public servers are not used for every sentence. All of it can be changed in the settings. |
 | Screen | `ovos-gui` + `ovos-skill-homescreen`, drawn by ovos-gui-visage (the Mark II face, Flutter web build) |
 | Setup | the stock `ovos-control-panel`, in the ⚙ menu |
 | Network | a log of everything Emkay contacts, by day and service, in the ⚙ menu ([docs/network-log.md](docs/network-log.md)) |
@@ -133,7 +133,8 @@ forces a workaround:
   results and AudioService's state, and turns its buttons into AudioService
   commands. It belongs in OCP itself, and goes there as a PR.
 - **Speech to text** is OVOS' configured STT plugin, as on a device
-  (the public OVOS servers by default). One more plugin ships with the
+  (Whisper on the device by default, defaults v13; the public OVOS servers
+  are the fallback). One more plugin ships with the
   site: **ovos-stt-plugin-browser**, the browser's own speech recognition
   (Web Speech API – Google's in Chrome on Android, Apple's on an iPhone),
   picked in the control panel like any other STT
@@ -142,8 +143,8 @@ forces a workaround:
   speak; the audio goes to Google or Apple. The browser listens itself, so
   Emkay lets the microphone go meanwhile; where the browser has no speech
   recognition (Firefox), `stt.fallback_module` transcribes the recording.
-- **The wake word** is OVOS' own `listener.wake_word` ("hey_mycroft" by
-  default), heard with the plugin OVOS' config names for it
+- **The wake word** is OVOS' own `listener.wake_word` ("hey_emkay" by
+  default since defaults v13, "hey_mycroft" before), heard with the plugin OVOS' config names for it
   (`hotwords.<name>.module`), as ovos-dinkum-listener would load it, in a
   Web Worker of its own ([`wakeword.js`](web/wakeword.js), onnxruntime-web):
   - `ovos-ww-plugin-precise-onnx`, OVOS' default for "hey mycroft": the
@@ -160,9 +161,9 @@ forces a workaround:
     (`hey_emkay`, trained with
     [hey-emkay-wakeword](https://github.com/emkay-voice/hey-emkay-wakeword),
     same licence). Its `hotwords` entry is in Emkay's defaults (step 11
-    in `boot.py`), so it can be chosen as **Wake word** under Voice
-    settings in the control panel; the wake word in use does not change
-    on its own. Chosen by hand, it is:
+    in `boot.py`), and since step 13 it is the wake word where it was
+    still "hey_mycroft"; **Wake word** under Voice settings in the control
+    panel changes it back. The setting is:
 
     ```json
     {"listener": {"wake_word": "hey_emkay"},
