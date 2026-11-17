@@ -4,7 +4,7 @@
 // speaker, menu. The brain is the OpenVoiceOS it talks to:
 //
 //   local          OVOS in this browser (worker.js + Pyodide) – today's Emkay
-//   hivemind       a hivemind-core in the house (#11)          – not yet
+//   hivemind       a hivemind-core in the house (#11)
 //   homeassistant  Home Assistant's Assist, through the general
 //                  OVOS integration (andlo/ha-ovos-integration) – not yet
 //
@@ -36,8 +36,9 @@
  */
 
 import { createLocalBrain } from "./local.js";
+import { createHiveMindBrain } from "./hivemind-brain.js";
 
-export const BRAINS = ["local"];   // "hivemind", "homeassistant" when they exist
+export const BRAINS = ["local", "hivemind"];   // "homeassistant" when it exists
 const KEY = "emkay-brain";
 
 /**
@@ -58,6 +59,7 @@ export function chosenBrain(params) {
 export function createBrain(kind) {
   switch (kind) {
     case "local": return createLocalBrain();
+    case "hivemind": return createHiveMindBrain();
   }
   throw new Error(`no brain "${kind}"`);
 }

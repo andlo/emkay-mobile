@@ -155,3 +155,16 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .menu-card h2.with-icon img { width: 34px; height: 34px; border-radius: 8px; }
 .menu-card button.guardian-offline { background: #1a2028; border: 1px solid #2d3a48; }
 .menu-card button.guardian-offline.on { background: #13321b; border-color: #3a7d4a; color: #bfe8c8; }
+
+/* HiveMind brain (#11): the connection form over the boot screen */
+.hivemind-setup { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column;
+  align-items: stretch; justify-content: center; gap: 12px; padding: 24px; max-width: 360px; margin: 0 auto; }
+.hivemind-setup h2 { font-weight: 300; letter-spacing: .1em; margin: 0 0 4px; text-align: center; }
+.hivemind-setup p { margin: 0; color: #9aa; font-size: 14px; line-height: 1.45; }
+.hivemind-setup p.error { color: #f5a; }
+.hivemind-setup label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #9aa; }
+.hivemind-setup label.check { flex-direction: row; align-items: center; gap: 8px; }
+.hivemind-setup input[type=text], .hivemind-setup input[type=number], .hivemind-setup input[type=password] {
+  font-size: 16px; padding: 10px 12px; border-radius: 8px; border: 1px solid #345; background: #0b1218; color: #fff; }
+.hivemind-setup button { margin-top: 8px; font-size: 18px; padding: 14px 28px; border-radius: 40px; border: 0;
+  background: #22a7f0; color: #fff; }

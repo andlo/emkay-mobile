@@ -71,6 +71,11 @@ brain.on("audio", (d) => d.payload.sound ? speaker.playSound(d.data) : speaker.e
 brain.on("phal", (d) => onPhal(JSON.parse(d.payload)));
 brain.on("model", (d) => modelStatus.show(d.payload));   // whisper.js / piper.js downloads
 brain.on("bus", (d) => onBus(JSON.parse(d.payload)));
+// the menu shows what this brain has: the control panel, the skill store and
+// the network log belong to the OVOS in this browser
+$("menu-panel").hidden = !brain.can.panel;
+$("menu-store").hidden = !brain.can.store;
+$("menu-network").hidden = !brain.can.netlog;
 
 let ovosReady;
 const ready = new Promise((r) => (ovosReady = r));
@@ -182,7 +187,7 @@ function offerSetup() {
   try { first = !localStorage.getItem(WELCOMED); } catch {}
   const remember = () => { try { localStorage.setItem(WELCOMED, "1"); } catch {} };
   $("start").onclick = () => { remember(); start(); };
-  if (!first) return;
+  if (!first || !brain.can.panel) return;   // the setup wizard is the local OVOS' control panel
   $("start").dataset.i18n = "start.defaults";
   apply();
   $("start").classList.add("quiet");
@@ -247,7 +252,7 @@ async function keepStorage() {
     sttModule = info.stt_module;
     ovosReady();
     showVisage();
-    bootStatus("boot.skills", 1, { n: info.skills.length });
+    if (brain.kind === "local") bootStatus("boot.skills", 1, { n: info.skills.length });
     offerSetup();
     startDevice(call);   // the phone's sensors and connectivity, for PHAL
     $("start").hidden = false;
