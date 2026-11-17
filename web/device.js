@@ -14,7 +14,12 @@
 import { t } from "./i18n.js";
 
 let call = null;               // app.js' call() into the worker
-const event = (name, data) => call("phal_event", { event: name, data }).catch(() => {});
+// the PHAL plugin can ask (camera_check) before startDevice() has run: keep
+// what the page has to say until then, and send it once it has
+const early = [];
+const event = (name, data) => (call
+  ? call("phal_event", { event: name, data }).catch(() => {})
+  : (early.push([name, data]), Promise.resolve()));
 
 const lastSent = new Map();   // "device_name" -> last state sent
 
@@ -240,6 +245,7 @@ export function onRequest(msg) {
 /** Start reporting, once OVOS (and with it the plugin) is up. */
 export function startDevice(callWorker) {
   call = callWorker;
+  for (const [name, data] of early.splice(0)) event(name, data);
   watchOnline();
   watchBattery();
   watchNetwork();

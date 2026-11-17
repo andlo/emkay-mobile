@@ -8,6 +8,11 @@ questions go to the house over [HiveMind](https://github.com/JarbasHiveMind/Hive
 Nothing heavy loads on the phone: no Pyodide, no OVOS. Emkay starts in a
 second or two.
 
+The wake word is Emkay's own "hey M K" where the site has it, as on the
+device (`hey mycroft` otherwise; `wakeWord` in the settings picks another of
+the site's wake words). The face moves its mouth to the answer the same way
+the local OVOS does it (visemes from the text, spread over the audio).
+
 It works like `hivemind-voice-sat`: the wake word and the speech
 recognition run on the phone (Whisper in the browser, or the browser's own
 recognition), only the text goes to the house; the answer (`speak`) comes
@@ -58,7 +63,8 @@ echo -n '{"host":"ovos.local","port":5678,"ssl":true,"key":"…","password":"…
 ```
 
 Optional fields: `lang` (default: the browser's language), `stt`
-(`"whisper"`, the default, or `"browser"`), `siteId`.
+(`"whisper"`, the default, or `"browser"`), `wakeWord` (e.g. `"hey_mycroft"`),
+`path` (hivemind-core behind a reverse proxy, e.g. `"/hivemind"`), `siteId`.
 
 In this mode the ⚙ menu has no control panel, skill store or network log:
 those belong to the OVOS in the browser. Skills are installed on the OVOS
@@ -91,7 +97,6 @@ HM_KEY=K HM_PASSWORD=P node tools/probes/hivemind_node.mjs
 
 - Skill pages (ovos-gui) from the house on the phone's screen – the face
   and its clock work; GUI pages need HiveMind to carry the GUI stream.
-- The mouth follows no visemes yet in this mode (#28: mouth from the audio level).
 - The texts are in all of Emkay's languages, but only English and Danish
   were written by someone who speaks them; the rest need a native speaker's
   look (#10).

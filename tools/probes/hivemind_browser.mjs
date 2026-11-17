@@ -73,6 +73,9 @@ try {
   await tap("start");
   await until(`document.getElementById("boot").hidden`, 10, "the boot screen to go");
   log(`started; wake word: ${await js(`window.emkay.wake.state`)}`);
+  // the mouth: enclosure.mouth.viseme_list on the visage's bus while speaking
+  await js(`window.__mouth = []; window.emkayVisage2.subscribe("core", (raw) => { try { const m = JSON.parse(raw);
+    if (m.type === "enclosure.mouth.viseme_list") window.__mouth.push(m.data.visemes.length); } catch {} }); true`);
   await js(`window.__captions = []; window.__said = [];
     new MutationObserver(() => { const t = document.getElementById("caption-text").textContent;
       if (window.__captions.at(-1) !== t) window.__captions.push(t); })
@@ -94,6 +97,9 @@ try {
   log(`captions: ${await js(`JSON.stringify(window.__captions)`)}`);
   await until(`!window.emkay.speaker.playing`, 30, "the answer to finish");
   log("played");
+  log(`mouth: ${await js(`JSON.stringify(window.__mouth)`)} visemes per answer`);
+  await until(`window.emkay.wake.state !== "loading"`, 30, "the wake word engine");
+  log(`wake word: ${await js(`window.emkay.wake.engineName`)} ${await js(`document.getElementById("mic").classList.contains("wake") ? "listening" : window.emkay.wake.state`)}`);
   await sleep(1500);
   const png = await send("Page.captureScreenshot", { format: "png" });
   writeFileSync(shot, Buffer.from(png.data, "base64"));
