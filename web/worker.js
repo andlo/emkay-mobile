@@ -247,6 +247,17 @@ const commands = {
   /** The network log: every request this worker made in the last days (netlog.js). */
   net_log: () => netlog.entries(),
   net_clear: () => netlog.clear(),
+  // Emkay Dev (?dev, web/dev.js and py/emkay_mobile/dev.py): a skill from VS Code
+  dev_enable: () => main.dev_enable(),
+  dev_load: async ({ skillId, files, requirements }) => {
+    const out = await main.dev_load(skillId, JSON.stringify(files), JSON.stringify(requirements || []));
+    syncfs(false);   // the files are in ~/.local: kept for the next reload
+    return out;
+  },
+  dev_unload: ({ skillId, restore }) => promising(main.dev_unload, skillId, restore !== false),
+  dev_skills: () => main.dev_skills(),
+  dev_lang: () => main.dev_lang(),
+  dev_test: async ({ row }) => await main.dev_test(JSON.stringify(row)),
   /** Run a line of Python and return its value as text (for debugging). */
   python: ({ code }) => String(py.runPython(code)),
   /** The same through runPythonAsync: Python that may wait (JSPI, issue #20). */

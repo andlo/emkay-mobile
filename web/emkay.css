@@ -184,3 +184,9 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .brain-choice .brain-sub input { margin-top: 3px; }
 .brain-choice .brain-sub span { display: flex; flex-direction: column; }
 .brain-choice .brain-sub small { opacity: .7; }
+/* Emkay Dev (?dev, web/dev.js): this Emkay runs a skill from an editor */
+.dev-badge { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 50;
+  font: 600 11px/1 system-ui, sans-serif; letter-spacing: .08em; color: #0b1a24;
+  background: #22a7f0; border-radius: 999px; padding: 5px 10px; pointer-events: none; opacity: .9;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 140px); }
+.dev-badge.bad { background: #f0a022; }

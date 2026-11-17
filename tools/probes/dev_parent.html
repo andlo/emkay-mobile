@@ -1,0 +1,17 @@
+<!doctype html><meta charset=utf-8><title>dev parent</title>
+<iframe id=f src="http://127.0.0.1:8080/?dev" allow="microphone; autoplay" style="width:390px;height:700px"></iframe>
+<script>
+const f = document.getElementById("f");
+let nid = 0; const waiting = new Map();
+window.log = []; window.bus = []; window.hello = null;
+addEventListener("message", (e) => {
+  const d = e.data; if (!d || d.emkayDev !== 1) return;
+  if (d.op === "hello") window.hello = d;
+  if (d.op === "result") { waiting.get(d.id)?.(d); waiting.delete(d.id); }
+  if (d.op === "log") window.log.push(d.record);
+  if (d.op === "bus") { try { window.bus.push(JSON.parse(d.raw).type); } catch {} }
+});
+window.op = (op, args = {}) => new Promise((r) => { const id = ++nid; waiting.set(id, r);
+  f.contentWindow.postMessage({ emkayDev: 1, op, id, ...args }, "http://127.0.0.1:8080"); });
+setInterval(() => { if (!window.hello?.ready) f.contentWindow.postMessage({ emkayDev: 1, op: "hello" }, "http://127.0.0.1:8080"); }, 1000);
+</script>
