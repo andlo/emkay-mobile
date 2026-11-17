@@ -149,7 +149,7 @@ def _watch(raw):
     except Exception:
         return
     t = msg.get("type") if isinstance(msg, dict) else None
-    if _core_open:   # the new visage's core bus socket gets everything
+    if _core_open or _dev_stream:   # the visage's bus socket (and Emkay Dev) get everything
         _post("core", raw if isinstance(raw, str) else raw.serialize())
     if t in _STATE_TOPICS or (t or "").startswith(_MEDIA_PREFIX) and t != _MEDIA_PREFIX + "state":
         _post("bus", json.dumps({"type": t, "data": msg.get("data", {})}))
@@ -245,6 +245,7 @@ def gui_message(raw: str):
 # bus message, both ways, while it is open.
 
 _core_open = False
+_dev_stream = False   # Emkay Dev follows the bus too (dev_enable)
 
 
 def core_open(is_open: bool = True):
@@ -317,6 +318,40 @@ def sound_bytes(uri: str):
     """A sound file's bytes for the page (the confirm-listening sound)."""
     from pyodide.ffi import to_js
     return to_js(speech.sound_bytes(uri))
+
+
+# --- Emkay Dev (?dev, dev.py): a skill from VS Code ----------------------
+
+def dev_enable() -> str:
+    global _dev_stream
+    from . import dev
+    _dev_stream = True
+    return dev.enable(_post)
+
+
+async def dev_load(skill_id: str, files_json: str, requirements_json: str = "[]") -> str:
+    from . import dev
+    return await dev.load(skill_id, files_json, requirements_json)
+
+
+def dev_unload(skill_id: str, restore: bool = True) -> str:
+    from . import dev
+    return dev.unload(skill_id, restore=restore)
+
+
+def dev_lang() -> str:
+    from . import dev
+    return dev.language()
+
+
+def dev_skills() -> str:
+    from . import dev
+    return dev.skills()
+
+
+async def dev_test(row_json: str) -> str:
+    from . import dev
+    return await dev.test(row_json)
 
 
 def heard_text(text: str) -> str:

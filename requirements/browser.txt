@@ -79,3 +79,7 @@ ovos-stt-plugin-whisper-browser
 
 # browser glue
 pyodide-http
+
+# Emkay Dev (?dev, py/emkay_mobile/dev.py): a skill's golden utterances are
+# judged by the same judge as ovos-tui-client and the store's CI
+ovos-routing-judge

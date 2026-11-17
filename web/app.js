@@ -62,7 +62,10 @@ tabs.onmessage = ({ data }) => {
 // ----------------------------------------------------------------- brain
 // Where Emkay thinks (brains/brain.js, #28). Only the local brain (OVOS in
 // worker.js) exists so far; its worker starts loading right away, as before.
-const brain = createBrain(chosenBrain(params));
+// Emkay Dev (?dev, web/dev.js): always the OVOS in this browser – the skill
+// you are writing runs in it
+const devMode = params.has("dev");
+const brain = createBrain(devMode ? "local" : chosenBrain(params));
 const call = brain.call;   // worker.js commands (local brain)
 
 const guiSockets = new Set();
@@ -87,6 +90,13 @@ $("menu-brain").onclick = () => { $("menu").hidden = true; chooseBrain(brain.kin
 
 let ovosReady;
 const ready = new Promise((r) => (ovosReady = r));
+
+if (devMode) {
+  import("./dev.js").then(({ startDev }) => startDev({
+    call, ready,
+    onMessage: (fn) => brain.onMessage(fn), on: (k, fn) => brain.on(k, fn),
+  }));
+}
 
 // ---------------------------------------------------------------- the screen
 /**
@@ -193,6 +203,7 @@ const WELCOMED = "emkay-welcomed";
 function offerSetup() {
   let first = false;
   try { first = !localStorage.getItem(WELCOMED); } catch {}
+  if (devMode) first = false;   // a dev Emkay starts on the defaults, every time
   const remember = () => { try { localStorage.setItem(WELCOMED, "1"); } catch {} };
   $("start").onclick = () => { remember(); start(); };
   if (!first) return;

@@ -23,6 +23,16 @@ URL = "http://127.0.0.1:8080/"
 
 #: probe, extra env, arguments, the lines its log must hold (regex)
 PROBES = [
+    # Emkay Dev (?dev, #43): a skill sent as files from another window,
+    # tested, changed and loaded again; a broken one says why
+    ("dev_browser.mjs", {}, [], [
+        r"hello: ready=true",
+        r'load: ok=true .*"trained":\d',
+        r'test "[^"]+": pass – ovos-skill-hello\.emkay-voice:hello\.intent',
+        r"other language: skipped",
+        r'after reload: pass said \["Reloaded and ready\."\]',
+        r'broken: ok=false problems=\["Failed to load skill',
+    ]),
     ("setup_browser.mjs", {}, [], [
         r"\| Start ",                            # the first start offers setup
         r"wake step shown: false",              # browser-honest wizard
