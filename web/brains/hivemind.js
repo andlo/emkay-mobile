@@ -43,6 +43,9 @@ const CODECS = {
 export const ENCODINGS = Object.keys(CODECS);
 export const CIPHERS = ["AES-GCM"];
 
+/** An Error with a code the page can turn into its own words (hivemind.err.<code>). */
+const fail_ = (code, message) => Object.assign(new Error(message), { code });
+
 const random = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
 const concat = (...parts) => {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
@@ -106,17 +109,17 @@ export class HiveMindClient extends EventTarget {
   /** Connect and finish the handshake; resolves when bus messages can flow. */
   connect(timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => fail(new Error("HiveMind handshake timed out")), timeoutMs);
+      const timer = setTimeout(() => fail(fail_("timeout", "HiveMind handshake timed out")), timeoutMs);
       const fail = (e) => { clearTimeout(timer); this.close(); reject(e); };
       this._ready = () => { clearTimeout(timer); resolve(this); };
       this._fail = fail;
       this.ws = new WebSocket(this.url);
       this.ws.onmessage = (ev) => this._receive(ev.data).catch((e) => this._fail?.(e));
-      this.ws.onerror = () => this._fail?.(new Error(`can't reach ${this.opts.host}:${this.opts.port}`));
+      this.ws.onerror = () => this._fail?.(fail_("unreachable", `can't reach ${this.opts.host}:${this.opts.port}`));
       this.ws.onclose = (ev) => {
         const wasReady = !!this.key;
         this.key = null;
-        if (!wasReady) this._fail?.(new Error(`HiveMind closed the connection (${ev.code}) – wrong key or password?`));
+        if (!wasReady) this._fail?.(fail_("closed", `HiveMind closed the connection (${ev.code}) – wrong key or password?`));
         this.dispatchEvent(Object.assign(new Event("close"), { code: ev.code }));
       };
     });
@@ -186,7 +189,7 @@ export class HiveMindClient extends EventTarget {
   async _shake(p) {
     if (!p.envelope) {
       // the server asks us to start
-      if (!p.password) throw new Error("this hivemind-core offers no password handshake");
+      if (!p.password) throw fail_("no_password", "this hivemind-core offers no password handshake");
       this._iv = random(8);
       await this._send({ msg_type: "shake", payload: {
         binarize: false, encodings: ENCODINGS, ciphers: CIPHERS,
@@ -195,7 +198,7 @@ export class HiveMindClient extends EventTarget {
       return;
     }
     // the server's answer
-    if (!(await matches(p.envelope, this.opts.password))) throw new Error("HiveMind's answer doesn't match the password");
+    if (!(await matches(p.envelope, this.opts.password))) throw fail_("password", "HiveMind's answer doesn't match the password");
     if (p.cipher && !CIPHERS.includes(p.cipher)) throw new Error(`cipher ${p.cipher} not supported`);
     if (p.encoding && !CODECS[p.encoding]) throw new Error(`encoding ${p.encoding} not supported`);
     this.encoding = p.encoding || "JSON-HEX";
