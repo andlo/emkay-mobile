@@ -1,6 +1,7 @@
 // Emkay – the page side: screen, microphone and speaker.
 //
-// OVOS itself runs in worker.js. ovos-gui-visage (Mike's Flutter GUI) draws
+// OVOS itself runs in worker.js, behind the brain (brains/brain.js, #28),
+// so another OVOS can later stand in for it. ovos-gui-visage (Mike's Flutter GUI) draws
 // the screen, in a frame (visage2/); its websockets are web/visage2-shim.js,
 // which talks to OVOS through window.emkayVisage2 below.
 //
@@ -10,6 +11,7 @@
 import { t, apply, setLang, onLangChange, matchLang } from "./i18n.js";
 import { onRequest as deviceRequest, startDevice } from "./device.js";
 import { createMediaPlayer } from "./media.js";
+import { createBrain, chosenBrain } from "./brains/brain.js";
 
 const $ = (id) => document.getElementById(id);
 apply();                    // the phone's language until OVOS is up
@@ -55,42 +57,20 @@ tabs.onmessage = ({ data }) => {
   if (data?.install && PACKAGE_NAME.test(data.install)) receiveInstall(data.install);
 };
 
-// ---------------------------------------------------------------- worker
-const worker = new Worker("worker.js", { type: "module" });
-let nextId = 1;
-const waiting = new Map();
-
-/**
- * Ask the worker to run a command; resolves with its result.
- * @param {string} cmd one of worker.js `commands`
- * @param {object} args the command's arguments
- * @param {Transferable[]} transfer buffers to move instead of copy
- */
-function call(cmd, args = {}, transfer = []) {
-  const id = nextId++;
-  return new Promise((resolve, reject) => {
-    waiting.set(id, { resolve, reject });
-    worker.postMessage({ id, cmd, ...args }, transfer);
-  });
-}
+// ----------------------------------------------------------------- brain
+// Where Emkay thinks (brains/brain.js, #28). Only the local brain (OVOS in
+// worker.js) exists so far; its worker starts loading right away, as before.
+const brain = createBrain(chosenBrain(params));
+const call = brain.call;   // worker.js commands (local brain)
 
 const guiSockets = new Set();
-worker.onmessage = ({ data }) => {
-  if (data.id) {
-    const w = waiting.get(data.id);
-    waiting.delete(data.id);
-    return data.error ? w.reject(new Error(data.error)) : w.resolve(data.result);
-  }
-  switch (data.kind) {
-    case "status": return bootStatus(data.key, data.progress, data.vars);
-    case "gui": for (const s of guiSockets) s.deliver(data.payload); return;
-    case "core": for (const f of coreListeners) f(data.payload); return;
-    case "audio": return data.payload.sound ? speaker.playSound(data.data) : speaker.enqueue(data.data, data.payload);
-    case "phal": return onPhal(JSON.parse(data.payload));
-    case "model": return modelStatus.show(data.payload);   // whisper.js / piper.js downloads
-    case "bus": return onBus(JSON.parse(data.payload));
-  }
-};
+brain.on("status", (d) => bootStatus(d.key, d.progress, d.vars));
+brain.on("gui", (d) => { for (const s of guiSockets) s.deliver(d.payload); });
+brain.onMessage((raw) => { for (const f of coreListeners) f(raw); });
+brain.on("audio", (d) => d.payload.sound ? speaker.playSound(d.data) : speaker.enqueue(d.data, d.payload));
+brain.on("phal", (d) => onPhal(JSON.parse(d.payload)));
+brain.on("model", (d) => modelStatus.show(d.payload));   // whisper.js / piper.js downloads
+brain.on("bus", (d) => onBus(JSON.parse(d.payload)));
 
 let ovosReady;
 const ready = new Promise((r) => (ovosReady = r));
@@ -815,8 +795,7 @@ function onPhal(msg) {
 // ------------------------------------------------------------------ media
 /** Music, radio and podcasts: ovos-audio's AudioService plays them here,
  * through ovos-audio-plugin-browser (media.js has the details). */
-const media = createMediaPlayer((type, data) =>
-  call("core_send", { raw: JSON.stringify({ type, data, context: {} }) }));
+const media = createMediaPlayer((type, data) => brain.emit(type, data));
 
 /**
  * The phone's position for OVOS' location (the plugin turns it into city,
@@ -1111,7 +1090,7 @@ $("about-close").onclick = () => closeView("about");
  * answer (<type>.response) says what the screen is and whether a tap is
  * needed, and <type>.done follows once it is done.
  */
-const busSend = (type, data) => call("core_send", { raw: JSON.stringify({ type, data, context: {} }) });
+const busSend = (type, data) => brain.emit(type, data);
 const kioskState = () => ({ fullscreen: !!document.fullscreenElement, keep_awake: wakeLockOn,
   installed: installed(), can_install: !!installPrompt });
 
