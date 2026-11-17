@@ -179,3 +179,8 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 #first-house { margin-top: 10px; background: none; border: 0; color: #9cd3f5; font-size: 15px; padding: 8px; }
 #first-house[hidden] { display: none; }
 .network-list td.blocked { color: #7d7; }   /* refused in local only (netlog.js) */
+/* "Connect to my Home Assistant", under "on this device" in the brain choice */
+.brain-choice .brain-sub { display: flex; gap: 10px; align-items: flex-start; margin: -2px 0 10px 52px; cursor: pointer; }
+.brain-choice .brain-sub input { margin-top: 3px; }
+.brain-choice .brain-sub span { display: flex; flex-direction: column; }
+.brain-choice .brain-sub small { opacity: .7; }
