@@ -64,6 +64,7 @@ export function chooseBrain(current, onClose = () => {}) {
     };
     card.append(b);
     if (o.kind === "local") card.append(haLinkRow(box));
+    if (o.kind === "hivemind" && hivemindSettings()?.speech) card.append(houseSpeechRow(current));
   }
   const close = document.createElement("button");
   close.className = "secondary";
@@ -93,6 +94,23 @@ function haLinkRow(box) {
     if (!url) { e.target.checked = false; box.hidden = false; return; }
     setBrain("local");          // the link is for Emkay with its own OVOS
     wantHaLink(url);            // HA's login page, then back here
+  };
+  return row;
+}
+
+/**
+ * Under "the house": hear and speak with the house (emkay-home#13), when it
+ * offers it – on by default. Off keeps speech on this phone.
+ */
+function houseSpeechRow(current) {
+  const row = document.createElement("label");
+  row.className = "check brain-sub";
+  const s = hivemindSettings() || {};
+  row.innerHTML = `<input type="checkbox" ${s.houseSpeech !== false ? "checked" : ""}>` +
+    `<span><b data-i18n="hivemind.speech"></b><small data-i18n="hivemind.speech.hint"></small></span>`;
+  row.querySelector("input").onchange = (e) => {
+    saveHivemindSettings({ ...(hivemindSettings() || {}), houseSpeech: e.target.checked });
+    if (current === "hivemind") switchTo("hivemind");   // the brain reads it when it starts
   };
   return row;
 }

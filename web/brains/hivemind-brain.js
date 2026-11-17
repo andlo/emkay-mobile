@@ -12,8 +12,17 @@
 // playback_* … – and quietly declines the rest (the control panel, the
 // skill store and the network log belong to the local brain).
 //
+// Speech in the house (emkay-voice/emkay-home#13, #39): an Emkay Home on a
+// strong machine can hear and speak for its Emkays (Whisper, Piper). Then
+// the recording goes to the house's STT and the answer is spoken with its
+// TTS; the wake word stays here. The house says where in the pairing link
+// (`speech: {stt, tts}`) and at /api/speech-info, asked at every start; the
+// key is the HiveMind key. If the house doesn't answer, the phone does it
+// itself, as before – Emkay never goes quiet because the house is busy.
+// `houseSpeech: false` in the settings keeps speech on the phone.
+//
 // Settings live in localStorage ("emkay-hivemind"): host, port, ssl, key,
-// password, lang, stt ("whisper" | "browser"). They can be handed over once
+// password, lang, stt ("whisper" | "browser"), speech, houseSpeech. They can be handed over once
 // in the address, after "#hivemind=" as base64 JSON – a fragment never
 // leaves the browser – e.g. from a QR code; Emkay saves them and drops the
 // fragment from the address.
@@ -58,12 +67,28 @@ export function textVisemes(text, seconds) {
   return out;
 }
 
-/** Seconds of a 16-bit PCM WAV (as piper.js makes them). */
+/** Seconds of a 16-bit PCM WAV (piper.js', or the house's, which may carry
+ * more chunks before "data"). */
 export function wavSeconds(wav) {
   const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
-  const byteRate = v.getUint32(28, true), dataBytes = v.getUint32(40, true);
-  return byteRate ? dataBytes / byteRate : 0;
+  const byteRate = v.getUint32(28, true);
+  let at = 12;
+  while (at + 8 <= v.byteLength) {
+    const id = String.fromCharCode(v.getUint8(at), v.getUint8(at + 1), v.getUint8(at + 2), v.getUint8(at + 3));
+    const size = v.getUint32(at + 4, true);
+    if (id === "data") return byteRate ? Math.min(size, v.byteLength - at - 8) / byteRate : 0;
+    at += 8 + size + (size % 2);
+  }
+  return 0;
 }
+
+/** Whether to use the house's speech, and where it is; null: the phone's. */
+export function houseSpeechOf(s) {
+  return s?.speech?.stt && s?.speech?.tts && s.houseSpeech !== false ? s.speech : null;
+}
+
+/** How long the house may take before the phone does it itself. */
+const HOUSE_TIMEOUT = 20000;
 
 /** Settings from the address (once) or localStorage; null when there are none. */
 export function hivemindSettings() {
@@ -149,6 +174,54 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
   let lang = "en-US";
   let nextIdent = 1;
 
+  // --- speech in the house ---------------------------------------------------
+
+  /** A request to the house, with the HiveMind key; throws when it can't answer in time. */
+  async function house(url, opts = {}, ms = HOUSE_TIMEOUT) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), ms);
+    try {
+      const r = await fetch(url, { ...opts, cache: "no-store", signal: ac.signal,
+                                   headers: { ...(opts.headers || {}), Authorization: `Bearer ${settings.key}` } });
+      if (!r.ok) throw new Error(`the house answered ${r.status}`);
+      return r;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** What the house offers now (an Emkay Home; any other HiveMind says nothing). */
+  async function refreshSpeech() {
+    if (!settings.ssl) return;
+    const port = settings.port && +settings.port !== 443 ? `:${settings.port}` : "";
+    try {
+      const r = await house(`https://${settings.host}${port}/api/speech-info`, {}, 5000);
+      const { speech } = await r.json();
+      if (JSON.stringify(speech || null) !== JSON.stringify(settings.speech || null)) {
+        settings = { ...settings, speech: speech || null };
+        saveHivemindSettings(settings);
+      }
+    } catch { /* not an Emkay Home, or it can't say: keep what we know */ }
+  }
+
+  /** The house hears: the recording (16-bit PCM) to its STT. */
+  async function houseHear(sp, pcm, rate) {
+    const q = new URLSearchParams({ lang: lang.toLowerCase(), sample_rate: rate, sample_width: 2 });
+    const t0 = performance.now();
+    const r = await house(`${sp.stt}?${q}`, { method: "POST", body: pcm,
+                                             headers: { "Content-Type": "application/octet-stream" } });
+    const text = (await r.text()).trim();
+    console.log(`[emkay] the house heard in ${((performance.now() - t0) / 1000).toFixed(1)}s: ${JSON.stringify(text)}`);
+    return text;
+  }
+
+  /** The house speaks: a WAV from its TTS. */
+  async function houseVoice(sp, text, l) {
+    const q = new URLSearchParams({ utterance: text, lang: l.toLowerCase() });
+    const r = await house(`${sp.tts}/v2/synthesize?${q}`);
+    return new Uint8Array(await r.arrayBuffer());
+  }
+
   async function connect() {
     settings = hivemindSettings();
     let error = "";
@@ -196,13 +269,17 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
     if (msg.type === "speak" && msg.data?.utterance) speak(msg.data.utterance, msg.data.lang || lang);
   }
 
-  /** The voice, on the phone (piper.js); the page plays it. */
+  /** The voice: the house's when it has one, else the phone's (piper.js); the page plays it. */
   async function speak(text, l) {
+    const sp = houseSpeechOf(settings);
+    let wav = null;
+    if (sp) {
+      try { wav = await houseVoice(sp, text, l); } catch (e) { console.warn("[emkay] the house's voice – the phone's instead", e); }
+    }
     const voice = voiceFor(l) || voiceFor(lang);
-    if (!voice) return console.warn(`[emkay] no Piper voice for ${l}`);
+    if (!wav && !voice) return console.warn(`[emkay] no Piper voice for ${l}`);
     try {
-      const piper = await import("../piper.js");
-      const wav = await piper.synth(text, voice);
+      if (!wav) wav = await (await import("../piper.js")).synth(text, voice);
       const visemes = textVisemes(text, wavSeconds(wav));
       fire("audio", { payload: { ident: `hm-${nextIdent++}`, utterance: text, visemes }, data: wav.buffer });
     } catch (e) {
@@ -220,6 +297,7 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
     async boot() {
       fire("status", { key: "boot.loading" });
       await connect();
+      await refreshSpeech();
       fire("status", { key: "hivemind.connected", progress: 1, vars: { node: client.nodeId } });
       const build = await fetch("build.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({}));
       const precise = build.precise_models || {};
@@ -233,20 +311,32 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
       const hotword = wakeWord === "hey_mycroft" && heyMycroft
         ? { module: "ovos-ww-plugin-precise-onnx", model: heyMycroft }
         : { module: "ovos-ww-plugin-openwakeword", threshold: wakeWord === "hey_emkay" ? 0.8 : 0.5 };
-      const stt = settings.stt === "browser" ? BROWSER_STT : WHISPER_STT;
-      if (stt === WHISPER_STT) import("../whisper.js").then((w) => w.ready(sttModelFor(lang))).catch(() => {});
+      const sp = houseSpeechOf(settings);
+      // with speech in the house the recording goes there, as Whisper's does here
+      const stt = settings.stt === "browser" && !sp ? BROWSER_STT : WHISPER_STT;
+      // the phone's own models are only fetched when the phone does speech
+      // (with the house, they load the first time the house can't answer)
+      if (stt === WHISPER_STT && !sp) import("../whisper.js").then((w) => w.ready(sttModelFor(lang))).catch(() => {});
       const voice = voiceFor(lang);
-      if (voice) import("../piper.js").then((p) => p.ready(voice)).catch(() => {});
+      if (voice && !sp) import("../piper.js").then((p) => p.ready(voice)).catch(() => {});
       return {
         brain: "hivemind", node: client.nodeId, lang, skills: [], stt_module: stt,
         wake_word: wakeWord, hotword,
         precise_models: precise, wake_words: wakeWords,
         site_langs: [lang], intent_langs: [lang], listener: {}, confirm_listening: false,
+        speech: sp ? "house" : "phone",
       };
     },
     async heard({ pcm, rate }) {
-      const whisper = await import("../whisper.js");
-      const text = await whisper.transcribe(new Uint8Array(pcm), rate, lang, sttModelFor(lang));
+      const sp = houseSpeechOf(settings);
+      let text = null;
+      if (sp) {
+        try { text = await houseHear(sp, pcm, rate); } catch (e) { console.warn("[emkay] the house didn't hear – the phone instead", e); }
+      }
+      if (text === null) {
+        const whisper = await import("../whisper.js");
+        text = await whisper.transcribe(new Uint8Array(pcm), rate, lang, sttModelFor(lang));
+      }
       local("recognizer_loop:record_end");
       if (text) await ask_(text);
       return text;
