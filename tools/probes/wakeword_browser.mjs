@@ -86,6 +86,19 @@ sys.setprofile(_prof)
     document.getElementById("start").click(); true`);
   const t = Date.now();
   await until(`document.getElementById("mic").classList.contains("wake")`, 60, "the wake word engine");
+  // WAKE_WORD=hey_mycroft: the recording says "hey mycroft", but Emkay's own
+  // default is "hey_emkay" (boot.py, defaults v13). Switch the way the
+  // control panel does (configuration.patch on the bus); the page then
+  // starts the engine for the new wake word (worker_main._settings_changed)
+  const ww = process.env.WAKE_WORD;
+  if (ww) {
+    log(`default wake word engine ready in ${((Date.now() - t) / 1000).toFixed(1)}s: ${await js("window.emkay.wake.engineName")}`);
+    await py(`from ovos_bus_client.message import Message
+from emkay_mobile import boot
+boot.bus().emit(Message("configuration.patch", {"config": {"listener": {"wake_word": ${JSON.stringify(ww)}}}}))
+"ok"`);
+    await until(`window.emkay.wake.engineName !== "oww" && document.getElementById("mic").classList.contains("wake")`, 60, `the ${ww} engine`);
+  }
   log(`wake word engine ready in ${((Date.now() - t) / 1000).toFixed(1)}s: ${await js("window.emkay.wake.engineName")}`);
   // ANSWERS=2: the fake microphone loops the file, so a second "hey mycroft"
   // follows; Emkay must be back waiting for it after the first answer

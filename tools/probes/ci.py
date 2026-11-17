@@ -54,8 +54,11 @@ PROBES = [
         r'captions: \["Listening…","One moment…","“What time is it\?”"',   # tap, STT
         r'second said: \["(It|Currently)',                 # and an answer
     ]),
-    ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/hey_mycroft_what_time.wav"), "ANSWERS": "2"}, [], [
-        r"wake word engine ready in [0-9.]+s: precise",       # OVOS' default: ovos-ww-plugin-precise-onnx
+    # the recordings say "hey mycroft"; Emkay's default is "hey_emkay"
+    # (openWakeWord), so the probe switches as the control panel would
+    ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/hey_mycroft_what_time.wav"), "ANSWERS": "2", "WAKE_WORD": "hey_mycroft"}, [], [
+        r"default wake word engine ready in [0-9.]+s: oww",   # Emkay's own: hey_emkay
+        r"wake word engine ready in [0-9.]+s: precise",       # OVOS' hey_mycroft: ovos-ww-plugin-precise-onnx
         r'said: \["(It|Currently)',                        # no tap: the wake word
         r"answer 2; mic: mic[^,]*, wake listening",                # and back waiting for the next one
     ]),
@@ -68,7 +71,7 @@ PROBES = [
         r'"stop": said \["(?![^|]*(couldn.t|can.t) help)[^|]*\] \| captions \[\]',
     ]),
     # speech without the wake word, for a minute: Precise must stay quiet
-    ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/what_time.wav"), "WAIT_S": "60"}, [], [
+    ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/what_time.wav"), "WAIT_S": "60", "WAKE_WORD": "hey_mycroft"}, [], [
         r"wake word engine ready in [0-9.]+s: precise",
         r"FAILED: timed out waiting for answer 1",
     ]),
