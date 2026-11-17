@@ -142,7 +142,7 @@ export function startHaDevice(brain, { lang, version, onStatus = () => {} } = {}
   }
 
   /** HA's call to the control panel in the worker (andlo/ha-ovos-integration#15). */
-  async function panel({ id, method, path, body }) {
+  async function panel({ id, method, path, body, binary }) {
     let status = 400, out = { detail: "bad request" };
     if (/^\/[^]*$/.test(path || "") && !path.includes("..")) {
       const [p, query = ""] = path.split("?");
@@ -153,14 +153,33 @@ export function startHaDevice(brain, { lang, version, onStatus = () => {} } = {}
           body: body != null && method !== "GET" ? new TextEncoder().encode(JSON.stringify(body)).buffer : null,
         });
         status = res.status;
-        const text = new TextDecoder().decode(res.body);
-        try { out = JSON.parse(text); } catch { out = { detail: text.slice(0, 500) }; }
+        if (binary && status < 400) {
+          out = fileAnswer(res);
+          if (!out) { status = 413; out = { detail: "the file is too big to send to Home Assistant" }; }
+        } else {
+          const text = new TextDecoder().decode(res.body);
+          try { out = JSON.parse(text); } catch { out = { detail: text.slice(0, 500) }; }
+        }
       } catch (e) {
         status = 502; out = { detail: String(e.message || e) };
       }
     }
     ha.command({ type: "ovos/panel/response", device_id: settings.device_id,
                  request_id: id, status, body: out }).catch(() => {});
+  }
+
+  /** A file from the panel (its backup) as JSON for HA: base64 and its name.
+   *  One WebSocket message, and HA takes 4 MB, so null when it's bigger. */
+  function fileAnswer(res) {
+    const bytes = new Uint8Array(res.body);
+    if (bytes.length > 3 * 1024 * 1024 - 64 * 1024) return null;
+    const header = (name) => (res.headers || []).find(([k]) => k.toLowerCase() === name)?.[1] || "";
+    let raw = "";
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      raw += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return { content_type: header("content-type") || "application/octet-stream",
+             filename: /filename="?([^";]+)"?/.exec(header("content-disposition"))?.[1] || null,
+             data: btoa(raw) };
   }
 
   /** ovos-assist-pipeline-plugin's questions: answered here, by HA's Assist. */
