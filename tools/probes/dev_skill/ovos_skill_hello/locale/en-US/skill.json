@@ -7,5 +7,8 @@
     "Hello from my skill",
     "Run my first skill"
   ],
-  "tags": ["hello", "emkay"]
+  "tags": [
+    "hello",
+    "emkay"
+  ]
 }
