@@ -78,6 +78,7 @@ async function deriveKey(password, salt) {
  * @param {object} opts
  * @param {string} opts.host
  * @param {number} [opts.port=5678]
+ * @param {string} [opts.path=""]  behind a reverse proxy, e.g. "/hivemind" (Emkay Home, #33)
  * @param {boolean} [opts.ssl=true]  wss:// – an https page can't open ws:// on the LAN
  * @param {string} opts.key          access key from `hivemind-core add-client`
  * @param {string} opts.password     its password
@@ -89,7 +90,7 @@ async function deriveKey(password, salt) {
 export class HiveMindClient extends EventTarget {
   constructor(opts) {
     super();
-    this.opts = { port: 5678, ssl: true, useragent: "Emkay", siteId: "emkay", lang: "en-US", ...opts };
+    this.opts = { port: 5678, path: "", ssl: true, useragent: "Emkay", siteId: "emkay", lang: "en-US", ...opts };
     this.opts.sessionId ||= globalThis.crypto.randomUUID();
     if (this.opts.sessionId === "default") throw new Error('session "default" is for admins');
     this.key = null;        // CryptoKey once the handshake is done
@@ -101,9 +102,10 @@ export class HiveMindClient extends EventTarget {
   }
 
   get url() {
-    const { host, port, ssl, useragent, key } = this.opts;
+    const { host, port, path, ssl, useragent, key } = this.opts;
     const auth = btoa(`${useragent}:${key}`);
-    return `${ssl ? "wss" : "ws"}://${host}:${port}?authorization=${encodeURIComponent(auth)}`;
+    const p = path ? "/" + String(path).replace(/^\/+/, "") : "";
+    return `${ssl ? "wss" : "ws"}://${host}:${port}${p}?authorization=${encodeURIComponent(auth)}`;
   }
 
   /** Connect and finish the handshake; resolves when bus messages can flow. */
