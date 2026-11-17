@@ -257,6 +257,7 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
       client.addEventListener("message", (e) => fromHive(e.message));
       client.addEventListener("close", () => setTimeout(() => reconnect(), 3000));
       fire("status", { key: "hivemind.connected", progress: 1, vars: { node: client.nodeId } });
+      tellState();
     } catch {
       setTimeout(() => reconnect(), 10000);
     }
@@ -264,10 +265,71 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
 
   /** What the house says. */
   async function fromHive(msg) {
+    if (asDevice(msg)) return;
     const raw = JSON.stringify(msg);
     for (const fn of busListeners) fn(raw);
     fire("bus", { payload: raw });
     if (msg.type === "speak" && msg.data?.utterance) speak(msg.data.utterance, msg.data.lang || lang);
+  }
+
+  // ------------------------------------------------- this Emkay as a device
+  // The house (or Home Assistant through it, andlo/ha-ovos-integration#12)
+  // asks for the volume and the microphone in OVOS' words; answered as an
+  // OVOS would. Emkay Home lets these answers onto its bus.
+  const level = { volume: 0.75, muted: false };
+  let micMuted = false;
+  try { Object.assign(level, JSON.parse(localStorage.getItem("emkay-hm-volume") || "{}")); } catch {}
+
+  function toHouse(type, data) {
+    client?.emit(type, data).catch(() => {});
+  }
+
+  /** Right after connecting: the house learns this Emkay is here, and how it is set. */
+  function tellState() {
+    fire("phal", { payload: JSON.stringify({ volume: level.volume, muted: level.muted }) });
+    toHouse("mycroft.volume.get.response", { percent: level.volume, muted: level.muted });
+    toHouse("mycroft.mic.get_status.response", { muted: micMuted });
+  }
+
+  function setLevel(next) {
+    Object.assign(level, next);
+    level.volume = Math.max(0, Math.min(1, level.volume));
+    try { localStorage.setItem("emkay-hm-volume", JSON.stringify(level)); } catch {}
+    fire("phal", { payload: JSON.stringify({ volume: level.volume, muted: level.muted }) });
+    toHouse("mycroft.volume.get.response", { percent: level.volume, muted: level.muted });
+  }
+
+  /** Returns true when the message was for this Emkay as a device. */
+  function asDevice(msg) {
+    const d = msg.data || {};
+    switch (msg.type) {
+      case "mycroft.volume.get":
+        toHouse("mycroft.volume.get.response", { percent: level.volume, muted: level.muted });
+        return true;
+      case "mycroft.volume.set":
+        setLevel({ volume: Number(d.percent ?? level.volume) });
+        return true;
+      case "mycroft.volume.increase":
+        setLevel({ volume: level.volume + Number(d.percent ?? 0.1) });
+        return true;
+      case "mycroft.volume.decrease":
+        setLevel({ volume: level.volume + Number(d.percent ?? -0.1) });
+        return true;
+      case "mycroft.volume.mute":
+      case "mycroft.volume.unmute":
+        setLevel({ muted: msg.type.endsWith(".mute") });
+        return true;
+      case "mycroft.mic.get_status":
+        toHouse("mycroft.mic.get_status.response", { muted: micMuted });
+        return true;
+      case "mycroft.mic.mute":
+      case "mycroft.mic.unmute":
+        micMuted = msg.type.endsWith(".mute");
+        local(msg.type);                   // app.js' mic follows it
+        toHouse("mycroft.mic.get_status.response", { muted: micMuted });
+        return true;
+    }
+    return false;
   }
 
   /** The voice: the house's when it has one, else the phone's (piper.js); the page plays it. */
@@ -300,6 +362,7 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
       await connect();
       await refreshHouse();
       fire("status", { key: "hivemind.connected", progress: 1, vars: { node: client.nodeId } });
+      tellState();
       const build = await fetch("build.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({}));
       const precise = build.precise_models || {};
       const heyMycroft = Object.keys(precise).find((u) => /hey_mycroft/.test(u));
