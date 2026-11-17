@@ -38,18 +38,21 @@
 import { createLocalBrain } from "./local.js";
 import { createHiveMindBrain } from "./hivemind-brain.js";
 
+import { savedBrain, setBrain } from "./saved.js";
+export { savedBrain, setBrain };
+
 export const BRAINS = ["local", "hivemind"];   // "homeassistant" when it exists
-const KEY = "emkay-brain";
 
 /**
- * Which brain this start uses: ?brain=… for this start, else the saved
- * choice, else local. A brain that doesn't exist yet falls back to local.
+ * Which brain this start uses: ?brain=… for this start, else a pairing
+ * link (#hivemind=…, which is also saved as the choice), else the saved
+ * choice, else local – Emkay always starts without anything chosen. A
+ * brain that doesn't exist yet falls back to local.
  * @param {URLSearchParams} params
  */
 export function chosenBrain(params) {
-  let saved = null;
-  try { saved = localStorage.getItem(KEY); } catch {}
-  const want = params.get("brain") || saved || "local";
+  if (/[#&]hivemind=/.test(location.hash)) setBrain("hivemind");
+  const want = params.get("brain") || savedBrain() || "local";
   if (BRAINS.includes(want)) return want;
   console.warn(`[emkay] brain "${want}" isn't there yet; using local`);
   return "local";

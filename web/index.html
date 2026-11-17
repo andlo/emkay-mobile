@@ -28,6 +28,8 @@
       <button id="first-setup" data-i18n="first.setup"></button>
     </div>
     <button id="start" data-i18n="start" hidden></button>
+    <!-- first start only: Emkay as a satellite of an assistant in the house (brains/choose.js) -->
+    <button id="first-house" class="link" data-i18n="first.house" hidden></button>
     <p class="small"><span data-i18n="about"></span> · <a href="https://github.com/emkay-voice/emkay" data-i18n="source"></a></p>
   </div>
   <button id="mic" class="mic" data-i18n-aria="mic" hidden></button>
@@ -49,6 +51,10 @@
       <!-- each entry: Emkay-style icon (build/icons/make_icons.py), name and
            a line on what it is; what opens over the face returns here
            when it closes (app.js openFromMenu) -->
+      <button id="menu-brain" class="menu-item">
+        <img src="menu/brain.svg" alt="">
+        <span><b data-i18n="menu.brain"></b><small id="menu-brain-hint"></small></span>
+      </button>
       <button id="menu-panel" class="menu-item">
         <img src="menu/settings.svg" alt="">
         <span><b data-i18n="menu.panel"></b><small data-i18n="menu.panel.hint"></small></span>

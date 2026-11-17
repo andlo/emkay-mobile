@@ -12,6 +12,7 @@ import { t, apply, setLang, onLangChange, matchLang } from "./i18n.js";
 import { onRequest as deviceRequest, startDevice } from "./device.js";
 import { createMediaPlayer } from "./media.js";
 import { createBrain, chosenBrain } from "./brains/brain.js";
+import { chooseBrain, brainHint } from "./brains/choose.js";
 
 const $ = (id) => document.getElementById(id);
 apply();                    // the phone's language until OVOS is up
@@ -76,6 +77,12 @@ brain.on("bus", (d) => onBus(JSON.parse(d.payload)));
 $("menu-panel").hidden = !brain.can.panel;
 $("menu-store").hidden = !brain.can.store;
 $("menu-network").hidden = !brain.can.netlog;
+$("storage-state").hidden = !brain.can.panel;   // "take a backup (Settings → Backup)" is the panel's
+// "Where should Emkay think?" – on top of the menu, in every brain
+const showBrainHint = () => { $("menu-brain-hint").textContent = brainHint(brain.kind); };
+showBrainHint();
+onLangChange(showBrainHint);
+$("menu-brain").onclick = () => { $("menu").hidden = true; chooseBrain(brain.kind, () => { $("menu").hidden = false; }); };
 
 let ovosReady;
 const ready = new Promise((r) => (ovosReady = r));
@@ -187,7 +194,13 @@ function offerSetup() {
   try { first = !localStorage.getItem(WELCOMED); } catch {}
   const remember = () => { try { localStorage.setItem(WELCOMED, "1"); } catch {} };
   $("start").onclick = () => { remember(); start(); };
-  if (!first || !brain.can.panel) return;   // the setup wizard is the local OVOS' control panel
+  if (!first) return;
+  // or an assistant in the house instead (local only: elsewhere it was chosen)
+  if (brain.kind === "local") {
+    $("first-house").hidden = false;
+    $("first-house").onclick = () => chooseBrain(brain.kind);
+  }
+  if (!brain.can.panel) return;   // the setup wizard is the local OVOS' control panel
   $("start").dataset.i18n = "start.defaults";
   apply();
   $("start").classList.add("quiet");

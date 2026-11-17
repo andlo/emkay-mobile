@@ -168,3 +168,13 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
   font-size: 16px; padding: 10px 12px; border-radius: 8px; border: 1px solid #345; background: #0b1218; color: #fff; }
 .hivemind-setup button { margin-top: 8px; font-size: 18px; padding: 14px 28px; border-radius: 40px; border: 0;
   background: #22a7f0; color: #fff; }
+
+/* "Where should Emkay think?" (brains/choose.js): the menu's look, over the boot screen too */
+.brain-choice { z-index: 65; }
+.brain-choice[hidden] { display: none; }
+.menu-card .menu-item.current { outline: 2px solid #22a7f0; }
+.menu-card .menu-item:disabled { opacity: .45; }
+.hivemind-setup button.secondary { background: transparent; color: #9cd3f5; border: 1px solid #22a7f0; margin-top: 0; }
+/* first start: the quiet way to an assistant in the house */
+#first-house { margin-top: 10px; background: none; border: 0; color: #9cd3f5; font-size: 15px; padding: 8px; }
+#first-house[hidden] { display: none; }

@@ -20,6 +20,7 @@
 
 import { HiveMindClient } from "./hivemind.js";
 import { t } from "../i18n.js";
+import { setBrain } from "./saved.js";
 
 const KEY = "emkay-hivemind";
 const BROWSER_STT = "ovos-stt-plugin-browser";
@@ -56,9 +57,12 @@ export function saveHivemindSettings(s) {
 
 /**
  * Ask for the connection (host, port, wss, key, password) in a small form
- * over the boot screen; resolves with the settings when "Connect" is pressed.
+ * over the boot screen; resolves with the settings when "Connect" is
+ * pressed. `back`: a Back button, which resolves null. `local`: a "use
+ * Emkay on this device instead" button, which switches to the local brain –
+ * so a house that can't be reached never locks Emkay out.
  */
-function askSettings(prev = {}, error = "") {
+export function askHivemindSettings(prev = {}, error = "", { back = false, local = false } = {}) {
   return new Promise((resolve) => {
     document.getElementById("hivemind-setup")?.remove();
     const form = document.createElement("form");
@@ -75,8 +79,15 @@ function askSettings(prev = {}, error = "") {
       <label class="check"><input name="ssl" type="checkbox" ${prev.ssl ?? location.protocol === "https:" ? "checked" : ""}> ${t("hivemind.ssl")}</label>
       ${field("key", "text", prev.key, 'required autocapitalize="off" spellcheck="false"')}
       ${field("password", "password", prev.password, "required")}
-      <button type="submit">${t("hivemind.connect")}</button>`;
+      <button type="submit">${t("hivemind.connect")}</button>
+      ${back ? `<button type="button" class="secondary" data-act="back">${t("hivemind.back")}</button>` : ""}
+      ${local ? `<button type="button" class="secondary" data-act="local">${t("hivemind.use_local")}</button>` : ""}`;
     if (error) form.querySelector(".error").textContent = error;   // text, not HTML
+    form.querySelector('[data-act="back"]')?.addEventListener("click", () => { form.remove(); resolve(null); });
+    form.querySelector('[data-act="local"]')?.addEventListener("click", () => {
+      setBrain("local");
+      location.replace(location.pathname);
+    });
     form.onsubmit = (e) => {
       e.preventDefault();
       const f = new FormData(form);
@@ -93,7 +104,7 @@ function askSettings(prev = {}, error = "") {
  * @param {(s: object, error: string) => Promise<object>} [opts.ask]  how to ask for settings
  * @returns {import("./brain.js").Brain}
  */
-export function createHiveMindBrain({ ask = askSettings } = {}) {
+export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
   const handlers = new Map();
   const busListeners = new Set();
   const fire = (kind, data) => { for (const fn of handlers.get(kind) || []) fn(data); };
@@ -115,7 +126,7 @@ export function createHiveMindBrain({ ask = askSettings } = {}) {
     settings = hivemindSettings();
     let error = "";
     for (;;) {
-      if (!settings?.host || !settings?.key || !settings?.password) settings = await ask(settings || {}, error);
+      if (!settings?.host || !settings?.key || !settings?.password) settings = await ask(settings || {}, error, { local: true });
       fire("status", { key: "hivemind.connecting", vars: { host: settings.host } });
       lang = settings.lang || navigator.language || "en-US";
       client = new HiveMindClient({ ...settings, lang, siteId: settings.siteId || "emkay" });
@@ -125,7 +136,8 @@ export function createHiveMindBrain({ ask = askSettings } = {}) {
         break;
       } catch (e) {
         console.warn("[emkay] hivemind", e);
-        error = e.message || String(e);
+        // in the page's language where we know the error, else as it came
+        error = e.code ? t(`hivemind.err.${e.code}`, { host: settings.host }) : (e.message || String(e));
         if (location.protocol === "https:" && !settings.ssl) error += ` – ${t("hivemind.needs_wss")}`;
         settings = { ...settings, password: "" };   // ask again, with what was typed
       }

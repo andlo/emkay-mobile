@@ -32,17 +32,29 @@ trusts. Emkay served from the house over plain http
 
 ## On the phone
 
-Open Emkay with `?brain=hivemind`, e.g. `https://app.emkay.ai/?brain=hivemind`.
-The first time it asks for host, port, the access key and the password, and
-remembers them in the browser.
+Emkay always starts on its own first, with nothing to choose: OpenVoiceOS
+here on the device. To use the house instead:
 
-The connection can also be handed over in the address, after
-`#hivemind=` as base64 JSON – the part after `#` never leaves the browser,
-and Emkay removes it from the address once saved. Handy for a QR code:
+- the first start's **"Already have an assistant in the house?"**, or
+- **⚙ → "Where should Emkay think?"** any time later,
+
+then **"The OpenVoiceOS in your house"**: host, port, the access key and the
+password. Emkay remembers the choice and starts as a satellite from then on.
+If the house can't be reached, the form says why and offers **"Use Emkay on
+this device instead"**, so a house that is down never locks Emkay out.
+
+`?brain=hivemind` (or `?brain=local`) in the address picks a brain for that
+one start, without changing the saved choice.
+
+The connection can also be handed over in the address – a **pairing link** –
+after `#hivemind=` as base64 JSON – the part after `#` never leaves the browser,
+and Emkay removes it from the address once saved. Opening such a link (or
+scanning it as a QR code) makes Emkay a satellite of that house straight
+away, no questions asked:
 
 ```sh
 echo -n '{"host":"ovos.local","port":5678,"ssl":true,"key":"…","password":"…"}' | base64 -w0
-# → https://app.emkay.ai/?brain=hivemind#hivemind=<that>
+# → https://app.emkay.ai/#hivemind=<that>
 ```
 
 Optional fields: `lang` (default: the browser's language), `stt`
@@ -80,5 +92,6 @@ HM_KEY=K HM_PASSWORD=P node tools/probes/hivemind_node.mjs
 - Skill pages (ovos-gui) from the house on the phone's screen – the face
   and its clock work; GUI pages need HiveMind to carry the GUI stream.
 - The mouth follows no visemes yet in this mode (#28: mouth from the audio level).
-- Emkay's own texts for the setup form are in English and Danish; the other
-  languages fall back to English until translated.
+- The texts are in all of Emkay's languages, but only English and Danish
+  were written by someone who speaks them; the rest need a native speaker's
+  look (#10).
