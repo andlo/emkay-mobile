@@ -6,6 +6,10 @@
 //
 //   HM_HOST=127.0.0.1 HM_KEY=K HM_PASSWORD=P CHROME=... \
 //     node tools/probes/hivemind_browser.mjs [url] [screenshot.png]
+//
+// SPEECH_WAV=tools/probes/audio/hey_mycroft_what_time.wav: the microphone is
+// that file instead, and the question is spoken – wake word, Whisper on
+// the page, the text to the house – not typed.
 import { spawn } from "child_process";
 import { writeFileSync } from "fs";
 
@@ -19,7 +23,8 @@ const port = 9398;
 const chrome = spawn(process.env.CHROME, ["--headless=new", `--remote-debugging-port=${port}`,
   "--user-data-dir=/tmp/emkay-chrome-hivemind", "--window-size=390,844", "--autoplay-policy=no-user-gesture-required",
   "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--no-first-run",
-  "--enable-unsafe-swiftshader", "about:blank"], { stdio: "ignore" });
+  "--enable-unsafe-swiftshader",
+  ...(process.env.SPEECH_WAV ? [`--use-file-for-fake-audio-capture=${process.env.SPEECH_WAV}`] : []), "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const t0 = Date.now();
 const log = (m) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
@@ -68,13 +73,25 @@ try {
   await tap("start");
   await until(`document.getElementById("boot").hidden`, 10, "the boot screen to go");
   log(`started; wake word: ${await js(`window.emkay.wake.state`)}`);
-  await sleep(1500);
-  await js(`(() => { const f = document.getElementById("type"); f.hidden = false;
-    document.getElementById("type-text").value = ${JSON.stringify(process.env.QUESTION || "what time is it")};
-    f.requestSubmit(); })()`);
-  log("asked");
+  await js(`window.__captions = []; window.__said = [];
+    new MutationObserver(() => { const t = document.getElementById("caption-text").textContent;
+      if (window.__captions.at(-1) !== t) window.__captions.push(t); })
+      .observe(document.getElementById("caption"), { subtree: true, childList: true, characterData: true });
+    const orig = window.emkay.speaker.enqueue.bind(window.emkay.speaker);
+    window.emkay.speaker.enqueue = (data, meta) => { window.__said.push(meta.utterance); return orig(data, meta); }; true`);
+  if (process.env.SPEECH_WAV) {
+    await until(`document.getElementById("mic").classList.contains("wake")`, 60, "the wake word engine");
+    log(`wake word engine: ${await js("window.emkay.wake.engineName")}; listening for "hey mycroft"`);
+  } else {
+    await sleep(1500);
+    await js(`(() => { const f = document.getElementById("type"); f.hidden = false;
+      document.getElementById("type-text").value = ${JSON.stringify(process.env.QUESTION || "what time is it")};
+      f.requestSubmit(); })()`);
+    log("asked");
+  }
   await until(`window.emkay.speaker.spoken > 0`, 240, "an answer to be spoken");
-  log(`spoken: ${await js(`window.emkay.speaker.spoken`)}`);
+  log(`said: ${await js(`JSON.stringify(window.__said)`)}`);
+  log(`captions: ${await js(`JSON.stringify(window.__captions)`)}`);
   await until(`!window.emkay.speaker.playing`, 30, "the answer to finish");
   log("played");
   await sleep(1500);
@@ -83,6 +100,7 @@ try {
   log(`screenshot: ${shot}`);
 } catch (e) {
   log(`FAILED: ${e.message}`);
+  log(`captions so far: ${await js(`JSON.stringify(window.__captions || [])`)}`);
   const png = await send("Page.captureScreenshot", { format: "png" });
   if (png?.data) writeFileSync(shot, Buffer.from(png.data, "base64"));
 }
