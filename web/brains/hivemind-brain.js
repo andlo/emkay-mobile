@@ -216,9 +216,12 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
     return text;
   }
 
-  /** The house speaks: a WAV from its TTS. */
+  /** The house speaks: a WAV from its TTS – with the same Piper voice as
+   * the phone's (the house's Piper otherwise keeps the house's own voice and
+   * only changes its accent). */
   async function houseVoice(sp, text, l) {
-    const q = new URLSearchParams({ utterance: text, lang: l.toLowerCase() });
+    const voice = voiceFor(l) || voiceFor(lang);
+    const q = new URLSearchParams({ utterance: text, lang: l.toLowerCase(), ...(voice ? { voice } : {}) });
     const r = await house(`${sp.tts}/v2/synthesize?${q}`);
     return new Uint8Array(await r.arrayBuffer());
   }
