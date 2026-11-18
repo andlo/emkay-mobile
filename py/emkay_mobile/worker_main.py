@@ -354,6 +354,62 @@ async def dev_test(row_json: str) -> str:
     return await dev.test(row_json)
 
 
+# --- skills from GitHub (?install=github:owner/repo, app.js; github.py) ----
+
+async def _pip(topic: str, data: dict, timeout: float = 600) -> dict:
+    """Ask ovos-core's installer (SkillsStore) over the bus, as the control
+    panel does, and wait for its answer: {ok, error, detail}."""
+    import asyncio
+    from ovos_bus_client.message import Message
+    from .browser import hand_over
+    bus = boot.bus()
+    done, answer = asyncio.Event(), {}
+
+    def finished(ok):
+        def handler(message):
+            if not done.is_set():
+                answer.update(ok=ok, error=message.data.get("error", ""),
+                              detail=message.data.get("detail", ""))
+                done.set()
+        return handler
+
+    good, bad = finished(True), finished(False)
+    bus.on(f"{topic}.complete", good)
+    bus.on(f"{topic}.failed", bad)
+    try:
+        hand_over(lambda: bus.emit(Message(topic, data)))
+        await asyncio.wait_for(done.wait(), timeout)
+    except asyncio.TimeoutError:
+        answer.update(ok=False, error="timeout", detail="")
+    finally:
+        bus.remove(f"{topic}.complete", good)
+        bus.remove(f"{topic}.failed", bad)
+    return answer
+
+
+async def gh_install(spec: str) -> str:
+    """Install `git+https://github.com/owner/repo[@ref]` (also an update:
+    a newer commit replaces the one installed). JSON {ok, error, detail}."""
+    from . import github
+    if not github.parse(spec):
+        return json.dumps({"ok": False, "error": "not a GitHub repository", "detail": spec})
+    return json.dumps(await _pip("ovos.pip.install", {"packages": [spec]}))
+
+
+async def gh_remove(name: str) -> str:
+    """Uninstall a package installed from GitHub. JSON {ok, error, detail}."""
+    from . import github
+    if name not in {d["name"] for d in github.installed()}:
+        return json.dumps({"ok": False, "error": "not installed from GitHub", "detail": name})
+    return json.dumps(await _pip("ovos.pip.uninstall", {"packages": [name]}))
+
+
+def gh_installed() -> str:
+    """JSON list of what was installed from GitHub (github.installed)."""
+    from . import github
+    return json.dumps(github.installed())
+
+
 def heard_text(text: str) -> str:
     """Text the browser's own speech recognition heard (ovos-stt-plugin-browser):
     on to OVOS as any STT result goes (speech.heard after its STT step)."""

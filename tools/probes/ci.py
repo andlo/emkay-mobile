@@ -52,6 +52,16 @@ PROBES = [
         r"new: ovos-skill-number-facts\.openvoiceos",
         r"Successfully uninstalled ovos-skill-number-facts",
     ]),
+    # a skill straight from GitHub (#49): ?install=github:..., Install, it
+    # answers, it is there after a reload, Update, Remove
+    ("github_browser.mjs", {}, [], [
+        r'install: gh-status ok',
+        r"new skills: ovos-skill-hello\.emkay-voice",
+        r"asked \"hello from my skill\": answered by the skill",
+        r"after reload: still loaded=true",
+        r'update: gh-status ok',
+        r"after remove: skill gone=true listed=0",
+    ]),
     ("tx_browser.mjs", {}, [], [
         r"enable: \['ovos-dialog-normalizer-plugin'\]",
         r"spoken: I('ve| have) got (three|tre) apples",   # rewritten before TTS

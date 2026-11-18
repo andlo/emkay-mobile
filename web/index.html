@@ -63,6 +63,10 @@
         <img src="menu/store.svg" alt="">
         <span><b data-i18n="menu.store"></b><small data-i18n="menu.store.hint"></small></span>
       </a>
+      <button id="menu-github" class="menu-item">
+        <img src="menu/github.svg" alt="">
+        <span><b data-i18n="menu.github"></b><small data-i18n="menu.github.hint"></small></span>
+      </button>
       <button id="menu-network" class="menu-item">
         <img src="menu/guardian.svg" alt="">
         <span><b data-i18n="menu.network"></b><small data-i18n="menu.network.hint"></small></span>
@@ -147,6 +151,29 @@
         <button id="network-clear" class="secondary" data-i18n="network.clear"></button>
       </div>
       <button id="network-close" class="secondary" data-i18n="close"></button>
+    </div>
+  </div>
+
+  <!-- skills from GitHub (app.js, py/emkay_mobile/github.py): one to install
+       (?install=github:owner/repo, a link or QR code from Emkay Dev), and the
+       ones installed, to update or remove -->
+  <div id="github" class="menu" hidden>
+    <div class="menu-card github-card">
+      <h2 class="with-icon"><img src="menu/github.svg" alt=""><span data-i18n="gh.title"></span></h2>
+      <div id="gh-offer" hidden>
+        <a id="gh-repo" class="gh-repo" target="_blank" rel="noopener"></a>
+        <p id="gh-about" class="gh-about"></p>
+        <p id="gh-facts" class="small"></p>
+        <p class="gh-warning" data-i18n="gh.warning"></p>
+        <button id="gh-install" data-i18n="gh.install"></button>
+        <p id="gh-status" class="gh-status" role="status" aria-live="polite" hidden></p>
+        <details id="gh-detail" class="gh-detail" hidden><summary data-i18n="gh.details"></summary><pre></pre></details>
+      </div>
+      <p id="gh-note" class="gh-status" role="status" aria-live="polite" hidden></p>
+      <div id="gh-list" class="gh-list"></div>
+      <form id="gh-link" class="gh-link"><input id="gh-link-text" data-i18n-placeholder="gh.link"
+        autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url"><button data-i18n="gh.open"></button></form>
+      <button id="github-close" class="secondary" data-i18n="close"></button>
     </div>
   </div>
 

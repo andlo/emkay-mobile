@@ -34,6 +34,20 @@ const phoneScreen = matchMedia("(max-width: 700px), (pointer: coarse) and (max-w
 // tab says so and stops here, before its own OVOS starts.
 const STORE_ORIGIN = "https://store.emkay.ai";
 const PACKAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+// ?install=github:owner/repo[@ref]: a skill straight from GitHub (below, #49)
+const GITHUB_SPEC = /^github:([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})(?:@([A-Za-z0-9._\/-]{1,200}))?$/;
+const installable = (p) => PACKAGE_NAME.test(p) || GITHUB_SPEC.test(p);
+/** {owner, repo, ref} from github:owner/repo[@ref] or a github.com link, else null. */
+function ghSpec(text) {
+  const s = String(text || "").trim();
+  const m = s.match(GITHUB_SPEC) ||
+    s.replace(/^git\+/, "").match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?(?:\/tree\/([A-Za-z0-9._\/-]{1,200}))?(?:@([A-Za-z0-9._\/-]{1,200}))?\/?$/);
+  if (!m) return null;
+  const [, owner, repo, a, b] = m;
+  return { owner, repo, ref: a || b || "" };
+}
+/** The pip requirement for it, as ovos-core's installer gets it. */
+const ghPip = ({ owner, repo, ref }) => `git+https://github.com/${owner}/${repo}${ref ? `@${ref}` : ""}`;
 let pendingInstall = null;   // a package handed over before OVOS was up
 if (params.get("install")) {
   const probe = new BroadcastChannel("emkay-tabs");
@@ -56,7 +70,7 @@ if (params.get("install")) {
 const tabs = new BroadcastChannel("emkay-tabs");
 tabs.onmessage = ({ data }) => {
   if (data?.ping) tabs.postMessage({ pong: true });
-  if (data?.install && PACKAGE_NAME.test(data.install)) receiveInstall(data.install);
+  if (data?.install && installable(data.install)) receiveInstall(data.install);
 };
 
 // ----------------------------------------------------------------- brain
@@ -1013,6 +1027,12 @@ function installFromStore(pkg = params.get("install")) {
     history.replaceState(null, "", url);
     params.delete("install");
   }
+  if (pkg && GITHUB_SPEC.test(pkg)) {     // a skill from GitHub: its own card (below)
+    $("store").hidden = true;
+    $("gh-install").hidden = false;
+    openGithub(ghSpec(pkg));
+    return;
+  }
   if (!pkg || !PACKAGE_NAME.test(pkg)) return;
   $("store").hidden = true;
   if (fromMenu.delete("store")) fromMenu.add("panel");   // closing the panel goes back to the menu
@@ -1311,5 +1331,126 @@ $("guardian-offline").onclick = () => {
   busSend("ovos.local_only", { enabled: $("offline-shield").hidden });
 };
 new MutationObserver(guardianButton).observe($("offline-shield"), { attributes: true });
+
+// ------------------------------------------------------- skills from GitHub
+/**
+ * A skill straight from its GitHub repo (emkay-voice/emkay#49): a link or QR
+ * code (Emkay Dev's "Send to my Emkay", dev.emkay.ai's gallery) opens
+ * app.emkay.ai/?install=github:owner/repo[@ref]. Nothing installs on the
+ * link's say-so: this card shows the repo and says plainly that the store has
+ * not tested it, and only the Install button installs it, through ovos-core's
+ * installer like a store skill (`git+https://github.com/...`, which the
+ * browser's pip builds itself, github.py). The same card lists what came from
+ * GitHub, to update (the newest commit) or remove.
+ */
+let ghOffered = null;
+async function openGithub(offer = null) {
+  $("menu").hidden = true;
+  $("github").hidden = false;
+  $("gh-offer").hidden = !offer;
+  $("gh-status").hidden = true;
+  $("gh-note").hidden = true;
+  $("gh-detail").hidden = true;
+  $("gh-install").disabled = false;
+  ghOffered = offer;
+  if (offer) {
+    const name = `${offer.owner}/${offer.repo}${offer.ref ? ` @ ${offer.ref}` : ""}`;
+    $("gh-repo").textContent = name;
+    $("gh-repo").href = `https://github.com/${offer.owner}/${offer.repo}`;
+    $("gh-about").textContent = "";
+    $("gh-facts").textContent = t("gh.by", { owner: offer.owner });
+    const info = await call("gh_info", { owner: offer.owner, repo: offer.repo }).catch(() => ({ error: 0 }));
+    if (ghOffered !== offer) return;
+    if (info.error) {
+      $("gh-about").textContent = t(info.error === 404 ? "gh.notfound" : "gh.unreachable");
+      $("gh-install").disabled = info.error === 404;
+    } else {
+      $("gh-about").textContent = info.about;
+      const when = info.pushed ? new Date(info.pushed).toLocaleDateString(document.documentElement.lang || undefined,
+        { day: "numeric", month: "long", year: "numeric" }) : "";
+      const license = info.license && info.license !== "NOASSERTION" ? info.license : "";
+      $("gh-facts").textContent = [t("gh.by", { owner: info.owner }), when && t("gh.updated", { when }),
+        info.stars ? `★ ${info.stars}` : "", license].filter(Boolean).join(" · ");
+    }
+  }
+  await renderGithubList();
+}
+
+async function renderGithubList() {
+  const list = $("gh-list");
+  const items = await call("gh_installed").catch(() => []);
+  list.replaceChildren();
+  if (!items.length) {
+    if (!ghOffered) list.append(el("p", { className: "small", textContent: t("gh.empty") }));
+    return;
+  }
+  list.append(el("p", { className: "small", textContent: t("menu.github.hint") }));
+  for (const d of items) {
+    const where = d.url.replace(/^https:\/\/github\.com\//, "");
+    const update = el("button", { className: "secondary", textContent: t("gh.update") });
+    const remove = el("button", { className: "secondary", textContent: t("gh.remove") });
+    const note = $("gh-note");
+    update.onclick = () => ghRun(update, note, () => call("gh_install", { spec: ghPip({ ...ghSpec(d.url), ref: d.ref || "" }) }),
+      async () => {
+        const now = (await call("gh_installed").catch(() => [])).find((x) => x.name === d.name);
+        return now && now.commit === d.commit ? t("gh.uptodate") : t("gh.updated_ok");
+      });
+    // two taps to remove, as the network log's Clear (no dialogs here)
+    remove.onclick = () => {
+      if (!remove.dataset.armed) {
+        remove.dataset.armed = "1";
+        remove.textContent = t("gh.remove.sure");
+        setTimeout(() => { delete remove.dataset.armed; remove.textContent = t("gh.remove"); }, 4000);
+        return;
+      }
+      ghRun(remove, note, () => call("gh_remove", { name: d.name }), () => t("gh.removed"));
+    };
+    const link = el("a", { href: d.url, target: "_blank", rel: "noopener", textContent: where });
+    list.append(el("div", { className: "gh-item" },
+      el("b", { textContent: d.skills?.[0] || d.name }),
+      el("span", { className: "small" }, link, ` · ${(d.commit || "").slice(0, 7)}`),
+      el("div", { className: "row" }, update, remove)));
+  }
+}
+
+/** Run an install/update/removal from a button, saying how it went. */
+async function ghRun(button, note, run, okText) {
+  const buttons = $("github").querySelectorAll("button");
+  buttons.forEach((b) => { b.disabled = true; });
+  note.hidden = false;
+  note.className = "gh-status";
+  note.textContent = t("gh.working");
+  let r;
+  try { r = await run(); } catch (e) { r = { ok: false, error: String(e), detail: "" }; }
+  buttons.forEach((b) => { b.disabled = false; });
+  const said = r.ok ? await okText(r) : `${t("gh.failed")} ${r.error || ""}`.trim();
+  note.textContent = said;
+  note.className = `gh-status ${r.ok ? "ok" : "fail"}`;
+  if (!r.ok && r.detail) {
+    $("gh-detail").hidden = false;
+    $("gh-detail").querySelector("pre").textContent = r.detail;
+  }
+  if (r.ok) await renderGithubList();
+  return r;
+}
+
+$("gh-install").onclick = async () => {
+  if (!ghOffered) return;
+  const r = await ghRun($("gh-install"), $("gh-status"), () => call("gh_install", { spec: ghPip(ghOffered) }), () => t("gh.done"));
+  if (r.ok) $("gh-install").hidden = true;
+};
+$("gh-link").onsubmit = (e) => {
+  e.preventDefault();
+  const spec = ghSpec($("gh-link-text").value);
+  if (!spec) { $("gh-link-text").setCustomValidity(t("gh.bad_link")); $("gh-link-text").reportValidity(); return; }
+  $("gh-link-text").setCustomValidity("");
+  $("gh-link-text").value = "";
+  $("gh-install").hidden = false;
+  openGithub(spec);
+};
+$("gh-link-text").oninput = () => $("gh-link-text").setCustomValidity("");
+$("menu-github").hidden = !brain.can.install;
+$("menu-github").onclick = () => { fromMenu.add("github"); $("gh-install").hidden = false; openGithub(); };
+$("github-close").onclick = () => { ghOffered = null; closeView("github"); };
 
 window.emkay = { call, mic, speaker, media, wake, stt: () => sttModule };

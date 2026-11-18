@@ -255,6 +255,9 @@ def _install(spec, constraints, opts, log, top=False, extras=(), seen=None):
     from packaging.requirements import Requirement
     from packaging.utils import canonicalize_name
     seen = set() if seen is None else seen
+    from . import github
+    if isinstance(spec, str) and github.parse(spec):
+        return _install_github(spec, constraints, opts, log, seen)
     req = Requirement(spec) if isinstance(spec, str) else spec
     key = canonicalize_name(req.name)
     if key in seen:
@@ -285,6 +288,33 @@ def _install(spec, constraints, opts, log, top=False, extras=(), seen=None):
             _install(dep, constraints, opts, log, seen=seen)
         _unpack(whl, log)
     log(f"Successfully installed {req.name}-{version}")
+
+
+def _install_github(spec, constraints, opts, log, seen):
+    """`git+https://github.com/owner/repo@ref`: the wheel github.py builds
+    from the repo, then its requirements and the wheel, as for PyPI's."""
+    from . import github
+    try:
+        name, version, filename, blob = github.wheel_for(spec, log)
+    except github.GithubError as e:
+        raise PipError(str(e)) from None
+    from packaging.utils import canonicalize_name
+    seen.add(canonicalize_name(name))
+    have = _installed(name)
+    if have is not None and have.version == version:
+        log(f"Requirement already satisfied: {name}=={version} (from {spec})")
+        return
+    with zipfile.ZipFile(io.BytesIO(blob)) as whl:
+        meta = _wheel_metadata(whl)
+        for dep in _requirements(meta, ()):
+            _install(dep, constraints, opts, log, seen=seen)
+        if have is not None:
+            try:
+                _uninstall(name, log)  # the files of the commit installed before
+            except PipError:
+                pass                   # one that shipped with Emkay: USER_SITE comes first
+        _unpack(whl, log)
+    log(f"Successfully installed {name}-{version}")
 
 
 def _wheel_metadata(whl):

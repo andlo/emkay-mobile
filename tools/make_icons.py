@@ -71,10 +71,17 @@ ICONS = {
         face(256, 200, 40, 24, 268, 34, 18),
         '<g fill="none" stroke="#22a7f0" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">'
         '<path d="M256 300 V358 M226 330 L256 360 L286 330"/></g>'),
+    # code brackets around the face, an arrow down under it: a skill from GitHub
+    "github": svg(
+        '<g fill="none" stroke="#fff" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">'
+        '<path d="M150 120 L70 210 L150 300 M362 120 L442 210 L362 300"/></g>',
+        face(256, 190, 44, 26, 262, 38, 20),
+        '<g fill="none" stroke="#22a7f0" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">'
+        '<path d="M256 330 V430 M214 390 L256 432 L298 390"/></g>'),
 }
 
 #: the ones Emkay's own menu shows (web/menu/), next to its logo (web/icon.svg)
-MENU = ("settings", "store", "kiosk", "install", "guardian")
+MENU = ("settings", "store", "kiosk", "install", "guardian", "github")
 
 if __name__ == "__main__":
     repo = Path(__file__).resolve().parent.parent
