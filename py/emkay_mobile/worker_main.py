@@ -142,6 +142,47 @@ _STATE_TOPICS = {
 }
 
 
+#: What the "What's happening?" view follows (web/activity.js, #50), as
+#: ovos-tui-client's activity pane does: what was heard, which skill
+#: understood it (OVOS' own ovos.intent.matched, with the pipeline), the
+#: fallback and common-query rounds, what was said, and Emkay's note when
+#: speech falls back to another plugin. A few messages per question.
+_ACTIVITY = {
+    "recognizer_loop:wakeword", "recognizer_loop:record_begin", "recognizer_loop:utterance",
+    "recognizer_loop:speech.recognition.unknown", "emkay.speech.interim",
+    "ovos.intent.matched", "complete_intent_failure", "ovos.intent.unmatched",
+    "mycroft.skill.handler.error", "question:query", "question:query.response", "question:action",
+    "ocp:play", "ovos.common_play.skill.search_end", "mycroft.stop",
+    # what was said: the bus mirrors these two (speech.py, _once); the page
+    # shows one of a pair
+    "speak", "ovos.utterance.speak",
+}
+_FALLBACK_PREFIX = "ovos.skills.fallback."
+
+
+def _brief(data: dict) -> dict:
+    """The data of a message, without the session and with long texts cut."""
+    out = {}
+    for k, v in data.items():
+        if k in ("session", "context", "__sess"):
+            continue
+        if isinstance(v, str) and len(v) > 400:
+            v = v[:400] + "…"
+        out[k] = v
+    return out
+
+
+def activity_setup() -> str:
+    """How Emkay hears and speaks right now (JSON), for the top of the view."""
+    from ovos_config import Configuration
+    cfg = Configuration()
+    stt, tts = cfg.get("stt", {}), cfg.get("tts", {})
+    return json.dumps({"stt": stt.get("module"), "stt_fallback": stt.get("fallback_module"),
+                       "tts": tts.get("module"), "tts_fallback": tts.get("fallback_module"),
+                       "wake_word": cfg.get("listener", {}).get("wake_word"),
+                       "lang": cfg.get("lang")})
+
+
 def _watch(raw):
     """Forward the bus events in _STATE_TOPICS to the page."""
     try:
@@ -151,6 +192,10 @@ def _watch(raw):
     t = msg.get("type") if isinstance(msg, dict) else None
     if _core_open or _dev_stream:   # the visage's bus socket (and Emkay Dev) get everything
         _post("core", raw if isinstance(raw, str) else raw.serialize())
+    if t in _ACTIVITY or ((t or "").startswith(_FALLBACK_PREFIX) and t.endswith((".start", ".response"))):
+        _post("activity", json.dumps({"type": t, "data": _brief(msg.get("data") or {}),
+                                      "skill_id": (msg.get("context") or {}).get("skill_id")},
+                                     default=str))
     if t in _STATE_TOPICS or (t or "").startswith(_MEDIA_PREFIX) and t != _MEDIA_PREFIX + "state":
         _post("bus", json.dumps({"type": t, "data": msg.get("data", {})}))
     elif t in ("configuration.updated", "configuration.patch", "configuration.patch.clear"):

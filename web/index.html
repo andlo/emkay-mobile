@@ -67,6 +67,10 @@
         <img src="menu/github.svg" alt="">
         <span><b data-i18n="menu.github"></b><small data-i18n="menu.github.hint"></small></span>
       </button>
+      <button id="menu-activity" class="menu-item">
+        <img src="menu/activity.svg" alt="">
+        <span><b data-i18n="menu.activity"></b><small data-i18n="menu.activity.hint"></small></span>
+      </button>
       <button id="menu-network" class="menu-item">
         <img src="menu/guardian.svg" alt="">
         <span><b data-i18n="menu.network"></b><small data-i18n="menu.network.hint"></small></span>
@@ -151,6 +155,18 @@
         <button id="network-clear" class="secondary" data-i18n="network.clear"></button>
       </div>
       <button id="network-close" class="secondary" data-i18n="close"></button>
+    </div>
+  </div>
+
+  <!-- What's happening? (activity.js, #50): heard, understood, answered,
+       and what left this device, live -->
+  <div id="activity" class="menu" hidden>
+    <div class="menu-card activity-card">
+      <h2 class="with-icon"><img src="menu/activity.svg" alt=""><span data-i18n="act.title"></span></h2>
+      <p class="small" data-i18n="act.intro"></p>
+      <div id="activity-setup" class="activity-setup"></div>
+      <div id="activity-list" class="activity-list" aria-live="polite"></div>
+      <button id="activity-close" class="secondary" data-i18n="close"></button>
     </div>
   </div>
 

@@ -62,6 +62,14 @@ PROBES = [
         r'update: gh-status ok',
         r"after remove: skill gone=true listed=0",
     ]),
+    # What's happening? (#50): heard, understood with skill and pipeline,
+    # answered, from the bus as it happens
+    ("activity_browser.mjs", {}, [], [
+        r"setup: Hears with: \S+ – ",
+        r"understood: date-time: what_time_is_it \[via ovos-",
+        r"understood: geography: capital_of",
+        r"answered: “[^”]+” \[",
+    ]),
     ("tx_browser.mjs", {}, [], [
         r"enable: \['ovos-dialog-normalizer-plugin'\]",
         r"spoken: I('ve| have) got (three|tre) apples",   # rewritten before TTS
