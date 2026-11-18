@@ -399,6 +399,12 @@ async def dev_test(row_json: str) -> str:
     return await dev.test(row_json)
 
 
+async def dev_translate(lang: str, files_json: str) -> str:
+    """Add language (Emkay Dev): a skill's en-US files translated here (translate.py)."""
+    from . import translate
+    return await translate.translate_files(lang, files_json)
+
+
 # --- skills from GitHub (?install=github:owner/repo, app.js; github.py) ----
 
 async def _pip(topic: str, data: dict, timeout: float = 600) -> dict:

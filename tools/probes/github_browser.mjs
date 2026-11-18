@@ -9,7 +9,7 @@
 import { spawn } from "child_process";
 
 const base = process.argv[2] || "http://127.0.0.1:8080/";
-const repo = process.argv[3] || "emkay-voice/skill-template";
+const repo = process.argv[3] || "emkay-voice/ovos-skill-hello-example";
 const ask = process.argv[4] || "hello from my skill";
 const answer = new RegExp(process.argv[5] || "your very own skill|first skill works", "i");
 const port = 9343;

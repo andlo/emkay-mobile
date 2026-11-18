@@ -14,6 +14,8 @@
 //     test   {row}                  one golden utterance, judged (dev.py);
 //                                   skipped when not in Emkay's language
 //     lang                          the language Emkay speaks now
+//     translate {lang, files}       a skill's en-US files translated into lang,
+//                                   on this device (translate.py, mt.js)
 //     skills                        the skill ids Emkay runs
 //     python {code}                 run Python in Emkay's OVOS; its value as text
 //
@@ -95,6 +97,8 @@ export function startDev({ call, ready, onMessage, on }) {
     test: async ({ row }) => { await ready; return JSON.parse(await call("dev_test", { row })); },
     skills: async () => { await ready; return JSON.parse(await call("dev_skills")); },
     lang: async () => { await ready; return await call("dev_lang"); },
+    // Add language: {lang, files: {path in locale/en-US: text}} -> translate.py's answer
+    translate: async ({ lang, files }) => { await ready; return JSON.parse(await call("dev_translate", { lang, files })); },
     // a line of Python in this Emkay's OVOS, for looking around while debugging
     python: async ({ code }) => { await ready; return await call("python_async", { code }); },
   };
