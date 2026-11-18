@@ -303,6 +303,23 @@ def skills() -> str:
 #: Done with a step: the utterance was handled, or nobody took it.
 _STEP_ENDS = ("ovos.utterance.handled", "ovos.intent.unmatched", "complete_intent_failure")
 
+#: ... or the skill that took it asks something back (get_response,
+#: ask_yesno): who took the sentence is known, and the answer would only come
+#: from the user. The question is then called off (_call_off).
+_ASKS = ("mycroft.mic.listen",)
+_ASKS_SUFFIX = ".get_response.waiting"
+
+
+def _call_off(bus, skill_ids, sess):
+    """End what a test started: a question the skill is waiting on
+    (mycroft.skills.abort_question, which get_response reacts to) and the rest
+    (mycroft.stop)."""
+    from ovos_bus_client.message import Message
+    ctx = {"session": sess.serialize()}
+    for sid in skill_ids:
+        bus.emit(Message("mycroft.skills.abort_question", {"skill_id": sid}, ctx))
+    bus.emit(Message("mycroft.stop", {}, ctx))
+
 
 async def test(row_json: str, timeout: float = 20.0) -> str:
     """Send one golden utterance and judge who took it.
@@ -348,7 +365,7 @@ async def test(row_json: str, timeout: float = 20.0) -> str:
     sid = sess.session_id
 
     claim = Claim(session_id=sid)
-    spoke, done = [], asyncio.Event()
+    spoke, done, asked = [], asyncio.Event(), set()
 
     def watch(raw):
         msg = json.loads(raw) if isinstance(raw, str) else json.loads(raw.serialize())
@@ -359,7 +376,9 @@ async def test(row_json: str, timeout: float = 20.0) -> str:
         t = msg.get("type", "")
         if t in ("speak", "ovos.utterance.speak"):
             spoke.append((msg.get("data") or {}).get("utterance", ""))
-        if t in _STEP_ENDS:
+        if t in _STEP_ENDS or t in _ASKS or t.endswith(_ASKS_SUFFIX):
+            if t.endswith(_ASKS_SUFFIX):
+                asked.add(t[:-len(_ASKS_SUFFIX)])
             done.set()
 
     bus = boot.bus()
@@ -367,7 +386,10 @@ async def test(row_json: str, timeout: float = 20.0) -> str:
     t0 = time.time()
     hung = False
     try:
-        boot.utterance(text, lang=lang, session=sess)
+        # handed over: a handler that asks something back waits for the
+        # answer (JSPI), and this test must not wait with it
+        from .browser import hand_over
+        hand_over(lambda: boot.utterance(text, lang=lang, session=sess))
         try:
             await asyncio.wait_for(done.wait(), timeout)
         except asyncio.TimeoutError:
@@ -375,7 +397,7 @@ async def test(row_json: str, timeout: float = 20.0) -> str:
         await asyncio.sleep(0.3)   # a reply spoken right after "handled"
     finally:
         bus.remove("message", watch)
-        bus.emit(Message("mycroft.stop", {}, {"session": sess.serialize()}))
+        _call_off(bus, asked | ({skill_id} if skill_id else set()), sess)
 
     if not skill_id:
         status = "timeout" if hung and claim.empty else "sent"
