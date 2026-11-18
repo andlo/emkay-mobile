@@ -21,7 +21,9 @@ const given = process.argv.slice(2).find((a) => !/^https?:/.test(a));   // ci.py
 const skillDir = path.resolve(given || path.join(here, "dev_skill/ovos_skill_hello"));
 const parentPage = fs.readFileSync(path.join(here, "dev_parent.html"));
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  // PARENT_COEP=1: the parent is cross-origin isolated, as vscode.dev and its webviews are
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8",
+    ...(process.env.PARENT_COEP ? { "cross-origin-embedder-policy": "require-corp", "cross-origin-opener-policy": "same-origin" } : {}) });
   res.end(parentPage);
 }).listen(8091, "127.0.0.1");
 const url = "http://127.0.0.1:8091/";

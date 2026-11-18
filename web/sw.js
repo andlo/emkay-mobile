@@ -70,7 +70,21 @@ async function serveRes(path) {
   });
   if (!reply.body) return new Response("", { status: 404 });
   const ext = path.split(".").pop().toLowerCase();
-  return new Response(reply.body, { headers: { "content-type": RES_TYPES[ext] || "application/octet-stream" } });
+  const headers = new Headers({ "content-type": RES_TYPES[ext] || "application/octet-stream" });
+  embeddable(headers);
+  return new Response(reply.body, { headers });
+}
+
+/**
+ * What this worker makes up can be shown inside a cross-origin isolated
+ * Emkay: in VS Code for the Web (Emkay Dev, ?dev) Emkay itself sits in a
+ * frame of a page with COEP: require-corp, so everything it frames or loads
+ * must allow that too (the site's own files get the same headers from
+ * Cloudflare). Outside such a page the headers change nothing.
+ */
+function embeddable(headers) {
+  if (!headers.has("cross-origin-embedder-policy")) headers.set("cross-origin-embedder-policy", "credentialless");
+  if (!headers.has("cross-origin-resource-policy")) headers.set("cross-origin-resource-policy", "cross-origin");
 }
 
 self.addEventListener("fetch", (event) => {
@@ -156,6 +170,7 @@ function toResponse({ status, headers, body }) {
     data = prefixPaths(new TextDecoder().decode(body), type.includes("html"));
   }
   const nullBody = [101, 204, 205, 304].includes(status);
+  embeddable(out);
   return new Response(nullBody ? null : data, { status, headers: out });
 }
 
