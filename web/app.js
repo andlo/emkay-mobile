@@ -1398,10 +1398,19 @@ async function renderGithubList() {
     const update = el("button", { className: "secondary", textContent: t("gh.update") });
     const remove = el("button", { className: "secondary", textContent: t("gh.remove") });
     const note = $("gh-note");
-    update.onclick = () => ghRun(update, note, () => call("gh_install", { spec: ghPip({ ...ghSpec(d.url), ref: d.ref || "" }) }),
-      async () => {
+    // a repository can go away (deleted, made private) or be archived by its
+    // owner – e.g. a skill from dev.emkay.ai's gallery: the copy here keeps
+    // working, and this says so instead of a bare "failed"
+    update.onclick = () => ghRun(update, note, async () => {
+      const [owner, repo] = where.split("/");
+      const info = await call("gh_info", { owner, repo }).catch(() => ({ error: 0 }));
+      if (info.error === 404) return { ok: false, gone: true };
+      const r = await call("gh_install", { spec: ghPip({ ...ghSpec(d.url), ref: d.ref || "" }) });
+      return { ...r, archived: !!info.archived };
+    }, async (r) => {
         const now = (await call("gh_installed").catch(() => [])).find((x) => x.name === d.name);
-        return now && now.commit === d.commit ? t("gh.uptodate") : t("gh.updated_ok");
+        const said = now && now.commit === d.commit ? t("gh.uptodate") : t("gh.updated_ok");
+        return r.archived ? `${said} ${t("gh.archived")}` : said;
       });
     // two taps to remove, as the network log's Clear (no dialogs here)
     remove.onclick = () => {
@@ -1431,7 +1440,7 @@ async function ghRun(button, note, run, okText) {
   let r;
   try { r = await run(); } catch (e) { r = { ok: false, error: String(e), detail: "" }; }
   buttons.forEach((b) => { b.disabled = false; });
-  const said = r.ok ? await okText(r) : `${t("gh.failed")} ${r.error || ""}`.trim();
+  const said = r.ok ? await okText(r) : r.gone ? t("gh.gone") : `${t("gh.failed")} ${r.error || ""}`.trim();
   note.textContent = said;
   note.className = `gh-status ${r.ok ? "ok" : "fail"}`;
   if (!r.ok && r.detail) {
