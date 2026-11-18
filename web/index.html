@@ -51,26 +51,15 @@
       <!-- each entry: Emkay-style icon (build/icons/make_icons.py), name and
            a line on what it is; what opens over the face returns here
            when it closes (app.js openFromMenu) -->
-      <button id="menu-brain" class="menu-item">
-        <img src="menu/brain.svg" alt="">
-        <span><b data-i18n="menu.brain"></b><small id="menu-brain-hint"></small></span>
-      </button>
-      <button id="menu-panel" class="menu-item">
+      <div id="menu-main">
+      <button id="menu-settings" class="menu-item">
         <img src="menu/settings.svg" alt="">
-        <span><b data-i18n="menu.panel"></b><small data-i18n="menu.panel.hint"></small></span>
+        <span><b data-i18n="menu.settings"></b><small data-i18n="menu.settings.hint"></small></span>
       </button>
       <a id="menu-store" class="menu-item" href="https://store.emkay.ai/" target="_blank" rel="noopener">
         <img src="menu/store.svg" alt="">
         <span><b data-i18n="menu.store"></b><small data-i18n="menu.store.hint"></small></span>
       </a>
-      <button id="menu-github" class="menu-item">
-        <img src="menu/github.svg" alt="">
-        <span><b data-i18n="menu.github"></b><small data-i18n="menu.github.hint"></small></span>
-      </button>
-      <button id="menu-activity" class="menu-item">
-        <img src="menu/activity.svg" alt="">
-        <span><b data-i18n="menu.activity"></b><small data-i18n="menu.activity.hint"></small></span>
-      </button>
       <button id="menu-network" class="menu-item">
         <img src="menu/guardian.svg" alt="">
         <span><b data-i18n="menu.network"></b><small data-i18n="menu.network.hint"></small></span>
@@ -90,6 +79,29 @@
       </button>
       <p class="small"><span data-i18n="about"></span> ·
         <a href="https://github.com/emkay-voice/emkay" target="_blank" rel="noopener" data-i18n="source"></a></p>
+      </div>
+      <!-- Settings: where Emkay thinks, OVOS' control panel and, for
+           developers only, a skill straight from GitHub (skills come from
+           the store) -->
+      <div id="menu-settings-page" hidden>
+      <h3 class="menu-sub with-icon"><img src="menu/settings.svg" alt=""><span data-i18n="menu.settings"></span></h3>
+      <button id="menu-brain" class="menu-item">
+        <img src="menu/brain.svg" alt="">
+        <span><b data-i18n="menu.brain"></b><small id="menu-brain-hint"></small></span>
+      </button>
+      <button id="menu-panel" class="menu-item">
+        <img src="menu/panel.svg" alt="">
+        <span><b data-i18n="menu.panel"></b><small data-i18n="menu.panel.hint"></small></span>
+      </button>
+      <div id="menu-dev" class="menu-dev">
+      <p class="small" data-i18n="menu.dev"></p>
+      <button id="menu-github" class="menu-item">
+        <img src="menu/github.svg" alt="">
+        <span><b data-i18n="menu.github"></b><small data-i18n="menu.github.hint"></small></span>
+      </button>
+      </div>
+      <button id="menu-back" class="secondary" data-i18n="menu.back"></button>
+      </div>
       <button id="menu-close" class="secondary" data-i18n="close"></button>
     </div>
   </div>
@@ -146,6 +158,11 @@
       <h2 class="with-icon"><img src="menu/guardian.svg" alt=""><span data-i18n="network.title"></span></h2>
       <!-- local only (#23), the same switch as "go offline" by voice -->
       <button id="guardian-offline" class="guardian-offline"></button>
+      <!-- what's happening, live (activity.js) -->
+      <button id="menu-activity" class="menu-item guardian-activity">
+        <img src="menu/activity.svg" alt="">
+        <span><b data-i18n="menu.activity"></b><small data-i18n="menu.activity.hint"></small></span>
+      </button>
       <p class="small" data-i18n="network.intro"></p>
       <p id="network-summary" class="network-summary"></p>
       <div id="network-list" class="network-list"></div>

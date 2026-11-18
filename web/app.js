@@ -1107,7 +1107,14 @@ $("panel-close").onclick = () => closeView("panel");
 
 // ------------------------------------------------------------------ menu
 $("menu-panel").onclick = () => openFromMenu("panel", () => openPanel());
-$("menu-button").onclick = () => { $("menu").hidden = !$("menu").hidden; };
+/** The menu's two pages: the main one, and Settings (where Emkay thinks, the control panel, developers' GitHub). */
+function menuPage(settings) {
+  $("menu-main").hidden = settings;
+  $("menu-settings-page").hidden = !settings;
+}
+$("menu-button").onclick = () => { if ($("menu").hidden) menuPage(false); $("menu").hidden = !$("menu").hidden; };
+$("menu-settings").onclick = () => menuPage(true);
+$("menu-back").onclick = () => menuPage(false);
 $("menu-close").onclick = () => { $("menu").hidden = true; };
 $("menu-kiosk").onclick = () => { kiosk = true; enterKiosk(); $("menu").hidden = true; };
 
@@ -1450,7 +1457,8 @@ $("gh-link").onsubmit = (e) => {
   openGithub(spec);
 };
 $("gh-link-text").oninput = () => $("gh-link-text").setCustomValidity("");
-$("menu-github").hidden = !brain.can.install;
+// for developers (Emkay Dev): skills are installed from the store, so this is under Settings
+$("menu-dev").hidden = !brain.can.install;
 $("menu-github").onclick = () => { fromMenu.add("github"); $("gh-install").hidden = false; openGithub(); };
 $("github-close").onclick = () => { ghOffered = null; closeView("github"); };
 
@@ -1459,12 +1467,17 @@ $("github-close").onclick = () => { ghOffered = null; closeView("github"); };
 // it follows the bus from the start, so the last questions are there
 const activity = createActivity({ on: (k, fn) => brain.on(k, fn), call, t, $, el });
 $("menu-activity").hidden = !brain.can.netlog;   // the OVOS in this browser
+// opened from Guardian's card, it goes back there
 $("menu-activity").onclick = () => {
-  fromMenu.add("activity");
+  $("network").hidden = true;
   $("menu").hidden = true;
   $("activity").hidden = false;
   activity.show();
 };
-$("activity-close").onclick = () => { activity.hide(); closeView("activity"); };
+$("activity-close").onclick = () => {
+  activity.hide();
+  $("activity").hidden = true;
+  $("network").hidden = false;
+};
 
 window.emkay = { call, mic, speaker, media, wake, activity, stt: () => sttModule };
