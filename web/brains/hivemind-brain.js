@@ -219,8 +219,13 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
   /** The house speaks: a WAV from its TTS – with the same Piper voice as
    * the phone's (the house's Piper otherwise keeps the house's own voice and
    * only changes its accent). */
+  /** The voice for `l`: the house's own, when it has chosen one for its
+   * language (emkay-home: one voice for the whole house), else Emkay's. */
+  const voiceOf = (sp, l) => (sp?.voice && sp.lang && sp.lang.split("-")[0] === l.split("-")[0].toLowerCase()
+    ? sp.voice : null) || voiceFor(l) || voiceFor(lang);
+
   async function houseVoice(sp, text, l) {
-    const voice = voiceFor(l) || voiceFor(lang);
+    const voice = voiceOf(sp, l);
     const q = new URLSearchParams({ utterance: text, lang: l.toLowerCase(), ...(voice ? { voice } : {}) });
     const r = await house(`${sp.tts}/v2/synthesize?${q}`);
     return new Uint8Array(await r.arrayBuffer());
@@ -342,7 +347,8 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
     if (sp) {
       try { wav = await houseVoice(sp, text, l); } catch (e) { console.warn("[emkay] the house's voice – the phone's instead", e); }
     }
-    const voice = voiceFor(l) || voiceFor(lang);
+    // the house's voice here too, when the house couldn't answer
+    const voice = voiceOf(houseSpeechOf(settings), l);
     if (!wav && !voice) return console.warn(`[emkay] no Piper voice for ${l}`);
     try {
       if (!wav) wav = await (await import("../piper.js")).synth(text, voice);
