@@ -266,6 +266,10 @@ async function keepStorage() {
   }
 }
 
+/** The house's control panel, when this Emkay is a satellite of an Emkay Home
+ * served from the house (shown in the same place as the local panel). */
+let housePanel = null;
+
 (async () => {
   try {
     keepStorage();
@@ -278,11 +282,14 @@ async function keepStorage() {
     ovosReady();
     showVisage();
     if (brain.kind === "local") bootStatus("boot.skills", 1, { n: info.skills.length });
-    // a satellite of an Emkay Home: ⚙ → Settings is the house's control panel
-    // (its own page, behind the house's password – it can't be framed here)
+    // a satellite of an Emkay Home: ⚙ → Settings is the house's control panel,
+    // shown the same way as the local OVOS' own – over the face, with × –
+    // when Emkay comes from the house itself (the house lets only its own
+    // Emkay frame it); from elsewhere (app.emkay.ai) in a window of its own
     if (!brain.can.panel && info.house_panel) {
       $("menu-panel").hidden = false;
-      $("menu-panel").onclick = () => { $("menu").hidden = true; window.open(info.house_panel, "_blank", "noopener"); };
+      housePanel = new URL(info.house_panel).hostname === location.hostname ? info.house_panel : null;
+      if (!housePanel) $("menu-panel").onclick = () => { $("menu").hidden = true; window.open(info.house_panel, "_blank", "noopener"); };
     }
     offerSetup();
     startDevice(call);   // the phone's sensors and connectivity, for PHAL
@@ -1059,6 +1066,12 @@ $("menu-store").onclick = (e) => { e.preventDefault(); openFromMenu("store", ope
  */
 function openPanel(page = "") {
   $("menu").hidden = true;
+  if (housePanel) {
+    const frame = $("panel-frame");
+    if (!frame.getAttribute("src")) frame.src = housePanel;
+    $("panel").hidden = false;
+    return;
+  }
   // the panel's own Simple view (only the everyday pages) to begin with, on
   // a phone; its header toggle shows all pages and is remembered from then
   // on (localStorage "ovos-simple" is the panel's own setting, same origin)
