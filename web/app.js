@@ -14,6 +14,7 @@ import { createMediaPlayer } from "./media.js";
 import { createBrain, chosenBrain } from "./brains/brain.js";
 import { haLinkWanted, startHaDevice } from "./ha-device.js";
 import { chooseBrain, brainHint } from "./brains/choose.js";
+import { createActivity } from "./activity.js";
 
 const $ = (id) => document.getElementById(id);
 apply();                    // the phone's language until OVOS is up
@@ -1453,4 +1454,17 @@ $("menu-github").hidden = !brain.can.install;
 $("menu-github").onclick = () => { fromMenu.add("github"); $("gh-install").hidden = false; openGithub(); };
 $("github-close").onclick = () => { ghOffered = null; closeView("github"); };
 
-window.emkay = { call, mic, speaker, media, wake, stt: () => sttModule };
+// ------------------------------------------------------- what's happening
+// What Emkay heard, understood, answered and sent, live (activity.js, #50);
+// it follows the bus from the start, so the last questions are there
+const activity = createActivity({ on: (k, fn) => brain.on(k, fn), call, t, $, el });
+$("menu-activity").hidden = !brain.can.netlog;   // the OVOS in this browser
+$("menu-activity").onclick = () => {
+  fromMenu.add("activity");
+  $("menu").hidden = true;
+  $("activity").hidden = false;
+  activity.show();
+};
+$("activity-close").onclick = () => { activity.hide(); closeView("activity"); };
+
+window.emkay = { call, mic, speaker, media, wake, activity, stt: () => sttModule };

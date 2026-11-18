@@ -214,3 +214,25 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .gh-link input { flex: 1; min-width: 0; padding: 12px; border-radius: 12px; border: 1px solid #333;
   background: #0a0a0a; color: #eee; font-size: 15px; }
 .gh-link button { padding: 12px 14px; }
+
+/* What's happening? (activity.js, #50): one box per question, newest first */
+.activity-card { max-width: 560px; max-height: 92vh; }
+.activity-setup { font-size: 13px; color: #9ab; background: #0c1016; border-radius: 12px; padding: 8px 12px;
+  display: flex; flex-direction: column; gap: 3px; }
+.activity-setup:empty { display: none; }
+.activity-setup b { color: #cdd; font-weight: 600; }
+.activity-list { overflow-y: auto; flex: 1; min-height: 160px; display: flex; flex-direction: column; gap: 10px; }
+.act-turn { background: #0c1016; border: 1px solid #1d2430; border-radius: 14px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 6px; }
+.act-time { font-size: 11px; color: #678; text-align: right; }
+.act-line { display: flex; gap: 10px; align-items: flex-start; border-left: 3px solid #333; padding-left: 8px; }
+.act-icon { width: 22px; flex: none; text-align: center; }
+.act-body { display: flex; flex-direction: column; min-width: 0; }
+.act-lane { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #789; }
+.act-text { color: #eee; font-size: 15px; word-break: break-word; }
+.act-sub { color: #8a96a8; font-size: 12px; word-break: break-word; }
+.act-heard { border-color: #22a7f0; }
+.act-understood { border-color: #a78bfa; }
+.act-answered { border-color: #4ade80; }
+.act-network { border-color: #f0a022; }
+.act-note { border-color: #f08a8a; }

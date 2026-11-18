@@ -247,6 +247,8 @@ const commands = {
   /** The network log: every request this worker made in the last days (netlog.js). */
   net_log: () => netlog.entries(),
   net_clear: () => netlog.clear(),
+  /** How Emkay hears and speaks now, for "What's happening?" (activity.js). */
+  activity_setup: () => JSON.parse(main.activity_setup()),
   // Emkay Dev (?dev, web/dev.js and py/emkay_mobile/dev.py): a skill from VS Code
   dev_enable: () => main.dev_enable(),
   dev_load: async ({ skillId, files, requirements }) => {
