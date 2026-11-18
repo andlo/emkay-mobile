@@ -47,6 +47,14 @@ globalThis.emkayWhisper = {
     (await import("./whisper.js")).transcribe(pcm, rate, lang, model),
 };
 
+// Machine translation for Emkay Dev's "Add language" (web/mt.js), for
+// py/emkay_mobile/translate.py through `js`; loaded the first time it is asked for
+globalThis.emkayMT = {
+  side: async (lang) => (await import("./mt.js")).side(lang),
+  ready: async (lang) => (await import("./mt.js")).ready(lang),
+  generate: async (lang, ids) => (await import("./mt.js")).generate(lang, Array.from(ids)),
+};
+
 let py = null;    // the Pyodide instance
 let main = null;  // the Python module emkay_mobile.worker_main
 const build = fetch("build.json", { cache: "no-cache" }).then((r) => r.json());
@@ -260,6 +268,7 @@ const commands = {
   dev_skills: () => main.dev_skills(),
   dev_lang: () => main.dev_lang(),
   dev_test: async ({ row }) => await main.dev_test(JSON.stringify(row)),
+  dev_translate: async ({ lang, files }) => await main.dev_translate(lang, JSON.stringify(files)),
   // skills from GitHub (?install=github:owner/repo, app.js; py/emkay_mobile/github.py)
   gh_installed: () => JSON.parse(main.gh_installed()),
   /** What GitHub says about a repo, for the page to show before installing (in the network log, as all this worker fetches). */

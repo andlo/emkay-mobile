@@ -56,7 +56,7 @@ PROBES = [
     # answers, it is there after a reload, Update, Remove
     ("github_browser.mjs", {}, [], [
         r'install: gh-status ok',
-        r"new skills: ovos-skill-hello\.emkay-voice",
+        r"new skills: ovos-skill-hello-example\.emkay-voice",
         r"asked \"hello from my skill\": answered by the skill",
         r"after reload: still loaded=true",
         r'update: gh-status ok',

@@ -47,16 +47,23 @@ def norm(n):
     return re.sub(r"[-_.]+", "-", n).lower()
 
 
-def vendor_pyodide(packages):
+#: Pyodide packages put on the site but not loaded at boot: loaded the first
+#: time something asks for them (sentencepiece: Emkay Dev's Add language,
+#: py/emkay_mobile/translate.py)
+PYODIDE_LAZY = ["sentencepiece"]
+
+
+def vendor_pyodide(packages, lazy=False):
     """Copy Pyodide and the packages OVOS needs into the site.
 
     Served from the same origin, so the app does not depend on a CDN, works
     offline once cached, and needs no cross-origin requests from the worker.
+    `lazy`: only the packages' wheels (Pyodide itself is there already).
     """
     src = REPO / "node_modules/pyodide"
     dst = OUT / "pyodide"
-    dst.mkdir(parents=True)
-    for f in PYODIDE_CORE:
+    dst.mkdir(parents=True, exist_ok=lazy)
+    for f in ([] if lazy else PYODIDE_CORE):
         shutil.copy(src / f, dst / f)
     lock = json.load(open(src / "pyodide-lock.json"))["packages"]
     by_norm = {norm(k): v for k, v in lock.items()}
@@ -317,6 +324,7 @@ def main():
     precise = precise_models(OUT)
 
     packages, pyodide_bytes = vendor_pyodide(plan["pyodide"] + ["micropip"])
+    vendor_pyodide([p for p in PYODIDE_LAZY if p not in packages], lazy=True)
 
     versions = sorted(n.split("-")[0] + "==" + n.split("-")[1] for n in plan["pure"])
     build = {
