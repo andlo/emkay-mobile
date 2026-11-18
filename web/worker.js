@@ -258,6 +258,28 @@ const commands = {
   dev_skills: () => main.dev_skills(),
   dev_lang: () => main.dev_lang(),
   dev_test: async ({ row }) => await main.dev_test(JSON.stringify(row)),
+  // skills from GitHub (?install=github:owner/repo, app.js; py/emkay_mobile/github.py)
+  gh_installed: () => JSON.parse(main.gh_installed()),
+  /** What GitHub says about a repo, for the page to show before installing (in the network log, as all this worker fetches). */
+  gh_info: async ({ owner, repo }) => {
+    const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      { headers: { Accept: "application/vnd.github+json" } });
+    if (!r.ok) return { error: r.status };
+    const j = await r.json();
+    return { name: j.full_name, about: j.description || "", url: j.html_url, owner: j.owner?.login,
+      stars: j.stargazers_count, pushed: j.pushed_at, license: j.license?.spdx_id || "",
+      branch: j.default_branch, archived: !!j.archived };
+  },
+  gh_install: async ({ spec }) => {
+    const out = JSON.parse(await main.gh_install(spec));
+    await syncfs(false);   // the package is in ~/.local: kept for the next reload
+    return out;
+  },
+  gh_remove: async ({ name }) => {
+    const out = JSON.parse(await main.gh_remove(name));
+    await syncfs(false);
+    return out;
+  },
   /** Run a line of Python and return its value as text (for debugging). */
   python: ({ code }) => String(py.runPython(code)),
   /** The same through runPythonAsync: Python that may wait (JSPI, issue #20). */
