@@ -110,6 +110,13 @@ try {
     await js(`window.said = []`);
     await sleep(1500);
   }
+  if (process.env.SHOT) {   // "Tap to start", as a person would, so the face and the screen run
+    const el = await js(`(() => { const r = document.getElementById("f").getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; })()`);
+    for (const type of ["mousePressed", "mouseReleased"]) {
+      await send("Input.dispatchMouseEvent", { type, x: el[0] + el[2] / 2, y: el[1] + 462, button: "left", clickCount: 1 });
+    }
+    await sleep(4000);
+  }
   // the conversation
   await op("say", { text: "stop" }).catch(() => {});
   await sleep(2000);
@@ -126,6 +133,12 @@ try {
     log(`say ${JSON.stringify(text)} -> ${ok ? "ok" : "NO MATCH /" + expect + "/"} ${JSON.stringify(said)}`);
     if (!ok) failed++;
     await sleep(800);
+  }
+  if (process.env.SHOT) {   // SHOT=file.png: a picture of Emkay after the conversation
+    await sleep(3000);
+    const r = await send("Page.captureScreenshot", { format: "png", clip: { x: 0, y: 0, width: 400, height: 710, scale: 1 } });
+    fs.writeFileSync(process.env.SHOT, Buffer.from(r.result.data, "base64"));
+    log(`screenshot: ${process.env.SHOT}`);
   }
   const errors = await js(`window.errors.slice(-3)`);
   if (errors?.length) log(`errors: ${JSON.stringify(errors).slice(0, 600)}`);

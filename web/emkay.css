@@ -60,6 +60,13 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
   text-decoration: none; font-size: 16px; }
 .menu-card .menu-item:active, .menu-card .menu-item:hover { background: #232c38; }
 .menu-card .menu-item[hidden] { display: none; }
+/* the menu's Settings page, and its developers' corner (app.js menuPage) */
+#menu-main, #menu-settings-page, .menu-dev { display: flex; flex-direction: column; gap: 10px; }
+#menu-main[hidden], #menu-settings-page[hidden], .menu-dev[hidden] { display: none; }
+.menu-card h3.menu-sub { margin: 4px 0 4px; font-size: 1.05em; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.menu-card h3.menu-sub img { width: 30px; height: 30px; border-radius: 7px; }
+.menu-dev { margin-top: 14px; padding-top: 6px; border-top: 1px solid #2d3a48; }
+.menu-dev p.small { margin: 6px 0; }
 .menu-card .menu-item img { width: 40px; height: 40px; border-radius: 9px; flex: none; }
 .menu-card .menu-item span { display: flex; flex-direction: column; min-width: 0; }
 .menu-card .menu-item b { font-weight: 600; }
@@ -154,6 +161,7 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .menu-card h2.with-icon { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .menu-card h2.with-icon img { width: 34px; height: 34px; border-radius: 8px; }
 .menu-card button.guardian-offline { background: #1a2028; border: 1px solid #2d3a48; }
+.menu-card .guardian-activity { margin: 8px 0; }
 .menu-card button.guardian-offline.on { background: #13321b; border-color: #3a7d4a; color: #bfe8c8; }
 
 /* HiveMind brain (#11): the connection form over the boot screen */

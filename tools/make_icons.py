@@ -63,6 +63,11 @@ ICONS = {
         f'<path d="{gear(256, 256, 196, 160, 8)}" fill="none" stroke="#fff" stroke-width="24" '
         'stroke-linejoin="round"/>',
         face(256, 236, 52, 30, 318, 42, 22)),
+    # two sliders, the face between them: OVOS' control panel
+    "panel": svg(
+        '<g fill="none" stroke="#fff" stroke-width="26" stroke-linecap="round"><path d="M96 112 H416 M96 400 H416"/></g>',
+        '<g fill="#000" stroke="#22a7f0" stroke-width="26"><circle cx="186" cy="112" r="36"/><circle cx="326" cy="400" r="36"/></g>',
+        face(256, 236, 52, 30, 308, 42, 22)),
     # a phone with the face on its screen and an arrow down onto it: install as an app
     "install": svg(
         '<g fill="none" stroke="#fff" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">'
@@ -86,7 +91,7 @@ ICONS = {
 }
 
 #: the ones Emkay's own menu shows (web/menu/), next to its logo (web/icon.svg)
-MENU = ("settings", "store", "kiosk", "install", "guardian", "github", "activity")
+MENU = ("settings", "panel", "store", "kiosk", "install", "guardian", "github", "activity")
 
 if __name__ == "__main__":
     repo = Path(__file__).resolve().parent.parent
