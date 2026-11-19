@@ -91,16 +91,17 @@ def _read(path):
     return {}
 
 
-def _seeds():
-    """The seed files the site shipped. Without glob or fnmatch: they compile
-    regexes, and this runs inside re's compile (_compile)."""
+def seeds(name=SEED_NAME):
+    """The seed files called `name` the site shipped, one per language's
+    intent cache. Without glob or fnmatch: they compile regexes, and this
+    runs inside re's compile (_compile)."""
     found = []
     try:
         for cache in sorted(os.listdir(SEEDS)):
             if not cache.startswith("intent_cache"):
                 continue
             for lang in sorted(os.listdir(os.path.join(SEEDS, cache))):
-                path = os.path.join(SEEDS, cache, lang, SEED_NAME)
+                path = os.path.join(SEEDS, cache, lang, name)
                 if os.path.isfile(path):
                     found.append(path)
     except OSError:
@@ -112,7 +113,7 @@ def _load():
     global _cache, _loaded
     if _cache is None:
         _cache = {}
-        for seed in _seeds():
+        for seed in seeds():
             _cache.update(_read(seed))
         _cache.update(_read(PATH))       # what this device compiled itself
         _loaded = frozenset(_cache)
@@ -180,6 +181,26 @@ def _compile(p, flags=0):
         if len(_misses) < 5:
             _misses.append(p)
         _dirty = True
+    return compiled
+
+
+def fast(p, flags):
+    """`p` compiled straight from the cache - none of re.compile's own
+    Python around it - or None when the cache doesn't have it
+    (padaos_lines.py)."""
+    global _hits
+    import _sre
+    key = (p, int(flags))
+    hit = _load().get(key)
+    if hit is None:
+        return None
+    try:
+        compiled = _sre.compile(p, *_sre_args(hit))
+    except Exception:   # noqa: BLE001 - a bad entry: compiled again later
+        _cache.pop(key, None)
+        return None
+    _used.add(key)
+    _hits += 1
     return compiled
 
 
