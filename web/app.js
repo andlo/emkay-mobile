@@ -153,12 +153,15 @@ window.emkayVisage2 = {
 /**
  * Put the visage's frame on the page, under Emkay's own layer (boot, menu,
  * mic). It fills the window on any screen: Flutter lays out for the size.
+ * `?lang=` is OVOS' language, so the clock and dates the visage draws itself
+ * speak it too (ovos-gui-visage date_locale.dart); a new language restarts
+ * Emkay (languageChanged), and with it the frame.
  */
 function showVisage() {
   const frame = document.createElement("iframe");
   frame.id = "visage2";
   frame.className = "visage2";
-  frame.src = "visage2/index.html";
+  frame.src = `visage2/index.html?lang=${encodeURIComponent(ovosLang)}`;
   frame.title = "OVOS Visage";
   frame.allow = "autoplay";
   document.body.prepend(frame);
