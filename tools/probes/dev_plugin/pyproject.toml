@@ -1,0 +1,8 @@
+[project]
+name = "ovos-phal-plugin-dev-probe"
+version = "0.0.1"
+description = "Emkay Dev's probe plugin (tools/probes/template_browser.mjs)"
+dependencies = []
+
+[project.entry-points."opm.phal"]
+"ovos-phal-plugin-dev-probe" = "ovos_phal_plugin_dev_probe:DevProbePlugin"

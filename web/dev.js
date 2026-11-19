@@ -79,9 +79,10 @@ export function startDev({ call, ready, onMessage, on }) {
 
   const ops = {
     hello: async () => ({ version, ready: up, lang: up ? await call("dev_lang") : null }),
-    load: async ({ skillId, files, requirements }) => {
+    // kind "plugin" (a PHAL plugin): entry is its opm.phal "module:Class"
+    load: async ({ skillId, files, requirements, kind, entry }) => {
       await ready;
-      const out = JSON.parse(await call("dev_load", { skillId, files, requirements }));
+      const out = JSON.parse(await call("dev_load", { skillId, files, requirements, kind, entry }));
       badge.textContent = out.ok ? `DEV · ${skillId}` : "DEV · ✗";
       badge.classList.toggle("bad", !out.ok);
       return out;

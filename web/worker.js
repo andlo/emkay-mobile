@@ -259,8 +259,9 @@ const commands = {
   activity_setup: () => JSON.parse(main.activity_setup()),
   // Emkay Dev (?dev, web/dev.js and py/emkay_mobile/dev.py): a skill from VS Code
   dev_enable: () => main.dev_enable(),
-  dev_load: async ({ skillId, files, requirements }) => {
-    const out = await main.dev_load(skillId, JSON.stringify(files), JSON.stringify(requirements || []));
+  dev_load: async ({ skillId, files, requirements, kind, entry }) => {
+    const out = await main.dev_load(skillId, JSON.stringify(files), JSON.stringify(requirements || []),
+                                    kind || "skill", entry || "");
     syncfs(false);   // the files are in ~/.local: kept for the next reload
     return out;
   },

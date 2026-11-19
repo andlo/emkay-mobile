@@ -46,6 +46,7 @@ ALREADY_THERE = ("ovos-workshop", "ovos-utils", "ovos-bus-client", "ovos-core",
 
 _post = None          # set by enable(): post(kind, payload)
 _loaders = {}         # skill_id -> SkillLoader of the dev copy
+_plugins = {}         # plugin id -> the running PHALPlugin from dev files
 _replaced = {}        # skill_id -> True when a store-installed copy was unloaded for it
 _watching = set()     # module names whose DEBUG lines are shown (the dev skills)
 
@@ -265,8 +266,133 @@ async def load(skill_id: str, files_json: str, requirements_json: str = "[]") ->
                        "problems": problems, "log": lines})
 
 
+#: "package.module:Class", as in an opm.phal entry point
+ENTRY = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$")
+
+#: what every PHALPlugin listens to; the rest is what this one added
+_PHAL_OWN = None
+
+
+async def load_plugin(plugin_id: str, entry: str, files_json: str,
+                      requirements_json: str = "[]") -> str:
+    """(Re)start a PHAL plugin from its files.
+
+    A skill is loaded by OVOS' SkillLoader; a plugin has no such loader - the
+    PHAL service finds plugins by their installed entry points when it
+    starts, and Emkay runs no PHAL service (the browser is its one device,
+    ovos-phal-plugin-browser). So this does what the PHAL service does for
+    one plugin: import the class the opm.phal entry point names, ask its
+    validator whether it fits this device, and make it with the bus and its
+    part of the configuration (PHAL.<plugin id>). The running copy is shut
+    down first (shutdown() takes its bus handlers off again).
+
+    Args:
+        plugin_id: the entry point's name ("ovos-phal-plugin-hello").
+        entry: what it points at ("ovos_phal_plugin_hello:HelloPlugin").
+        files_json: {"relative/path": "<base64>", ...} - the package folder
+            of the entry's top module.
+        requirements_json: its dependencies.
+
+    Returns JSON: {ok, skill_id (the plugin id), kind: "plugin", seconds,
+    listens (the bus messages it handles), problems, log}.
+    """
+    import base64
+    import importlib
+    import sys
+    from ovos_config import Configuration
+    from ovos_plugin_manager.templates.phal import PHALPlugin
+    from . import boot
+
+    t0 = time.time()
+    lines = []
+    log = lines.append
+
+    def answer(ok, problems, listens=()):
+        return json.dumps({"ok": ok, "skill_id": plugin_id, "kind": "plugin",
+                           "seconds": round(time.time() - t0, 2),
+                           "listens": sorted(listens), "problems": problems, "log": lines})
+
+    if not SKILL_ID.match(plugin_id or ""):
+        return answer(False, [f"not a plugin id: {plugin_id!r}"])
+    if not ENTRY.match(entry or ""):
+        return answer(False, [f"not an entry point: {entry!r} (want package.module:Class)"])
+    module_name, class_name = entry.split(":")
+    top = module_name.split(".")[0]
+    files = json.loads(files_json)
+    if "__init__.py" not in {_safe_path(p).replace(os.sep, "/") for p in files}:
+        return answer(False, [f"no __init__.py in the {top} folder"])
+
+    problems = _install(json.loads(requirements_json or "[]"), log)
+    unload(plugin_id, quiet=True)
+
+    plugins_root = os.path.join(DEV_ROOT, "_plugins")
+    base = os.path.join(plugins_root, plugin_id)
+    shutil.rmtree(base, ignore_errors=True)
+    for rel, b64 in files.items():
+        path = os.path.join(base, top, _safe_path(rel))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(base64.b64decode(b64))
+    log(f"{len(files)} files written")
+
+    # this plugin's folder first on the path, and its old modules forgotten
+    sys.path[:] = [p for p in sys.path if not p.startswith(plugins_root)]
+    sys.path.insert(0, base)
+    for name in [m for m in sys.modules if m == top or m.startswith(top + ".")]:
+        sys.modules.pop(name, None)
+    importlib.invalidate_caches()
+
+    global _capture, _PHAL_OWN
+    _capture = []
+    _watching.add(top)
+    instance = None
+    try:
+        cls = getattr(importlib.import_module(module_name), class_name)
+        if not (isinstance(cls, type) and issubclass(cls, PHALPlugin)):
+            problems.append(f"{entry} is not a PHALPlugin")
+        else:
+            config = Configuration().get("PHAL", {}).get(plugin_id, {})
+            validator = getattr(cls, "validator", None)
+            if validator is not None and not validator.validate(config):
+                problems.append(f"{class_name}.validator says it does not fit this device")
+            else:
+                instance = cls(bus=boot.bus(), name=plugin_id, config=config)
+    except Exception as e:
+        import traceback
+        problems.append(f"{type(e).__name__}: {e}")
+        log(traceback.format_exc())
+    errors, _capture = _capture, None
+    if instance is None:
+        if not problems:
+            problems.append(errors[0] if errors else "the plugin did not start - see the Emkay log")
+        return answer(False, problems)
+    _plugins[plugin_id] = instance
+    if _PHAL_OWN is None:
+        _PHAL_OWN = _phal_own_topics()
+    listens = {topic for topic, _ in getattr(instance, "_registered_handlers", [])} - _PHAL_OWN
+    log(f"{plugin_id} runs; it handles: {', '.join(sorted(listens)) or '-'}")
+    return answer(True, problems, listens)
+
+
+def _phal_own_topics() -> set:
+    """The bus messages a bare PHALPlugin listens to (enclosure, audio events)."""
+    from ovos_plugin_manager.templates.phal import PHALPlugin
+    from ovos_utils.fakebus import FakeBus
+
+    class _Bare(PHALPlugin):
+        def start(self):   # no thread for a look at what it registers
+            pass
+    bare = _Bare(bus=FakeBus(), name="emkay-dev-bare", config={})
+    return {topic for topic, _ in bare._registered_handlers}
+
 def unload(skill_id: str, quiet: bool = False, restore: bool = False) -> str:
-    """Stop the dev copy of a skill; with restore, load the installed one again."""
+    """Stop the dev copy of a skill or plugin; with restore, load the installed skill again."""
+    plugin = _plugins.pop(skill_id, None)
+    if plugin is not None:
+        try:
+            plugin.shutdown()
+        except Exception:
+            logging.getLogger("emkay.dev").exception("shutting down %s", skill_id)
     loader = _loaders.pop(skill_id, None)
     if loader is not None:
         try:
@@ -281,8 +407,8 @@ def unload(skill_id: str, quiet: bool = False, restore: bool = False) -> str:
 
 
 def loaded() -> str:
-    """The skills running from dev files."""
-    return json.dumps(sorted(_loaders))
+    """The skills and plugins running from dev files."""
+    return json.dumps(sorted(set(_loaders) | set(_plugins)))
 
 
 def language() -> str:
