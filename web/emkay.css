@@ -14,7 +14,7 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
   border-top-color: #fff; animation: spin 1.6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .bar { width: 220px; height: 4px; background: #222; border-radius: 2px; overflow: hidden; }
-.bar div { height: 100%; width: 0; background: #22a7f0; transition: width .2s; }
+.bar div { height: 100%; width: 0; background: #22a7f0; transition: width .15s linear; }
 #start, #first-setup { margin-top: 18px; font-size: 18px; padding: 16px 32px; border-radius: 40px; border: 0;
   background: #22a7f0; color: #fff; }
 /* first start: "Sæt op" is the main button, starting on the defaults the quiet one */

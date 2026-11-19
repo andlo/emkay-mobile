@@ -110,6 +110,51 @@ _bus = None
 _manager = None
 
 
+def report(key: str, progress: float = None, **variables):
+    """How the boot is going, for the start screen's bar (app.js bootStatus).
+
+    `key` is one of Emkay's texts (locale/<lang>/<key>.dialog), `progress`
+    0..1 within that step. Does nothing until worker_main sets it.
+    """
+
+
+def _count_skill_loads(manager):
+    """Report each skill as it loads: "Loading skills (3/24)…".
+
+    Wraps SkillManager's discovery (to learn how many skills there are to
+    load) and its _load_plugin_skill (one done); returns a function that
+    takes the wrappers off again. Skipped where ovos-core looks different.
+    """
+    import ovos_core.skill_manager as sm
+    if not hasattr(manager, "_load_plugin_skill") or not hasattr(sm, "find_skill_plugins"):
+        return lambda: None
+    find, load = sm.find_skill_plugins, manager._load_plugin_skill
+    count = {"done": 0, "total": 0}
+
+    def counting_find(*args, **kwargs):
+        found = find(*args, **kwargs)
+        blacklist = set(manager.blacklist or [])
+        count["total"] = len([s for s in found if s not in blacklist])
+        report("boot.loadskills", 0, i=0, n=count["total"])
+        return found
+
+    def counting_load(skill_id, *args, **kwargs):
+        try:
+            return load(skill_id, *args, **kwargs)
+        finally:
+            count["done"] += 1
+            n = max(count["total"], count["done"])
+            report("boot.loadskills", count["done"] / n, i=count["done"], n=n)
+
+    sm.find_skill_plugins = counting_find
+    manager._load_plugin_skill = counting_load
+
+    def restore():
+        sm.find_skill_plugins = find
+        manager.__dict__.pop("_load_plugin_skill", None)
+    return restore
+
+
 def _merge(base: dict, extra: dict) -> dict:
     """Merge `extra` into `base` in place, recursing into nested dicts."""
     for k, v in extra.items():
@@ -591,7 +636,11 @@ def start(on_message=None, user_config=None) -> dict:
     # unloads skills (its handlers for ovos.pip.install.complete etc.)
     # SkillManager.run() minus its 30 s rescan loop (a service loop, see
     # browser.FOREVER_LOOPS): load the skills, then announce readiness.
-    _manager._load_new_skills()
+    restore = _count_skill_loads(_manager)
+    try:
+        _manager._load_new_skills()
+    finally:
+        restore()
     _bus.emit(Message("mycroft.skills.initialized"))
     _manager.status.set_ready()
     if sys.platform == "emscripten":
