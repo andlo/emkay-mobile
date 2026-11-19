@@ -153,8 +153,9 @@ export function createPrivacy({ t, $, openSettings }) {
     },
     /** emkay.speech.interim: a fallback plugin listens or speaks meanwhile. */
     interim({ what, using, module }) {
-      if (using !== "fallback" || !route) return;
-      const p = route[`${what}_fallback`];
+      if (!route || !module) return;
+      // the fallback plugin, or the plugin from before a settings change
+      const p = using === "fallback" ? route[`${what}_fallback`] : null;
       fallback[what] = speechPart(p?.module === module ? p : { module, hosts: [] });
       render();
     },

@@ -469,7 +469,9 @@ const mic = {
         caption(t("mic.thinking"));
         const before = speaker.spoken, handled = utterancesHandled;
         const text = await call("heard", { pcm: pcm.buffer, rate: 16000 }, [pcm.buffer]);
-        caption(text ? `“${text}”` : t("mic.unclear"), null, text ? 6000 : 4000);
+        // nothing heard because the device's ears aren't there yet (speechWait): say that
+        caption(text ? `“${text}”` : t(speechWait.has("stt") ? "wait.stt.short" : "mic.unclear"),
+          null, text ? 6000 : 4000);
         if (text) unanswered(before, handled);
       }
     } catch (e) {
@@ -504,6 +506,8 @@ async function unanswered(before, handledBefore = utterancesHandled - 1) {
   }
   await new Promise((r) => setTimeout(r, 1500));
   if (speaker.spoken !== before || speaker.playing) return;
+  // answered, but as text: the voice isn't on the device yet (speechWait)
+  if (speechWait.shownAt && Date.now() - speechWait.shownAt < 30000) return;
   caption(t("noanswer"), null, 6000);
   if (!mic.errorSound && bootInfo?.error_sound) {
     try {
@@ -525,6 +529,9 @@ async function warmingWatch(seconds = 150) {
   const end = performance.now() + seconds * 1000;
   const asked = () => speaker.spoken > 0 || mic.busy || questionsAsked > 0;
   let shown = false, wasSlow = false;
+  // hide the warm-up line only if it is still the one shown (an answer shown
+  // as text meanwhile – speechWait – must not be written over)
+  const hideWarming = () => { if ($("caption-text").textContent === t("warming")) $("caption").hidden = true; };
   while (performance.now() < end && !asked()) {
     const slow = setTimeout(() => {
       wasSlow = true;
@@ -534,11 +541,11 @@ async function warmingWatch(seconds = 150) {
     await call("python", { code: "1" }).catch(() => {});
     clearTimeout(slow);
     const fast = performance.now() - t0 < 300;
-    if (shown && fast) { caption(t("warming"), null, 1); shown = false; }
+    if (shown && fast) { hideWarming(); shown = false; }
     if (wasSlow && fast) return;   // the warm-up is over
     await new Promise((r) => setTimeout(r, 1000));
   }
-  if (shown) caption(t("warming"), null, 1);
+  if (shown) hideWarming();
 }
 
 // ovos-stt-plugin-browser: the browser's own speech recognition, chosen as
@@ -913,7 +920,12 @@ const modelStatus = {
     }
     clearTimeout(this.pending.get(key));
     this.pending.delete(key);
-    if (state === "ready") { $("model-status-interim").hidden = true; privacy.ready(what); }   // the new one takes over now
+    if (state === "ready") {   // the new one takes over now
+      $("model-status-interim").hidden = true;
+      privacy.ready(what);
+      speechWait.ready(what);
+    }
+    if (state === "error") speechWait.fail(what);
     if (!this.shown.has(key) && state === "ready") return;   // came from the cache: nothing to say
     this.shown.delete(key);
     this.render(what, name, 1, state);
@@ -944,6 +956,66 @@ const modelStatus = {
     }
   },
 };
+
+// ------------------------------------------- the device's speech not ready
+/**
+ * Emkay's speech runs on the device, and no server stands in by itself
+ * (defaults v15). Until its models are there – the first start, a new
+ * language, a failed download – speech.py says so (emkay.speech.waiting)
+ * instead of sending anything out: the ears (stt) or the voice (tts). This
+ * note says it in words, opens the keyboard when Emkay can't hear yet,
+ * shows an answer it couldn't speak as text, and offers OpenVoiceOS' servers
+ * until then – chosen, for this start only (speech.py servers_meanwhile);
+ * the privacy chip turns amber when they are used.
+ */
+const speechWait = {
+  waiting: new Set(),   // "stt", "tts"
+  dismissed: false,     // "Not now": the note stays away this start; captions still say it
+  has(what) { return this.waiting.has(what); },
+  remember: "",         // "stt"/"tts": no model for this language on the device – the choice is kept
+  failed: new Set(),    // "stt"/"tts" whose model download failed (modelStatus)
+  /** A model download failed (modelStatus): an open note says so. */
+  fail(what) {
+    this.failed.add(what);
+    if (this.waiting.has(what) && !$("speech-wait").hidden && !this.remember) {
+      $("speech-wait-text").textContent = t(`wait.${what}.failed`);
+    }
+  },
+  show({ what, utterance, reason }) {
+    this.waiting.add(what);
+    if (what === "tts" && utterance) this.shownAt = Date.now();
+    if (what === "tts" && utterance) caption(`“${utterance}”`, null, Math.max(6000, utterance.length * 90));
+    if (what === "stt") { $("type").hidden = false; }
+    if (this.dismissed) return;
+    // a language Emkay has no voice (or ears) for on the device: say so plainly,
+    // and the servers, if chosen, are kept for it
+    this.remember = reason === "language" ? what : "";
+    const both = this.waiting.has("stt") && this.waiting.has("tts");
+    // the download failed (modelStatus "error"): not "on its way"
+    $("speech-wait-text").textContent = t(this.remember ? `wait.${what}.language`
+      : this.failed.has(what) ? `wait.${what}.failed` : both ? "wait.both" : `wait.${what}`);
+    $("speech-wait-servers").textContent = t(this.remember ? "wait.servers.always" : "wait.servers");
+    $("speech-wait").hidden = false;
+  },
+  /** A model on the device is ready (modelStatus). */
+  ready(what) {
+    this.failed.delete(what);
+    if (!this.waiting.delete(what)) return;
+    if (!this.waiting.size) $("speech-wait").hidden = true;
+    else $("speech-wait-text").textContent = t(`wait.${[...this.waiting][0]}`);
+  },
+};
+$("speech-wait-servers").onclick = async () => {
+  $("speech-wait").hidden = true;
+  speechWait.dismissed = true;
+  try {
+    await call("servers_meanwhile", { remember: speechWait.remember });
+    caption(t(speechWait.remember ? "wait.servers.kept" : "wait.servers.on"), null, 5000);
+  } catch (e) {
+    console.warn("[emkay] servers meanwhile", e);
+  }
+};
+$("speech-wait-close").onclick = () => { $("speech-wait").hidden = true; speechWait.dismissed = true; };
 
 // ------------------------------------------------------------ PHAL plugin
 /**
@@ -985,6 +1057,7 @@ function locate() {
 function onBus(msg) {
   if (media.onBus(msg)) return;
   if (msg.type === "emkay.speech.interim") { privacy.interim(msg.data); return modelStatus.interim(msg.data); }
+  if (msg.type === "emkay.speech.waiting") return speechWait.show(msg.data);
   if (msg.type === "emkay.wakeword") {   // a new wake word in the settings
     wake.restart(msg.data.wake_word, msg.data.hotword).catch((e) => { wake.state = `error: ${e.message || e}`; });
     return;
