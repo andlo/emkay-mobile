@@ -33,6 +33,30 @@ import { sttModelFor, textVisemes, voiceFor, wavSeconds } from "./hivemind-brain
 
 const PROTOCOL = 1;
 const WHISPER_STT = "ovos-stt-plugin-whisper-browser";
+
+/**
+ * Where Emkay hears, speaks and thinks with this Assist pipeline, for the
+ * privacy chip (privacy.js). HA thinks; it hears and speaks when the
+ * pipeline has speech-to-text or text-to-speech, else this device does.
+ * Home Assistant Cloud's engines (Nabu Casa) are not in the house, nor is
+ * a conversation agent of an AI service on the internet (OpenAI, Google …).
+ */
+const CLOUD_AGENT = /openai|google|gemini|anthropic|claude|mistral|groq|openrouter|azure|cloud/i;
+export function haPrivacy(pipeline, url) {
+  let host = "";
+  try { host = new URL(url).hostname; } catch {}
+  const engine = (id) => {
+    if (!id) return { what: "device" };
+    if (/cloud/i.test(id)) return { what: "server", host: "Home Assistant Cloud" };
+    return { what: "ha", host };
+  };
+  const agent = pipeline?.conversation_engine || "";
+  const think = CLOUD_AGENT.test(agent)
+    ? { what: "server", host: agent.replace(/^conversation\./, "").replace(/_/g, " ") }
+    : { what: "ha", host };
+  return { think, hear: engine(pipeline?.stt_engine), voice: engine(pipeline?.tts_engine) };
+}
+
 const CONVERSATION_KEEP_MS = 5 * 60e3;   // follow-up questions keep HA's conversation
 
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -506,6 +530,7 @@ export function createHomeAssistantBrain({ ask = askHaUrl } = {}) {
         wake_word: wakeWord, hotword, precise_models: precise, wake_words: wakeWordList,
         site_langs: [lang], intent_langs: [lang], listener: {}, confirm_listening: false,
         pipeline: pipeline?.name,
+        privacy: haPrivacy(pipeline, settings.url),
       };
     },
     async heard({ pcm, rate }) {

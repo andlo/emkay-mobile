@@ -41,6 +41,8 @@
   <form id="type" class="type" hidden><input id="type-text" data-i18n-placeholder="type" autocomplete="off"></form>
   <button id="keyboard" class="keyboard" data-i18n-aria="keyboard" hidden>⌨</button>
   <button id="menu-button" class="menu-button" data-i18n-aria="menu" hidden>⚙</button>
+  <!-- where Emkay hears, speaks and thinks; a tap opens ⚙ → Settings (privacy.js) -->
+  <button id="privacy-chip" class="privacy-chip" hidden></button>
 
   <!-- the menu: OVOS' own settings (backups too: the panel's Backup page),
        full screen, about -->
@@ -85,6 +87,11 @@
            the store) -->
       <div id="menu-settings-page" hidden>
       <h3 class="menu-sub with-icon"><img src="menu/settings.svg" alt=""><span data-i18n="menu.settings"></span></h3>
+      <!-- privacy: where Emkay hears, speaks and thinks, above what changes it (privacy.js) -->
+      <section id="privacy" class="privacy" aria-labelledby="privacy-title">
+        <p id="privacy-title" class="privacy-title" data-i18n="privacy.title"></p>
+        <div id="privacy-rows" class="privacy-rows"></div>
+      </section>
       <button id="menu-brain" class="menu-item">
         <img src="menu/brain.svg" alt="">
         <span><b data-i18n="menu.brain"></b><small id="menu-brain-hint"></small></span>

@@ -16,7 +16,7 @@ const PLACES = [
   [/browser|whisper|piper|vosk|onnx|openwakeword|oww|silero|precise|kokoro|nos|roest|rost/i, "device"],
   [/./, "server"],
 ];
-const place = (module) => (module ? PLACES.find(([re]) => re.test(module))[1] : "");
+export const place = (module) => (module ? PLACES.find(([re]) => re.test(module))[1] : "");
 
 const MAX = 400;           // events kept
 const TURN_GAP = 20000;    // ms of quiet that ends a question
