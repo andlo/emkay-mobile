@@ -58,6 +58,7 @@ function blocked(url, method) {
 }
 
 let fs = null;            // Pyodide's FS, once ~/.local is mounted
+let sink = null;          // in the speech worker: where entries go instead
 let pending = [];          // entries not written yet
 let pruned = false;
 
@@ -73,7 +74,7 @@ function record(url, method, status, bytes, caller, refused = false) {
   try { host = new URL(url, self.location.href).host; } catch { return; }
   if (!host || url.startsWith("data:") || url.startsWith("blob:")) return;
   const [kind, name] = service(host);
-  pending.push({
+  (sink ?? add)({
     t: Date.now(), host, method: (method || "GET").toUpperCase(),
     status: status || 0, bytes: Number.isFinite(bytes) ? bytes : null,
     who: caller || "emkay", service: name, kind, ...(refused ? { blocked: true } : {}),
@@ -170,11 +171,21 @@ function flush() {
   }
 }
 
-/** Start logging: wraps fetch and XMLHttpRequest in this worker. */
-export function install() {
+/**
+ * Start logging: wraps fetch and XMLHttpRequest in this worker. In the
+ * speech worker (speech-worker.js) `sink` gets each entry, which worker.js
+ * add()s to its own log.
+ */
+export function install(options = {}) {
+  sink = options.sink || null;
   wrapFetch();
   wrapXHR();
-  setInterval(flush, 5000);
+  if (!sink) setInterval(flush, 5000);
+}
+
+/** An entry made in another worker (the speech worker). */
+export function add(entry) {
+  pending.push(entry);
 }
 
 /** Pyodide's FS, once ~/.local is mounted: entries from now on go to the file. */

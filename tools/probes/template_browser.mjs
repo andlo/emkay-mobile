@@ -64,8 +64,51 @@ const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pending = new Map();
-ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); } };
-const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+// CPUPROF=1: Chrome's CPU profiler on Emkay's worker (where Pyodide runs),
+// reported for the seconds around "ready" and the first question (#4)
+let workerSession = null;
+const sendS = (method, params = {}, sessionId) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params, sessionId })); });
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); return; }
+  if (m.method === "Target.attachedToTarget" && process.env.CPUPROF) {
+    const { sessionId, targetInfo } = m.params;
+    if (targetInfo.type === "worker" && /worker\.js/.test(targetInfo.url)) {
+      workerSession = sessionId;
+      sendS("Profiler.enable", {}, sessionId).then(() => sendS("Profiler.setSamplingInterval", { interval: 500 }, sessionId))
+        .then(() => sendS("Profiler.start", {}, sessionId)).then(() => sendS("Runtime.runIfWaitingForDebugger", {}, sessionId));
+    } else {
+      sendS("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, sessionId);
+      sendS("Runtime.runIfWaitingForDebugger", {}, sessionId);
+    }
+  }
+};
+const send = (method, params = {}) => sendS(method, params);
+async function cpuReport(fromWall, toWall) {
+  if (!workerSession) { log("cpuprof: no worker attached"); return; }
+  const stopWall = Date.now();
+  const r = await sendS("Profiler.stop", {}, workerSession);
+  const prof = r.result?.profile;
+  if (!prof) { log("cpuprof: no profile " + JSON.stringify(r).slice(0, 200)); return; }
+  const byId = new Map(prof.nodes.map((n) => [n.id, n]));
+  let t = prof.startTime;
+  const self = new Map(), files = new Map();
+  for (let i = 0; i < prof.samples.length; i++) {
+    t += prof.timeDeltas[i];
+    const wall = stopWall - (prof.endTime - t) / 1000;
+    if (wall < fromWall || wall > toWall) continue;
+    const n = byId.get(prof.samples[i]); const cf = n.callFrame;
+    const key = `${cf.functionName || "(anon)"} ${cf.url.split("/").pop()}:${cf.lineNumber}`;
+    const dt = (prof.timeDeltas[i + 1] ?? prof.timeDeltas[i]) / 1000;
+    self.set(key, (self.get(key) || 0) + dt);
+    const f = cf.url.split("/").pop() || cf.functionName;
+    files.set(f, (files.get(f) || 0) + dt);
+  }
+  const top = (m, k) => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, k);
+  log(`cpuprof: worker, ${((toWall - fromWall) / 1000).toFixed(1)} s window`);
+  for (const [k, v] of top(files, 10)) log(`  file ${(v / 1000).toFixed(2)} s  ${k}`);
+  for (const [k, v] of top(self, 25)) log(`  self ${(v / 1000).toFixed(2)} s  ${k}`);
+}
 async function js(expression) {
   const r = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
   return r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description;
@@ -100,11 +143,13 @@ function deps() {
 
 let failed = 0;
 try {
+  if (process.env.CPUPROF) await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
   await send("Page.enable");
   await send("Page.navigate", { url: "http://127.0.0.1:8092/" });
   const hello = await until(`window.hello?.ready && window.hello`, 400, "a ready dev Emkay");
   const lang = hello.lang;
   log(`emkay ready, speaks ${lang}`);
+  const readyWall = Date.now();
   if (process.env.PY_BEFORE) {   // PY_BEFORE="<python>": run before the first question (e.g. start a profiler)
     const r = await op("python", { code: process.env.PY_BEFORE }, 120);
     log(`python before: ${JSON.stringify(r.result ?? r.error).slice(0, 300)}`);
@@ -117,6 +162,7 @@ try {
       await op("say", { text: process.env.FIRST });
       await until(`window.said.length`, 120, `an answer to ${process.env.FIRST}`);
       log(`${round} answer after ${((Date.now() - t1) / 1000).toFixed(1)} s: ${JSON.stringify(await js("window.said"))}`);
+      if (process.env.CPUPROF && round === "first") await cpuReport(readyWall - 3000, Date.now());
       for (const l of await js(`window.trace.filter((l) => new RegExp(${JSON.stringify(process.env.FIRST_TRACE || "padaos|train|warm|regex")}, "i").test(l))`)) log(`  ${l}`);
       await sleep(3000);
     }
