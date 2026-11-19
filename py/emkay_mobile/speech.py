@@ -34,11 +34,17 @@ def _config():
     return Configuration()
 
 
+#: the module names of the plugins made by stt() and tts(), so a plugin kept
+#: as `_previous` after a settings change is known by name
+_names = {"stt": None, "tts": None}
+
+
 def stt():
     global _stt
     if _stt is None:
         from ovos_plugin_manager.stt import OVOSSTTFactory
         _stt = OVOSSTTFactory.create(_config())
+        _names["stt"] = _config().get("stt", {}).get("module")
     return _stt
 
 
@@ -47,7 +53,21 @@ def tts():
     if _tts is None:
         from ovos_plugin_manager.tts import OVOSTTSFactory
         _tts = OVOSTTSFactory.create(_config())
+        _names["tts"] = _config().get("tts", {}).get("module")
     return _tts
+
+
+#: the plugins that run on the device itself; anything else talks to a server
+_ON_DEVICE = ("ovos-stt-plugin-whisper-browser", "ovos-tts-plugin-piper-browser")
+
+
+def _keep_previous(what: str) -> bool:
+    """The plugin from before a settings change may go on listening or
+    speaking while the new one gets ready – if it runs on the device. One
+    that talks to a server is not kept silently (defaults v15): it may only
+    stand in like the servers do (_stand_in)."""
+    name = _previous_names.get(what)
+    return name in _ON_DEVICE or (name is not None and _servers_meanwhile)
 
 
 def transformers():
@@ -72,6 +92,7 @@ _fallback = None
 #: model downloads, so switching from one local model to another needs no
 #: server meanwhile
 _previous = {"stt": None, "tts": None}
+_previous_names = {"stt": None, "tts": None}
 _interim_said = set()   # ("tts", "previous") etc. already told the page since the last reload
 
 
@@ -92,26 +113,104 @@ def _interim(what: str, using: str, module: str = None):
         print(f"[emkay] interim not shown: {e!r}")
 
 
+class SpeechNotReady(Exception):
+    """The device's own speech can't be used yet (its model still
+    downloading, or the download failed) and nothing was chosen to stand in."""
+
+
+#: The user tapped "use OpenVoiceOS' servers until it's ready" (the page,
+#: servers_meanwhile()): the public servers stand in for the device's speech
+#: while it isn't ready, until the page is loaded again. Never saved – a new
+#: start asks again.
+_servers_meanwhile = False
+
+
+def servers_meanwhile(on: bool = True, remember: str = ""):
+    """on: the servers stand in while the device's speech isn't ready, this
+    start only. remember ("stt"/"tts"): the user's language has no model on
+    the device for that, and they chose the servers for it – kept as that
+    part's `fallback_module`, so the next start doesn't ask again (the
+    control panel can change it)."""
+    global _servers_meanwhile
+    _servers_meanwhile = bool(on)
+    if remember in ("stt", "tts"):
+        from . import boot
+        boot.write_user_config({remember: {"fallback_module": f"ovos-{remember}-plugin-server"}})
+    print(f"[emkay] servers meanwhile: {_servers_meanwhile}" + (f", kept for {remember}" if remember else ""))
+
+
+def _reason(what: str, lang: str) -> str:
+    """Why the device's own plugin can't do it: "language" when Emkay has no
+    model on the device for this language at all (a Piper voice, a Whisper
+    language), else "loading" (still downloading, or the download failed)."""
+    cfg = _config().get(what, {})
+    base = (lang or "en").split("-")[0].lower()
+    try:
+        if what == "tts" and cfg.get("module") == "ovos-tts-plugin-piper-browser":
+            from ovos_tts_plugin_piper_browser import voice_for
+            if not voice_for(lang):
+                return "language"
+        if what == "stt" and cfg.get("module") == "ovos-stt-plugin-whisper-browser":
+            from ovos_stt_plugin_whisper_browser import LANGUAGES, MODELS
+            if base not in LANGUAGES and base not in MODELS:
+                return "language"
+    except Exception:
+        pass
+    return "loading"
+
+
+def _waiting(what: str, error: Exception, utterance: str = ""):
+    """Tell the page the device's speech isn't ready (emkay.speech.waiting):
+    it shows that, offers the servers for the moment (or, for a language
+    with no model on the device, for good), and shows a sentence that
+    couldn't be spoken as text."""
+    try:
+        from ovos_bus_client.message import Message
+        from . import boot
+        lang = _config().get("lang", "en-US")
+        boot.bus().emit(Message("emkay.speech.waiting",
+                                {"what": what, "utterance": utterance, "error": repr(error),
+                                 "reason": _reason(what, lang), "lang": lang}))
+    except Exception as e:
+        print(f"[emkay] waiting not shown: {e!r}")
+
+
+def _stand_in(what: str):
+    """The plugin that may stand in when the configured one fails: one the
+    user chose as `<what>.fallback_module`, or – only after "use the servers
+    meanwhile" – OpenVoiceOS' public servers. None: nothing may (since
+    defaults v15 the servers are no longer a silent fallback)."""
+    cfg = _config().get(what, {})
+    name = cfg.get("fallback_module") or ""
+    if name and name != cfg.get("module"):
+        return name
+    if _servers_meanwhile:
+        return f"ovos-{what}-plugin-server"
+    return None
+
+
 def _get_tts(utterance, path, lang):
     """The configured TTS; if it fails, the plugin from before the last
-    settings change, else `tts.fallback_module`, as ovos-audio does. A plugin
-    that runs on the phone (Piper) can fail where a server plugin does not:
-    its voice still downloading, no network for that first download, a
-    language it has no voice for."""
+    settings change, else a stand-in (_stand_in), as ovos-audio does with its
+    fallback. A plugin that runs on the phone (Piper) can fail where a server
+    plugin does not: its voice still downloading, no network for that first
+    download, a language it has no voice for. With no stand-in it raises
+    SpeechNotReady."""
     global _fallback
     try:
         out = tts().get_tts(utterance, path, lang=lang)
         _previous["tts"] = None      # the new one works: the old one can go
         return out
     except Exception as e:
-        if _previous["tts"] is not None:
+        if _previous["tts"] is not None and _keep_previous("tts"):
             print(f"[emkay] tts failed ({e!r}); the previous TTS speaks meanwhile")
-            _interim("tts", "previous")
+            _interim("tts", "previous", _previous_names["tts"])
             return _previous["tts"].get_tts(utterance, path, lang=lang)
         cfg = _config().get("tts", {})
-        name = cfg.get("fallback_module") or "ovos-tts-plugin-server"
-        if name == cfg.get("module"):
-            raise
+        name = _stand_in("tts")
+        if not name:
+            print(f"[emkay] tts not ready ({e!r}); nothing stands in")
+            raise SpeechNotReady(e) from e
         print(f"[emkay] tts failed ({e!r}); using the fallback {name}")
         _interim("tts", "fallback", name)
         if _fallback is None:
@@ -130,10 +229,12 @@ def reload(keep_previous: bool = False):
     """
     global _stt, _tts, _dialog_tx, _tts_tx, _fallback, _stt_fallback
     if keep_previous:
-        _previous["stt"] = _stt or _previous["stt"]
-        _previous["tts"] = _tts or _previous["tts"]
+        for what, cur in (("stt", _stt), ("tts", _tts)):
+            if cur is not None:
+                _previous[what], _previous_names[what] = cur, _names[what]
     else:
         _previous["stt"] = _previous["tts"] = None
+        _previous_names["stt"] = _previous_names["tts"] = None
     _interim_said.clear()
     _stt = _tts = _fallback = _stt_fallback = None
     for service in (_dialog_tx, _tts_tx):
@@ -199,14 +300,15 @@ def _execute_stt(audio, lang):
         _previous["stt"] = None      # the new one works: the old one can go
         return text
     except Exception as e:
-        if _previous["stt"] is not None:
+        if _previous["stt"] is not None and _keep_previous("stt"):
             print(f"[emkay] stt failed ({e!r}); the previous STT listens meanwhile")
-            _interim("stt", "previous")
+            _interim("stt", "previous", _previous_names["stt"])
             return _previous["stt"].execute(audio, language=lang)
         cfg = _config().get("stt", {})
-        name = cfg.get("fallback_module") or "ovos-stt-plugin-server"
-        if name == cfg.get("module"):
-            raise
+        name = _stand_in("stt")
+        if not name:
+            print(f"[emkay] stt not ready ({e!r}); nothing stands in")
+            raise SpeechNotReady(e) from e
         print(f"[emkay] stt failed ({e!r}); using the fallback {name}")
         _interim("stt", "fallback", name)
         if _stt_fallback is None:
@@ -225,7 +327,13 @@ def heard(pcm16: bytes, sample_rate: int = 16000):
     from ovos_bus_client.message import Message
     lang = _config().get("lang", "en-US")
     bus.emit(Message("recognizer_loop:record_end"))
-    text = transcribe(pcm16, sample_rate, lang)
+    try:
+        text = transcribe(pcm16, sample_rate, lang)
+    except SpeechNotReady as e:
+        # the device's ears aren't there yet: say so rather than "I didn't
+        # understand", and let the page offer the servers or typing
+        _waiting("stt", e)
+        return ""
     if not text:
         bus.emit(Message("recognizer_loop:speech.recognition.unknown"))
         return ""
@@ -337,6 +445,8 @@ def on_speak(message):
         os.unlink(path)
     except Exception as e:
         print(f"[emkay] tts failed: {e!r}")
+        if isinstance(e, SpeechNotReady):
+            _waiting("tts", e, utterance)   # the page shows the sentence as text
         from ovos_bus_client.message import Message
         message.forward("ovos.audio.output.error", {"error": repr(e)})
         return

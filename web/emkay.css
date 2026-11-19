@@ -273,3 +273,17 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .privacy-wake { margin: 2px 0 0; color: #789; }
 .privacy.flash { animation: privacy-flash 1.2s ease-out; }
 @keyframes privacy-flash { from { border-color: #22a7f0; } to { border-color: #1d2430; } }
+
+/* the device's speech isn't ready yet (app.js speechWait): under the
+   download line, with the choice of OpenVoiceOS' servers for now */
+.speech-wait { position: fixed; left: 50%; transform: translateX(-50%); z-index: 32;
+  top: calc(max(10px, env(safe-area-inset-top)) + 128px); width: min(86vw, 380px); box-sizing: border-box;
+  background: #0c1016f2; border: 1px solid #2d3a48; border-radius: 16px; padding: 12px 14px;
+  color: #dfe6ee; font-size: 14px; text-align: center; }
+.speech-wait[hidden] { display: none; }
+.speech-wait p { margin: 0 0 10px; line-height: 1.4; }
+.speech-wait-actions { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.speech-wait-actions button { font: inherit; cursor: pointer; }
+.speech-wait-actions button.secondary { width: 100%; font-size: 14px; padding: 10px 12px; border-radius: 12px;
+  background: transparent; color: #f0b429; border: 1px solid #f0b42999; }
+.speech-wait-actions button.link { font-size: 13px; background: none; border: 0; color: #9ab; padding: 4px; }

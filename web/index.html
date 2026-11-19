@@ -156,6 +156,16 @@
     <div id="model-status-interim" class="model-interim" hidden></div>
   </div>
 
+  <!-- the device's speech isn't ready yet and nothing stands in (speech.py,
+       emkay.speech.waiting): say so, and offer OpenVoiceOS' servers for now (app.js speechWait) -->
+  <div id="speech-wait" class="speech-wait" role="status" aria-live="polite" hidden>
+    <p id="speech-wait-text"></p>
+    <div class="speech-wait-actions">
+      <button id="speech-wait-servers" class="secondary" data-i18n="wait.servers"></button>
+      <button id="speech-wait-close" class="link" data-i18n="wait.later"></button>
+    </div>
+  </div>
+
   <!-- a tap the browser needs for what was asked by voice (ovos-skill-kiosk) -->
   <button id="tap-action" class="tap-action" hidden></button>
 

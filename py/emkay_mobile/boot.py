@@ -58,9 +58,10 @@ HEY_EMKAY = {"module": "ovos-ww-plugin-openwakeword", "threshold": 0.8, "listen"
 #: Emkay's own defaults as a device (defaults v13): speech on the device and
 #: its own wake word. Speech recognition (Whisper, Røst for Danish) and the
 #: voice (Piper) run in the browser, so what is said stays on the device and
-#: OpenVoiceOS' public servers are not used for every sentence; they stay the
-#: fallback (`fallback_module`), which speaks and listens while a model
-#: downloads the first time, and for a language a local plugin cannot do.
+#: OpenVoiceOS' public servers are not used for every sentence. Since v15
+#: they are not a silent fallback either: while a model downloads, or for a
+#: language with no model on the device, Emkay says so and the user may
+#: choose the servers (speech.py, servers_meanwhile).
 #: Only a setting still at the installer's default is changed; everything
 #: can be set back in the control panel.
 LOCAL_STT = "ovos-stt-plugin-whisper-browser"
@@ -94,7 +95,7 @@ INSTALLER_PIPELINE = (
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 14
+DEFAULTS_VERSION = 15
 #: the package index the control panel searches (defaults v7)
 STORE_INDEX = "https://store.emkay.ai"
 
@@ -352,7 +353,12 @@ def _browser_defaults(done: int) -> dict:
          blacklisted (NO_USE_IN_BROWSER)
      13. speech runs on the device and "hey M K" wakes it (LOCAL_STT,
          LOCAL_TTS, EMKAY_WAKE_WORD), where those settings are still the
-         installer's defaults; the servers stay the fallback
+         installer's defaults
+     14. yes/no questions use ovos-yes-no-plugin
+     15. no server stands in for the device's speech without being asked:
+         the `fallback_module` v13 set (the public OVOS servers) goes. While
+         a model downloads, Emkay says so and offers the servers for the
+         moment (speech.py, servers_meanwhile)
     The m2v model folders and the unused pipeline plugins are written on
     every boot, since they follow whatever the site shipped and the
     pipeline the user chose.
@@ -427,9 +433,9 @@ def _browser_defaults(done: int) -> dict:
     if done < 13:
         cfg = Configuration()
         if cfg.get("stt", {}).get("module") in (None, SERVER_STT):
-            out.setdefault("stt", {}).update({"module": LOCAL_STT, "fallback_module": SERVER_STT})
+            out.setdefault("stt", {})["module"] = LOCAL_STT       # no server fallback (v15)
         if cfg.get("tts", {}).get("module") in (None, SERVER_TTS):
-            out.setdefault("tts", {}).update({"module": LOCAL_TTS, "fallback_module": SERVER_TTS})
+            out.setdefault("tts", {})["module"] = LOCAL_TTS
         if cfg.get("listener", {}).get("wake_word") in (None, "hey_mycroft"):
             out.setdefault("listener", {})["wake_word"] = EMKAY_WAKE_WORD
             out.setdefault("hotwords", {})[EMKAY_WAKE_WORD] = HEY_EMKAY
@@ -450,6 +456,17 @@ def _browser_defaults(done: int) -> dict:
         if not pad:
             del user["intents"]["ovos-padatious-pipeline-plugin"]
         _write_whole_user_config(user)
+    # defaults v15: the public servers are no longer the silent fallback for
+    # the device's speech (v13 wrote them); a fallback the user chose stays
+    if done < 15:
+        changed = False
+        for what, server in (("stt", SERVER_STT), ("tts", SERVER_TTS)):
+            sec = user.get(what)
+            if isinstance(sec, dict) and sec.get("fallback_module") == server:
+                del sec["fallback_module"]
+                changed = True
+        if changed:
+            _write_whole_user_config(user)
     loc = user.get("location")
     if isinstance(loc, dict) and list(loc) == ["timezone"] and \
             loc["timezone"].get("code") == loc["timezone"].get("name"):

@@ -157,6 +157,7 @@ _STATE_TOPICS = {
     "mycroft.mic.mute", "mycroft.mic.unmute",
     "ovos.utterance.handled", "mycroft.skill.handler.complete",
     "emkay.speech.interim",   # speech.py: what speaks or listens while a new model loads
+    "emkay.speech.waiting",   # speech.py: the device's speech isn't ready, nothing stands in
     "complete_intent_failure", "ovos.intent.unmatched",
 }
 
@@ -189,6 +190,13 @@ def _brief(data: dict) -> dict:
             v = v[:400] + "…"
         out[k] = v
     return out
+
+
+def servers_meanwhile(remember: str = ""):
+    """The user chose OpenVoiceOS' servers until the device's speech is ready
+    (app.js, the "waiting" note): for this start only – or, for a language
+    with no model on the device, kept for `remember` ("stt"/"tts") (speech.py)."""
+    speech.servers_meanwhile(True, remember or "")
 
 
 def activity_setup() -> str:
