@@ -618,6 +618,10 @@ def adapt_ovos():
       pattern file keeps the lines of every container that shares it.
     * chronologia: its loader reads the one language it loads instead of
       all 61 of its locale tree (chronologia_speed.py, #4).
+    * ovos-m2v-pipeline: word_sequence through str.translate instead of a
+      Python loop over every character (m2v_speed.py, #4).
+    * ovos-spec-tools: a template's expansion is kept and given again, the
+      same samples or the same error (spec_speed.py, #4).
     * ovos-utils: is_process_running answers "no" instead of running `ps`,
       which a browser does not have (OCP asks it on every search).
     * ovos-bus-client: OCP's search waits until the media skills have gone
@@ -642,6 +646,15 @@ def adapt_ovos():
     # language it loads, not all 61 of its tree (chronologia_speed.py)
     from . import chronologia_speed
     chronologia_speed.install()
+    # m2v puts every template sample in word form one character at a time
+    # in Python: a quarter of the boot. The same text through str.translate
+    # (m2v_speed.py)
+    from . import m2v_speed
+    m2v_speed.install()
+    # every pipeline expands the same template lines again: nine in ten
+    # expansions at boot were one already made (spec_speed.py)
+    from . import spec_speed
+    spec_speed.install()
     try:
         # ovos-utils asks `ps axw` whether a program is running
         # (is_process_running, used by is_gui_running, which OCP calls for

@@ -13,7 +13,14 @@ SHIMMED = {"rapidfuzz", "pystemmer", "pyahocorasick", "marisa-trie", "psutil",
 DROPPED = {"hf-xet",               # optional huggingface_hub transfer backend
            "timezonefinder-data",  # data for timezonefinder, which the browser answers itself
            # uvicorn extras: the control panel app is called in-process, not served
-           "uvloop", "httptools", "watchfiles", "websockets"}
+           "uvloop", "httptools", "watchfiles", "websockets",
+           # ovos-m2v-pipeline needs scikit-learn and skops only to convert a
+           # legacy pipeline.skops head; every m2v model the site ships has
+           # head.safetensors (tools/fetch_m2v_models.py), read with numpy.
+           # Loading scipy and scikit-learn at every start took 8.5 s and
+           # ~650 MB of the tab's memory (Node: 9.3 -> 0.8 s, 938 -> 286 MB
+           # RSS), which a phone may not have. The rest is only theirs.
+           "scikit-learn", "scipy", "skops", "threadpoolctl", "narwhals", "prettytable"}
 # shipped as-is although tagged for a platform (pure Python inside)
 # (tornado: its C speedups are optional; ovos-gui only imports it)
 FORCE_PURE = {"watchdog", "tornado"}
