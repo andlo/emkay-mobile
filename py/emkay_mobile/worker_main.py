@@ -90,6 +90,7 @@ def start(js_post, user_config=None) -> str:
     # the phone's cache, so the first question does not wait for it; for
     # server plugins this does nothing
     speech.prewarm()
+    info["speech_blocked"] = speech.blocked_parts()   # no JSPI: app.js says so at once
     bus.on("message", _watch)
     # a pipeline plugin installed in the panel is placed in the pipeline
     # and loaded at once (pipeline_place.py)

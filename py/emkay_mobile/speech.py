@@ -127,23 +127,67 @@ _servers_meanwhile = False
 
 def servers_meanwhile(on: bool = True, remember: str = ""):
     """on: the servers stand in while the device's speech isn't ready, this
-    start only. remember ("stt"/"tts"): the user's language has no model on
-    the device for that, and they chose the servers for it – kept as that
+    start only. remember ("stt", "tts" or both, "stt,tts"): the device can't
+    do that – no model for the user's language, or a browser that can't run
+    the models at all – and they chose the servers for it: kept as that
     part's `fallback_module`, so the next start doesn't ask again (the
     control panel can change it)."""
     global _servers_meanwhile
     _servers_meanwhile = bool(on)
-    if remember in ("stt", "tts"):
+    parts = [p for p in (remember or "").split(",") if p in ("stt", "tts")]
+    if parts:
         from . import boot
-        boot.write_user_config({remember: {"fallback_module": f"ovos-{remember}-plugin-server"}})
+        boot.write_user_config({p: {"fallback_module": f"ovos-{p}-plugin-server"} for p in parts})
     print(f"[emkay] servers meanwhile: {_servers_meanwhile}" + (f", kept for {remember}" if remember else ""))
 
 
+def jspi() -> bool:
+    """True when this browser has JavaScript Promise Integration (worker.js
+    emkayJSPI). Whisper and Piper on the device wait for whisper.js and
+    piper.js (pyodide's run_sync), which needs it: without it (Safari before
+    27, for one) they can't run at all, however long one waits. Outside a
+    browser (tests) there is nothing to miss."""
+    try:
+        import js
+    except ImportError:
+        return True
+    return bool(getattr(js, "emkayJSPI", True))
+
+
+class NoJSPI(RuntimeError):
+    """This browser can't run the device's own speech (no JSPI)."""
+
+
+def _blocked(what: str) -> bool:
+    """The configured plugin runs on the device, and this browser can't run it."""
+    return _config().get(what, {}).get("module") in _ON_DEVICE and not jspi()
+
+
+def blocked_parts() -> list:
+    """The parts ("stt", "tts") this browser can't run on the device, with no
+    stand-in chosen for them yet: the page says so at the first tap (app.js
+    speechWait), before anyone speaks to an Emkay that can't hear."""
+    return [w for w in ("stt", "tts")
+            if _blocked(w) and not _config().get(w, {}).get("fallback_module")]
+
+
+def _check_browser(what: str):
+    """Raise NoJSPI before the device's own plugin is even made or called
+    where the browser can't run it: Whisper and Piper start downloading their
+    model on first use, which here would only cost data and memory."""
+    if _blocked(what):
+        raise NoJSPI(f"this browser can't run {what} on the device (no JSPI)")
+
+
 def _reason(what: str, lang: str) -> str:
-    """Why the device's own plugin can't do it: "language" when Emkay has no
-    model on the device for this language at all (a Piper voice, a Whisper
-    language), else "loading" (still downloading, or the download failed)."""
+    """Why the device's own plugin can't do it: "browser" when this browser
+    can't run Emkay's speech on the device at all (no JSPI), "language" when
+    Emkay has no model on the device for this language at all (a Piper voice,
+    a Whisper language), else "loading" (still downloading, or the download
+    failed)."""
     cfg = _config().get(what, {})
+    if _blocked(what):
+        return "browser"
     base = (lang or "en").split("-")[0].lower()
     try:
         if what == "tts" and cfg.get("module") == "ovos-tts-plugin-piper-browser":
@@ -198,6 +242,7 @@ def _get_tts(utterance, path, lang):
     SpeechNotReady."""
     global _fallback
     try:
+        _check_browser("tts")
         out = tts().get_tts(utterance, path, lang=lang)
         _previous["tts"] = None      # the new one works: the old one can go
         return out
@@ -249,10 +294,14 @@ def prewarm():
     """Start downloading the models of the configured STT and TTS now, so a
     change made in the settings is ready (and its progress shows) before the
     next sentence. Only Emkay's browser plugins have models to fetch; for
-    any other plugin there is nothing to do."""
+    any other plugin there is nothing to do. Nor where the browser can't run
+    them (no JSPI): a model of ~100 MB it can never use would only cost the
+    data and the memory a smaller phone needs for Emkay itself."""
     try:
         import js
     except ImportError:          # not in a browser (tests)
+        return
+    if not jspi():
         return
     cfg = _config()
     lang = cfg.get("lang", "en-US")
@@ -296,6 +345,7 @@ def _execute_stt(audio, lang):
     fails while its model is still downloading, the first time."""
     global _stt_fallback
     try:
+        _check_browser("stt")
         text = stt().execute(audio, language=lang)
         _previous["stt"] = None      # the new one works: the old one can go
         return text
@@ -452,7 +502,7 @@ def on_speak(message):
         return
     seconds = _wav_seconds(data)
     visemes = None
-    if phonemes:
+    if phonemes and not _blocked("tts"):   # a stand-in spoke: don't make Piper for its visemes
         try:
             visemes = [[str(c), float(d)] for c, d in tts().viseme(phonemes)]
         except Exception:

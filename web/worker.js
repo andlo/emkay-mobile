@@ -20,6 +20,14 @@ import * as netlog from "./netlog.js";
 netlog.install();
 globalThis.emkayNet = { setLocalOnly: netlog.setLocalOnly, isLocalOnly: netlog.isLocalOnly };
 
+// JavaScript Promise Integration (Chrome/Edge 137+, Firefox 153+, Safari 27+):
+// Python can wait for a Promise where it is. Without it Python's waits return
+// at once (browser.py), and the speech that runs on the device – Whisper and
+// Piper, which wait for whisper.js and piper.js – can't run at all (speech.py
+// says so: emkay.speech.waiting, reason "browser").
+const JSPI = typeof WebAssembly?.Suspending === "function";
+globalThis.emkayJSPI = JSPI;
+
 // A speech model's download (whisper.js, piper.js), for the page's status
 // line (app.js modelStatus): what ("stt", "tts"), its name, progress 0..1 and
 // state ("loading" = fetched, "reading" = from the phone's cache, "ready", "error"). Progress is sent at most every 300 ms.
@@ -275,9 +283,11 @@ importlib.invalidate_caches()
  * with callPromising, a time.sleep or Event.wait in it suspends Python
  * where it is, and this worker goes on with the page's next messages. Where
  * the browser has no JSPI (older browsers) it is an ordinary call, and Python's
- * waits return at once (browser.py).
+ * waits return at once (browser.py). Every PyProxy has callPromising, also
+ * where the browser has no JSPI – there it throws ("WebAssembly stack
+ * switching not supported"), so ask the browser, not the proxy.
  */
-const promising = (fn, ...args) => (fn.callPromising ? fn.callPromising(...args) : fn(...args));
+const promising = (fn, ...args) => (JSPI ? fn.callPromising(...args) : fn(...args));
 
 /** Everything the page can ask for. Each returns a value or a Promise. */
 const commands = {

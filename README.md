@@ -245,7 +245,11 @@ forces a workaround:
   when?", "is it that one?", yes/no, quizzes) gets the answer, and `stop`
   reaches a skill that is reading aloud. Without JSPI (older browsers)
   waits return at once, and a question back is asked but not waited
-  for ([#20](https://github.com/emkay-voice/emkay/issues/20)).
+  for ([#20](https://github.com/emkay-voice/emkay/issues/20)). Emkay's own
+  ears and voice on the device (Whisper, Piper) need JSPI too, so there
+  Emkay says so at the first tap, downloads no model it can't use, and
+  offers OpenVoiceOS' servers for that browser – saying first that what you
+  say is then sent to them (`tools/probes/nojspi_browser.mjs` checks it).
 - **Speech can be made on the phone** with Piper: choose
   [`ovos-tts-plugin-piper-browser`](https://github.com/emkay-voice/ovos-tts-plugin-piper-browser) as the TTS (the control panel's voice
   settings). It is Emkay's stand-in for ovos-tts-plugin-piper, which needs
