@@ -34,6 +34,7 @@ import os
 import re
 import sys
 import threading
+import time
 
 #: Name of every thread and timer that was asked to start, for diagnostics.
 STARTED = []
@@ -482,6 +483,51 @@ def _get_response(self, dialog="", data=None, validator=None, on_fail=None,
     return None
 
 
+#: How long OCP's search waits after the last media skill was heard from
+#: before it decides that every skill has answered (OCPQuery's own 0.5 s).
+OCP_QUIET = 0.5
+
+
+def _ocp_search_end(self, message):
+    """OCPQuery.handle_skill_search_end: note that a media skill is done.
+
+    On a device every media skill gets the query at once on its own thread
+    and says "searching" (search_start) right away; when the last one is
+    done, OCP sleeps half a second ("hacky, but avoids a race condition")
+    and stops waiting. Here the skills search one after another, so when
+    the first is done the next has not said "searching" yet: OCP saw no
+    skill left, stopped, and the next skill's results came "too late"
+    (only the first media skill could ever play). The decision moves to
+    _ocp_wait, which waits for the bus to go quiet instead."""
+    skill_id = message.data["skill_id"]
+    with self.active_skills_lock:
+        if skill_id in self.active_skills:
+            with self.active_skills[skill_id]:
+                del self.active_skills[skill_id]
+    self._emkay_heard = time.time()
+
+
+def _ocp_wait(self):
+    """OCPQuery.wait: as OVOS has it, and it also ends when no media skill
+    is searching and none has been heard from for OCP_QUIET seconds."""
+    from ovos_utils.ocp import MediaType
+    timeout = self.config.get("max_timeout", 15) + (3 if self.media_type == MediaType.GENERIC else 0)
+    while self.searching and time.time() - self.search_start <= timeout:
+        time.sleep(0.1)
+        heard = getattr(self, "_emkay_heard", None)
+        if heard and not self.active_skills and time.time() - heard >= OCP_QUIET:
+            break
+    self.searching = False
+    self.remove_events()
+
+
+def _ocp_heard(original):
+    def handler(self, message):
+        self._emkay_heard = time.time()
+        return original(self, message)
+    return handler
+
+
 def adapt_ovos():
     """Changes to OVOS itself for a single-threaded WebAssembly host.
 
@@ -504,6 +550,9 @@ def adapt_ovos():
       answer" instead of hanging the assistant.
     * ovos-utils: is_process_running answers "no" instead of running `ps`,
       which a browser does not have (OCP asks it on every search).
+    * ovos-bus-client: OCP's search waits until the media skills have gone
+      quiet, not just until those that already said "searching" are done
+      (_ocp_wait above): skills search one after another here.
     """
     try:
         from ovos_padatious.opm import PadatiousPipeline
@@ -520,6 +569,15 @@ def adapt_ovos():
         import ovos_utils.gui as _gui
         import ovos_utils.system as _system
         _system.is_process_running = _gui.is_process_running = lambda process: False
+    except ImportError:
+        pass
+    try:
+        from ovos_bus_client.apis.ocp import OCPQuery
+        if OCPQuery.wait is not _ocp_wait:
+            OCPQuery.handle_skill_search_start = _ocp_heard(OCPQuery.handle_skill_search_start)
+            OCPQuery.handle_skill_response = _ocp_heard(OCPQuery.handle_skill_response)
+            OCPQuery.handle_skill_search_end = _ocp_search_end
+            OCPQuery.wait = _ocp_wait
     except ImportError:
         pass
     try:

@@ -82,10 +82,10 @@ def _hook_logging():
 
 
 #: Where the INFO lines worth a skill developer's time come from (loading
-#: skills, matching intents); everything else shows from WARNING up, and the
+#: skills, matching intents, the media player's pick); everything else shows from WARNING up, and the
 #: skill being developed shows everything (DEBUG too).
 _TOLD = ("skill_launcher", "skill_manager", "intent_services", "ovos_workshop.skills",
-         "ovos_padatious", "emkay_mobile.dev", "emkay_mobile.pip")
+         "ovos_padatious", "ocp_pipeline", "apis.ocp", "emkay_mobile.dev", "emkay_mobile.pip")
 
 #: ERROR lines while a skill loads (load() names the first one as the problem)
 _capture = None
@@ -307,6 +307,9 @@ _STEP_ENDS = ("ovos.utterance.handled", "ovos.intent.unmatched", "complete_inten
 #: ask_yesno): who took the sentence is known, and the answer would only come
 #: from the user. The question is then called off (_call_off).
 _ASKS = ("mycroft.mic.listen",)
+# OCP's pipeline takes a "play ..." sentence (ocp:*) and is handled at once;
+# which skill plays it comes seconds later, when the search is done
+_OCP_PICKS = ("ovos.common_play.play", "ovos.common_play.search.populate")
 _ASKS_SUFFIX = ".get_response.waiting"
 
 
@@ -365,21 +368,26 @@ async def test(row_json: str, timeout: float = 20.0) -> str:
     sid = sess.session_id
 
     claim = Claim(session_id=sid)
-    spoke, done, asked = [], asyncio.Event(), set()
+    spoke, done, asked, ocp = [], asyncio.Event(), set(), [False]
 
     def watch(raw):
         msg = json.loads(raw) if isinstance(raw, str) else json.loads(raw.serialize())
         claim.observe(msg, known | ({skill_id} if skill_id else set()))
+        t = msg.get("type", "")
+        if t in _OCP_PICKS and ocp[0]:
+            done.set()   # OCP's own messages may not carry our session
         ctx_sess = (msg.get("context") or {}).get("session") or {}
         if ctx_sess.get("session_id") != sid:
             return
-        t = msg.get("type", "")
         if t in ("speak", "ovos.utterance.speak"):
             spoke.append((msg.get("data") or {}).get("utterance", ""))
+        if t.startswith("ocp:"):
+            ocp[0] = True
         if t in _STEP_ENDS or t in _ASKS or t.endswith(_ASKS_SUFFIX):
             if t.endswith(_ASKS_SUFFIX):
                 asked.add(t[:-len(_ASKS_SUFFIX)])
-            done.set()
+            if not (ocp[0] and t in _STEP_ENDS):   # OCP: wait for its pick
+                done.set()
 
     bus = boot.bus()
     bus.on("message", watch)
