@@ -45,7 +45,7 @@ setInterval(() => { if (!window.hello?.ready) f.contentWindow.postMessage({ emka
 </script>`;
 const server = http.createServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(parent); })
   .listen(8092, "127.0.0.1");
-const port = 9349;
+const port = Number(process.env.PROBE_PORT || 9349);   // another probe on this machine may have 9349
 const chrome = spawn(process.env.CHROME, [
   "--headless=new", `--remote-debugging-port=${port}`, "--user-data-dir=/tmp/emkay-chrome-template",
   "--window-size=1000,800", "--autoplay-policy=no-user-gesture-required", "--no-first-run",
@@ -105,8 +105,12 @@ try {
   const hello = await until(`window.hello?.ready && window.hello`, 400, "a ready dev Emkay");
   const lang = hello.lang;
   log(`emkay ready, speaks ${lang}`);
+  if (process.env.PY_BEFORE) {   // PY_BEFORE="<python>": run before the first question (e.g. start a profiler)
+    const r = await op("python", { code: process.env.PY_BEFORE }, 120);
+    log(`python before: ${JSON.stringify(r.result ?? r.error).slice(0, 300)}`);
+  }
   if (process.env.FIRST) {   // FIRST="what time is it": how long the first answer after "ready" takes (#4)
-    for (const round of ["first", "second"]) {
+    for (const round of (process.env.FIRST_ONLY ? ["first"] : ["first", "second"])) {
       await js(`window.said = []; window.trace = []`);
       const t1 = Date.now();
       log(`asked at ${(Date.now() / 1000 % 1000).toFixed(1)}`);
