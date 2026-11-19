@@ -346,6 +346,7 @@ async def load_plugin(plugin_id: str, entry: str, files_json: str,
     _capture = []
     _watching.add(top)
     instance = None
+    topics = set()
     try:
         cls = getattr(importlib.import_module(module_name), class_name)
         if not (isinstance(cls, type) and issubclass(cls, PHALPlugin)):
@@ -356,7 +357,22 @@ async def load_plugin(plugin_id: str, entry: str, files_json: str,
             if validator is not None and not validator.validate(config):
                 problems.append(f"{class_name}.validator says it does not fit this device")
             else:
-                instance = cls(bus=boot.bus(), name=plugin_id, config=config)
+                bus = boot.bus()
+                # what it listens to: PHALPlugin's own _on, or bus.on directly
+                had = "on" in vars(bus)
+                plain_on = bus.on
+
+                def recording_on(topic, handler, *args, **kwargs):
+                    topics.add(topic)
+                    return plain_on(topic, handler, *args, **kwargs)
+                bus.on = recording_on
+                try:
+                    instance = cls(bus=bus, name=plugin_id, config=config)
+                finally:
+                    if had:
+                        bus.on = plain_on
+                    else:
+                        del bus.on
     except Exception as e:
         import traceback
         problems.append(f"{type(e).__name__}: {e}")
@@ -369,7 +385,7 @@ async def load_plugin(plugin_id: str, entry: str, files_json: str,
     _plugins[plugin_id] = instance
     if _PHAL_OWN is None:
         _PHAL_OWN = _phal_own_topics()
-    listens = {topic for topic, _ in getattr(instance, "_registered_handlers", [])} - _PHAL_OWN
+    listens = topics - _PHAL_OWN
     log(f"{plugin_id} runs; it handles: {', '.join(sorted(listens)) or '-'}")
     return answer(True, problems, listens)
 
