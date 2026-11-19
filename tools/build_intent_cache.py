@@ -44,6 +44,10 @@ if os.environ.get("EMKAY_DIAG"):
     diag.install()
 
 from emkay_mobile import boot  # noqa: E402
+# padaos as the browser has it, so the patterns compiled here are the ones
+# the browser compiles; tools/re_seed.mjs makes their opcodes (re_cache.py)
+from emkay_mobile import padaos_speed, re_cache  # noqa: E402
+padaos_speed.install()
 
 trained = threading.Event()
 
@@ -70,6 +74,13 @@ n = 0
 for d in src.glob("intent_cache*"):
     shutil.copytree(d, out / d.name, dirs_exist_ok=True)
     n += sum(1 for _ in (out / d.name).rglob("*") if _.is_file())
+# padaos' patterns, for the browser's first start (re_cache.py, tools/re_seed.mjs)
+patterns = re_cache.used_patterns()
+if patterns:
+    seed = out / "intent_cache" / langs[0] / re_cache.PATTERNS_NAME
+    seed.parent.mkdir(parents=True, exist_ok=True)
+    seed.write_text(json.dumps(patterns))
+    print(f"{len(patterns)} padaos patterns to {seed.relative_to(out)}")
 json.dump({"langs": langs, "skills": info["skills"], "files": n},
           open(out / "manifest.json", "w"), indent=1)
 print(f"wrote {n} cache files to {out}")

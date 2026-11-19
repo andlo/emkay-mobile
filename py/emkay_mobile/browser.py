@@ -634,16 +634,8 @@ def adapt_ovos():
         # compiling them is Python's own re parser, ~28 s in WebAssembly
         # (re_cache.py), and each line's pattern built without formatting
         # the entities it doesn't use (padaos_speed.py)
-        from ovos_padatious import padaos
-        from . import padaos_speed, re_cache
-        if not getattr(padaos.IntentContainer._compile, "_emkay_re_cache", False):
-            padaos.IntentContainer._compile = re_cache.around(padaos.IntentContainer._compile)
-            padaos.IntentContainer._compile._emkay_re_cache = True
-            padaos.IntentContainer._create_intent_pattern = padaos_speed.create_intent_pattern
-            padaos.IntentContainer.create_regexes = padaos_speed.create_regexes
-            padaos.IntentContainer.add_entity = padaos_speed.sorted_lines(padaos.IntentContainer.add_entity)
-            padaos.IntentContainer.add_intent = padaos_speed.sorted_lines(padaos.IntentContainer.add_intent)
-            padaos._PatternCache.save = padaos_speed.merged_save
+        from . import padaos_speed
+        padaos_speed.install()
     except ImportError:
         pass
     # chronologia (typed slots: dates in what was said) reads only the

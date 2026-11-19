@@ -133,3 +133,21 @@ def merged_save(self):
             os.remove(tmp)
         except OSError:
             pass
+
+
+def install():
+    """Put these into padaos, with its regexes from re_cache.py. Safe to call
+    more than once. The browser does it (browser.adapt_ovos), and so does
+    tools/build_intent_cache.py, so the patterns it leaves for the site's
+    regex cache (re_cache.py, tools/re_seed.mjs) are the browser's."""
+    from ovos_padatious import padaos
+    from . import re_cache
+    if getattr(padaos.IntentContainer._compile, "_emkay_re_cache", False):
+        return
+    padaos.IntentContainer._compile = re_cache.around(padaos.IntentContainer._compile)
+    padaos.IntentContainer._compile._emkay_re_cache = True
+    padaos.IntentContainer._create_intent_pattern = create_intent_pattern
+    padaos.IntentContainer.create_regexes = create_regexes
+    padaos.IntentContainer.add_entity = sorted_lines(padaos.IntentContainer.add_entity)
+    padaos.IntentContainer.add_intent = sorted_lines(padaos.IntentContainer.add_intent)
+    padaos._PatternCache.save = merged_save
