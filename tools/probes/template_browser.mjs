@@ -34,8 +34,8 @@ addEventListener("message", (e) => {
   const d = e.data; if (!d || d.emkayDev !== 1) return;
   if (d.op === "hello") window.hello = d;
   if (d.op === "result") { waiting.get(d.id)?.(d); waiting.delete(d.id); }
-  if (d.op === "log") { window.trace.push("log " + d.record.level + " " + String(d.record.msg).slice(0, 200)); if (d.record.level === "ERROR") window.errors.push(d.record.msg); }
-  if (d.op === "bus") { window.raw.push(d.raw); if (window.raw.length > 800) window.raw.splice(0, 200); try { const m = JSON.parse(d.raw); window.trace.push("bus " + m.type);
+  if (d.op === "log") { window.trace.push((d.record.t % 1000).toFixed(1) + " log " + d.record.level + " " + String(d.record.msg).slice(0, 200)); if (d.record.level === "ERROR") window.errors.push(d.record.msg); }
+  if (d.op === "bus") { window.raw.push(d.raw); if (window.raw.length > 800) window.raw.splice(0, 200); try { const m = JSON.parse(d.raw); window.trace.push((Date.now() / 1000 % 1000).toFixed(1) + " bus " + m.type);
     if (m.type === "speak" || m.type === "ovos.utterance.speak") window.said.push(m.data.utterance);
     if (m.type === "mycroft.skill.handler.error") window.errors.push(m.data.exception || "handler error"); } catch {} }
 });
@@ -105,6 +105,22 @@ try {
   const hello = await until(`window.hello?.ready && window.hello`, 400, "a ready dev Emkay");
   const lang = hello.lang;
   log(`emkay ready, speaks ${lang}`);
+  if (process.env.FIRST) {   // FIRST="what time is it": how long the first answer after "ready" takes (#4)
+    for (const round of ["first", "second"]) {
+      await js(`window.said = []; window.trace = []`);
+      const t1 = Date.now();
+      log(`asked at ${(Date.now() / 1000 % 1000).toFixed(1)}`);
+      await op("say", { text: process.env.FIRST });
+      await until(`window.said.length`, 120, `an answer to ${process.env.FIRST}`);
+      log(`${round} answer after ${((Date.now() - t1) / 1000).toFixed(1)} s: ${JSON.stringify(await js("window.said"))}`);
+      for (const l of await js(`window.trace.filter((l) => new RegExp(${JSON.stringify(process.env.FIRST_TRACE || "padaos|train|warm|regex")}, "i").test(l))`)) log(`  ${l}`);
+      await sleep(3000);
+    }
+  }
+  if (process.env.PY) {   // PY="<python>": run it in Emkay's Python and log what the last line gives
+    const r = await op("python", { code: process.env.PY }, 900);
+    log(`python: ${JSON.stringify(r.result ?? r.error)}`);
+  }
   const goldFile = path.join(repoDir, "test/end2end", `golden_utterances_${lang}.jsonl`);
   const gold = phal || !fs.existsSync(goldFile) ? [] : fs.readFileSync(goldFile, "utf8")
     .split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
