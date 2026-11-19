@@ -9,3 +9,5 @@ plan.json
 *.log
 package-lock.json
 web/visage2/
+wheelhouse.new/
+wheelhouse.old/

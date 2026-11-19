@@ -286,10 +286,9 @@ serve Emkay from the house.
 
 ```bash
 npm install --include=dev            # Pyodide, for Node runs
-python3 -m pip wheel --pre -w wheelhouse -r requirements/browser.txt
-python3 -m pip wheel --pre --no-deps -w wheelhouse \
-    -r requirements/browser-nodeps.txt -r requirements/browser-emscripten.txt
-python3 tools/wheelplan.py wheelhouse node_modules/pyodide/pyodide-lock.json > plan.json
+# the wheelhouse and plan.json, built fresh from requirements/ with Python
+# 3.14 exactly as CI does; run it again whenever requirements/ change
+tools/sync_wheelhouse.sh
 
 # pre-train padatious (normal CPython venv with requirements/browser*.txt,
 # minus ovos-m2v-pipeline), fetch the m2v and wake word models
