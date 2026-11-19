@@ -17,6 +17,20 @@ const chrome = spawn(process.env.CHROME, [
   "--window-size=390,844", "--autoplay-policy=no-user-gesture-required", "--no-first-run", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", `--use-file-for-fake-audio-capture=${process.env.SPEECH_WAV}`, `--lang=${process.env.PHONE_LANG || "en-US"}`, `--accept-lang=${process.env.PHONE_LANG || "en-US"}`,
   "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// "True" when the configured STT has what it needs: Whisper on the device
+// its model (emkayWhisper.ready starts the download and answers at once,
+// as ovos-stt-plugin-whisper-browser asks it); any other STT at once
+const STT_READY = `import js
+from ovos_config import Configuration
+_c = Configuration()
+_s = _c.get("stt", {})
+if _s.get("module") != "ovos-stt-plugin-whisper-browser":
+    _r = True
+else:
+    from ovos_stt_plugin_whisper_browser import model_for
+    _m = (_s.get("ovos-stt-plugin-whisper-browser") or {}).get("model") or model_for(_c.get("lang", "en-US"))
+    _r = bool(await js.emkayWhisper.ready(_m))
+str(_r)`;
 const t0 = Date.now();
 const stamp = () => `[${((Date.now() - t0) / 1000).toFixed(1)}s]`;
 const log = (m) => console.log(`${stamp()} ${m}`);
@@ -70,6 +84,14 @@ try {
   await until(`!!document.getElementById("start") && !document.getElementById("start").hidden`, 400, "OVOS boot");
   await js(`document.getElementById("start").click(); true`);
   await sleep(3000);
+  // Emkay's ears run on the device and are downloaded on the first start
+  // (Whisper, ~77 MB from Hugging Face), and no server stands in by itself
+  // (defaults v15): wait until the STT plugin itself would find its model
+  // ready, so a slow download is not taken for a broken microphone
+  const tw = Date.now();
+  await until(`window.emkay.call("python_async", {code: ${JSON.stringify(STT_READY)}}).then((r) => r === "True", () => false)`,
+    300, "the device's ears (the Whisper model)");
+  log(`ears ready ${((Date.now() - tw) / 1000).toFixed(1)}s after the tap`);
   // what the caption shows, and what Emkay says back
   await js(`window.__captions = []; window.__said = [];
     new MutationObserver(() => { const t = document.getElementById("caption-text").textContent;
