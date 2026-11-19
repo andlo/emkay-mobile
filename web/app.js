@@ -177,12 +177,14 @@ function bootStatus(key, progress, vars) {
  * Other brains' steps (HiveMind, Home Assistant) set the bar as they say.
  */
 const BOOT_STEPS = ["boot.loading", "boot.python", "boot.packages", "boot.ovos", "boot.intents",
-  "boot.m2v", "boot.unpack", "boot.start", "boot.loadskills", "boot.services"];
+  "boot.m2v", "boot.unpack", "boot.start", "boot.settings", "boot.findskills", "boot.engines",
+  "boot.loadskills", "boot.services"];
 /** First start on this device: about how long each step takes, in ms. */
 const BOOT_GUESS = {
   "boot.loading": 800, "boot.python": 3000, "boot.packages": 6000, "boot.ovos": 4000,
-  "boot.intents": 1500, "boot.m2v": 2000, "boot.unpack": 2500, "boot.start": 5000,
-  "boot.loadskills": 20000, "boot.services": 3000,
+  "boot.intents": 1500, "boot.m2v": 2000, "boot.unpack": 2500, "boot.start": 3000,
+  "boot.settings": 5000, "boot.findskills": 7000, "boot.engines": 10000,
+  "boot.loadskills": 18000, "boot.services": 3000,
 };
 const BOOT_TIMES = "emkay.bootTimes";   // localStorage: {step: ms} from the last start
 const bootBar = (() => {

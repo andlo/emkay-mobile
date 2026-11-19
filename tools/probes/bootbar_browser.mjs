@@ -32,9 +32,19 @@ const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pending = new Map();
+let t0 = Date.now();
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); }
+  // the worker's own "[emkay] …" lines (boot.py's timings), between the samples
+  if (m.method === "Target.attachedToTarget" && m.params.targetInfo.type === "worker") {
+    ws.send(JSON.stringify({ id: ++id, method: "Runtime.enable", sessionId: m.params.sessionId }));
+    ws.send(JSON.stringify({ id: ++id, method: "Runtime.runIfWaitingForDebugger", sessionId: m.params.sessionId }));
+  }
+  if (m.method === "Runtime.consoleAPICalled" && m.sessionId) {
+    const text = m.params.args.map((a) => a.value ?? a.description ?? "").join(" ");
+    if (text.startsWith("[emkay]")) console.log(`       ${((Date.now() - t0) / 1000).toFixed(1).padStart(5)}s  worker ${text.slice(0, 160)}`);
+  }
 };
 const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 async function js(expression) {
@@ -46,10 +56,11 @@ const SAMPLE = `(() => { const b = document.getElementById("boot-bar"), s = docu
            up: !!s && !s.hidden }; })()`;
 
 try {
+  await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
   await send("Page.enable");
   for (let n = 1; n <= boots; n++) {
     await send("Page.navigate", { url });
-    const t0 = Date.now();
+    t0 = Date.now();
     let last = { w: -1, text: "" }, back = 0, jumps = [];
     for (;;) {
       await sleep(250);
