@@ -5,7 +5,9 @@
 //   CHROME=... PHONE_LANG=en-US node tools/probes/template_browser.mjs <repo dir> [<script.json>]
 //
 // <script.json>: {"<lang>": [["say this", "regex the answer must match"], ...]}
-// – a conversation, each line said once the previous answer was spoken.
+// – a conversation, each line said once the previous answer was spoken. An
+// answer "bus:<regex>" is a bus message (as JSON) instead of something said:
+// a media skill plays, it does not speak.
 // Emkay must be served on http://127.0.0.1:8080 (tools/serve.py).
 import { spawn } from "child_process";
 import fs from "fs";
@@ -21,13 +23,13 @@ const parent = `<!doctype html><meta charset=utf-8><title>template parent</title
 <script>
 const f = document.getElementById("f");
 let nid = 0; const waiting = new Map();
-window.said = []; window.hello = null; window.errors = []; window.trace = [];
+window.said = []; window.hello = null; window.errors = []; window.trace = []; window.raw = [];
 addEventListener("message", (e) => {
   const d = e.data; if (!d || d.emkayDev !== 1) return;
   if (d.op === "hello") window.hello = d;
   if (d.op === "result") { waiting.get(d.id)?.(d); waiting.delete(d.id); }
   if (d.op === "log") { window.trace.push("log " + d.record.level + " " + String(d.record.msg).slice(0, 200)); if (d.record.level === "ERROR") window.errors.push(d.record.msg); }
-  if (d.op === "bus") { try { const m = JSON.parse(d.raw); window.trace.push("bus " + m.type);
+  if (d.op === "bus") { window.raw.push(d.raw); if (window.raw.length > 800) window.raw.splice(0, 200); try { const m = JSON.parse(d.raw); window.trace.push("bus " + m.type);
     if (m.type === "speak" || m.type === "ovos.utterance.speak") window.said.push(m.data.utterance);
     if (m.type === "mycroft.skill.handler.error") window.errors.push(m.data.exception || "handler error"); } catch {} }
 });
@@ -121,13 +123,14 @@ try {
   await op("say", { text: "stop" }).catch(() => {});
   await sleep(2000);
   for (const [text, expect] of script[lang] || script[lang.split("-")[0]] || []) {
-    await js(`window.said = []`);
+    await js(`window.said = []; window.raw = []`);
     await op("say", { text });
-    const re = new RegExp(expect, "i");
+    const onBus = expect.startsWith("bus:");
+    const re = new RegExp(onBus ? expect.slice(4) : expect, "i");
     let ok = false;
     for (let i = 0; i < 50 && !ok; i++) {
       await sleep(400);
-      ok = await js(`window.said.some((s) => ${re}.test(s))`);
+      ok = await js(`window.${onBus ? "raw" : "said"}.some((s) => ${re}.test(s))`);
     }
     const said = await js(`window.said`);
     log(`say ${JSON.stringify(text)} -> ${ok ? "ok" : "NO MATCH /" + expect + "/"} ${JSON.stringify(said)}`);
