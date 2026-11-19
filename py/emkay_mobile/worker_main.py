@@ -39,6 +39,20 @@ def _post(kind: str, payload: str, data: bytes = None):
         _js_post(kind, payload)
 
 
+def _boot_status(key: str, progress: float = None, **variables):
+    """A boot step for the start screen (worker.js emkayBootStatus).
+
+    Posted at once, also while Python is busy loading skills: the page is
+    another thread, so its bar moves while this one works.
+    """
+    try:
+        import js
+        from pyodide.ffi import to_js
+        js.emkayBootStatus(key, progress, to_js(variables, dict_converter=js.Object.fromEntries))
+    except Exception:   # outside the browser (tests), or an older worker.js
+        pass
+
+
 def start(js_post, user_config=None) -> str:
     """Boot OVOS and wire it to the page; return a JSON summary of the boot."""
     global _js_post
@@ -51,20 +65,25 @@ def start(js_post, user_config=None) -> str:
         netlog.install()             # ... each request naming its skill (network log)
     except ImportError:
         pass
+    boot.report = _boot_status   # the start screen's bar follows the skills loading
     t = time.time()
     info = boot.start(user_config=user_config)
     print(f"[emkay] core up in {time.time() - t:.1f}s")
     bus = boot.bus()
+    boot.report("boot.services", 0)
     t = time.time()
     gui.start(bus, lambda raw: _post("gui", raw))
     print(f"[emkay] gui up in {time.time() - t:.1f}s")
+    boot.report("boot.services", 0.3)
     speech.start(bus, lambda wav, meta: _post("audio", json.dumps(meta), wav))
     _start_audio_service(bus)
+    boot.report("boot.services", 0.6)
     from . import panel
     panel.follow_sensors(bus)                          # before the first reading
     # the phone's "hardware", also kiosk and local only (#23): the skills
     # send hardware-neutral bus messages, the plugin does the browser part
     phal.start(bus, lambda raw: _post("phal", raw), reload_speech=speech.reload)
+    boot.report("boot.services", 0.85)
     _report_status(bus)
     remember_speech_settings()   # later changes apply without a restart (_settings_changed)
     # a local STT/TTS (Whisper, Røst, Piper) starts loading its model now, from

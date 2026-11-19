@@ -110,6 +110,116 @@ _bus = None
 _manager = None
 
 
+def report(key: str, progress: float = None, **variables):
+    """How the boot is going, for the start screen's bar (app.js bootStatus).
+
+    `key` is one of Emkay's texts (locale/<lang>/<key>.dialog), `progress`
+    0..1 within that step. Does nothing until worker_main sets it.
+    """
+
+
+class _BootSteps:
+    """Report OVOS' start step by step, for the start screen.
+
+    Starting ovos-core is most of the boot, and nothing in it says how far it
+    is. While it starts, a few of its own functions are wrapped (and put back
+    afterwards) so each step reports itself:
+
+      boot.findskills  SkillManager's first find_skill_plugins (imports every skill)
+      boot.engines     the intent pipeline plugins loading, i of n
+      boot.loadskills  the skills loading, i of n
+
+    Anything ovos-core doesn't have (another version) is simply not reported.
+    """
+
+    def __init__(self):
+        self._undo = []
+        self.manager = None          # set once SkillManager exists
+        self.loading_skills = False  # set around SkillManager._load_new_skills
+        self.engines = {"done": 0, "total": 0}
+        self.skills = {"done": 0, "total": 0}
+
+    def _wrap(self, owner, name, make):
+        """Replace owner.name with make(original); undone by restore()."""
+        original = owner.__dict__.get(name)
+        if original is None:
+            return
+        self._undo.append((owner, name, original))
+        func = original.__func__ if isinstance(original, (staticmethod, classmethod)) else original
+        wrapped = make(func)
+        if isinstance(original, staticmethod):
+            wrapped = staticmethod(wrapped)
+        elif isinstance(original, classmethod):
+            wrapped = classmethod(wrapped)
+        setattr(owner, name, wrapped)
+
+    def __enter__(self):
+        try:
+            import ovos_core.skill_manager as sm
+            from ovos_plugin_manager.pipeline import OVOSPipelineFactory
+        except ImportError:
+            return self
+        steps = self
+
+        def find_skills(find):
+            def counting(*args, **kwargs):
+                if not steps.loading_skills:
+                    report("boot.findskills")
+                    return find(*args, **kwargs)
+                found = find(*args, **kwargs)
+                blacklist = set(getattr(steps.manager, "blacklist", None) or [])
+                steps.skills["total"] = len([s for s in found if s not in blacklist])
+                report("boot.loadskills", 0, i=0, n=steps.skills["total"])
+                return found
+            return counting
+        # SkillManager calls it by its module-level name
+        if hasattr(sm, "find_skill_plugins"):
+            self._undo.append((sm, "find_skill_plugins", sm.find_skill_plugins))
+            sm.find_skill_plugins = find_skills(sm.find_skill_plugins)
+
+        def load_skill(load):
+            def counting(manager, skill_id, *args, **kwargs):
+                try:
+                    return load(manager, skill_id, *args, **kwargs)
+                finally:
+                    if steps.loading_skills:
+                        steps._step("boot.loadskills", steps.skills)
+            return counting
+        self._wrap(sm.SkillManager, "_load_plugin_skill", load_skill)
+
+        def pipeline_ids(ids_of):
+            def counting(*args, **kwargs):
+                ids = ids_of(*args, **kwargs)
+                from ovos_config import Configuration
+                blacklist = set(Configuration().get("intents", {}).get("blacklisted_pipelines", []))
+                steps.engines["total"] = len([p for p in ids if p not in blacklist])
+                report("boot.engines", 0, i=0, n=steps.engines["total"])
+                return ids
+            return counting
+        self._wrap(OVOSPipelineFactory, "get_installed_pipeline_ids", pipeline_ids)
+
+        def load_engine(load):
+            def counting(*args, **kwargs):
+                try:
+                    return load(*args, **kwargs)
+                finally:
+                    steps._step("boot.engines", steps.engines)
+            return counting
+        self._wrap(OVOSPipelineFactory, "load_plugin", load_engine)
+        return self
+
+    def _step(self, key, count):
+        """One more of `count` done: report it."""
+        count["done"] += 1
+        n = max(count["total"], count["done"])
+        report(key, count["done"] / n, i=count["done"], n=n)
+
+    def __exit__(self, *exc):
+        for owner, name, original in reversed(self._undo):
+            setattr(owner, name, original)
+        self._undo.clear()
+
+
 def _merge(base: dict, extra: dict) -> dict:
     """Merge `extra` into `base` in place, recursing into nested dicts."""
     for k, v in extra.items():
@@ -557,6 +667,7 @@ def start(on_message=None, user_config=None) -> dict:
     from ovos_utils.fakebus import FakeBus
     from ovos_bus_client.message import Message
 
+    report("boot.settings")
     done = int(read_user_config().get("emkay_mobile_defaults") or 0)
     _phone_language()        # first: the defaults below depend on the language
     _phone_timezone()        # before skills load: some read it once (alerts)
@@ -579,19 +690,22 @@ def start(on_message=None, user_config=None) -> dict:
     _follow_config_changes(_bus)
     if sys.platform == "emscripten":
         _browser_installer()
-    _manager = SkillManager(_bus,
-                            enable_file_watcher=False,   # nothing edits files behind OVOS here
-                            enable_installer=True,       # ovos.pip.install, see pip.py
-                            enable_event_scheduler=True,
-                            enable_skill_api=True,
-                            enable_intent_service=True)
-    if _manager.event_scheduler is not None and sys.platform == "emscripten":
-        _drive_scheduler(_manager.event_scheduler)
-    # after an install or removal, SkillManager itself loads, reloads or
-    # unloads skills (its handlers for ovos.pip.install.complete etc.)
-    # SkillManager.run() minus its 30 s rescan loop (a service loop, see
-    # browser.FOREVER_LOOPS): load the skills, then announce readiness.
-    _manager._load_new_skills()
+    with _BootSteps() as steps:   # the start screen follows each step
+        _manager = SkillManager(_bus,
+                                enable_file_watcher=False,   # nothing edits files behind OVOS here
+                                enable_installer=True,       # ovos.pip.install, see pip.py
+                                enable_event_scheduler=True,
+                                enable_skill_api=True,
+                                enable_intent_service=True)
+        if _manager.event_scheduler is not None and sys.platform == "emscripten":
+            _drive_scheduler(_manager.event_scheduler)
+        # after an install or removal, SkillManager itself loads, reloads or
+        # unloads skills (its handlers for ovos.pip.install.complete etc.)
+        # SkillManager.run() minus its 30 s rescan loop (a service loop, see
+        # browser.FOREVER_LOOPS): load the skills, then announce readiness.
+        steps.manager = _manager
+        steps.loading_skills = True
+        _manager._load_new_skills()
     _bus.emit(Message("mycroft.skills.initialized"))
     _manager.status.set_ready()
     if sys.platform == "emscripten":

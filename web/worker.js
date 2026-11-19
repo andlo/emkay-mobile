@@ -63,6 +63,8 @@ const build = fetch("build.json", { cache: "no-cache" }).then((r) => r.json());
 function status(key, progress, vars) {
   self.postMessage({ kind: "status", key, vars, progress });   // texts: i18n.js
 }
+// ... and from Python while OVOS starts (worker_main._boot_status: skills loaded)
+globalThis.emkayBootStatus = (key, progress, vars) => status(key, progress ?? undefined, vars);
 
 /**
  * Called from Python (worker_main._post) with something for the page.

@@ -161,8 +161,93 @@ let lastStatus = { key: "boot.loading" };
 function bootStatus(key, progress, vars) {
   lastStatus = { key, vars };
   $("boot-text").textContent = t(key, vars);
-  if (progress !== undefined) $("boot-bar").style.width = `${Math.round(progress * 100)}%`;
+  bootBar.step(key, progress, vars);
 }
+
+/**
+ * The start screen's bar shows the whole start, not one step at a time.
+ *
+ * Each step of the local brain's boot (worker.js, boot.py) has its own
+ * stretch of the bar, as long as that step took the last time Emkay started
+ * on this device (kept in localStorage; BOOT_GUESS the first time), so the
+ * bar moves at an even pace and never goes back. A step that reports how far
+ * it is (a download, skills loaded) fills its stretch by that; one that
+ * can't (Python starting, the intent service) creeps towards its end at the
+ * pace it took last time, slowing down near the end instead of stopping.
+ * Other brains' steps (HiveMind, Home Assistant) set the bar as they say.
+ */
+const BOOT_STEPS = ["boot.loading", "boot.python", "boot.packages", "boot.ovos", "boot.intents",
+  "boot.m2v", "boot.unpack", "boot.start", "boot.settings", "boot.findskills", "boot.engines",
+  "boot.loadskills", "boot.services"];
+/** First start on this device: about how long each step takes, in ms. */
+const BOOT_GUESS = {
+  "boot.loading": 800, "boot.python": 3000, "boot.packages": 6000, "boot.ovos": 4000,
+  "boot.intents": 1500, "boot.m2v": 2000, "boot.unpack": 2500, "boot.start": 3000,
+  "boot.settings": 5000, "boot.findskills": 7000, "boot.engines": 10000,
+  "boot.loadskills": 18000, "boot.services": 3000,
+};
+const BOOT_TIMES = "emkay.bootTimes";   // localStorage: {step: ms} from the last start
+const bootBar = (() => {
+  let learned = {};
+  try { learned = JSON.parse(localStorage.getItem(BOOT_TIMES)) || {}; } catch {}
+  // ms per step as expected this time; a step that took no time last time
+  // (its download was on the phone already) still gets a sliver
+  const expect = Object.fromEntries(BOOT_STEPS.map((s) =>
+    [s, Math.max(learned[s] ?? BOOT_GUESS[s], 150)]));
+  const total = BOOT_STEPS.reduce((sum, s) => sum + expect[s], 0);
+  const startOf = {};
+  BOOT_STEPS.reduce((at, s) => { startOf[s] = at; return at + expect[s]; }, 0);
+  // ms each step took this time; a step that did not come (its download was
+  // on the phone already) took 0, so next time it gets only a sliver
+  const took = Object.fromEntries(BOOT_STEPS.map((s) => [s, 0]));
+  let current = "boot.loading", since = performance.now(), reported, next, shown = 0;
+  let timer = null, done = false;
+
+  const draw = (fraction) => {
+    shown = Math.max(shown, Math.min(fraction, 1));   // never back
+    $("boot-bar").style.width = `${(shown * 100).toFixed(1)}%`;
+  };
+  /** How far into the current step, 0..1: reported, else by the clock. */
+  const within = () => {
+    const x = (performance.now() - since) / expect[current];
+    const creep = x < 0.9 ? x : 0.9 + 0.09 * (1 - Math.exp(-(x - 0.9) * 3));
+    if (reported === undefined) return creep;
+    // between two reports (one skill loading), creep towards the next one
+    return Math.max(reported, Math.min(creep, next ?? reported));
+  };
+  const tick = () => draw((startOf[current] + expect[current] * within()) / total);
+  const finish = () => {
+    done = true;
+    clearInterval(timer);
+    draw(1);
+    took[current] = (took[current] || 0) + performance.now() - since;
+    try { localStorage.setItem(BOOT_TIMES, JSON.stringify(took)); } catch {}
+  };
+  timer = setInterval(tick, 100);
+
+  return {
+    step(key, progress, vars) {
+      if (done) return;
+      if (key === "boot.ready" || key === "boot.skills") return finish();
+      if (!BOOT_STEPS.includes(key)) {   // another brain, or an error
+        clearInterval(timer);
+        if (progress !== undefined) draw(progress);
+        return;
+      }
+      if (key !== current) {
+        took[current] = (took[current] || 0) + performance.now() - since;
+        since = performance.now();
+        current = key;
+        reported = next = undefined;
+      }
+      if (progress !== undefined) {
+        reported = progress;
+        next = vars?.n ? Math.min((vars.i + 1) / vars.n, 1) : undefined;
+      }
+      tick();
+    },
+  };
+})();
 
 let audioCtx = null;
 
