@@ -82,6 +82,15 @@ PROBES = [
         r'captions: \["Listening…","One moment…","“What time is it\?”"',   # tap, STT
         r'second said: \["(It|Currently)',                 # and an answer
     ]),
+    # a browser without JSPI (Safari before 27): the page's commands work,
+    # the note says so at once, no model is fetched, servers only when chosen
+    ("nojspi_browser.mjs", {}, [], [
+        r"ok   the note at the first tap: “This browser can't run",
+        r"ok   no speech model downloaded",
+        r"ok   nothing sent to a speech server before the tap",
+        r"ok   the servers are kept for both ears and voice",
+        r"PASSED",
+    ]),
     # the recordings say "hey mycroft"; Emkay's default is "hey_emkay"
     # (openWakeWord), so the probe switches as the control panel would
     ("wakeword_browser.mjs", {"SPEECH_WAV": str(REPO / "tools/probes/audio/hey_mycroft_what_time.wav"), "ANSWERS": "2", "WAKE_WORD": "hey_mycroft"}, [], [

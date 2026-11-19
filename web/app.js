@@ -302,6 +302,9 @@ async function start() {
   $("boot").hidden = true;
   for (const id of ["mic", "keyboard", "menu-button"]) $(id).hidden = false;
   started = true;
+  // a browser that can't run Emkay's own ears and voice (no JSPI) is told so
+  // now, not the first time someone speaks to an Emkay that can't hear
+  for (const what of bootInfo?.speech_blocked || []) speechWait.show({ what, reason: "browser" });
   installFromStore();
   if (pendingInstall) { installFromStore(pendingInstall); pendingInstall = null; }
 }
@@ -990,6 +993,17 @@ const speechWait = {
     if (what === "tts" && utterance) caption(`“${utterance}”`, null, Math.max(6000, utterance.length * 90));
     if (what === "stt") { $("type").hidden = false; }
     if (this.dismissed) return;
+    // a browser that can't run Emkay's ears and voice on the device at all
+    // (no JSPI: Safari before 27, say): say so plainly, with what it takes;
+    // the servers, if chosen, are kept for both in this browser – and the
+    // note says what that means for privacy before anyone taps it
+    if (reason === "browser") {
+      this.remember = "stt,tts";
+      $("speech-wait-text").textContent = t("wait.browser");
+      $("speech-wait-servers").textContent = t("wait.servers.browser");
+      $("speech-wait").hidden = false;
+      return;
+    }
     // a language Emkay has no voice (or ears) for on the device: say so plainly,
     // and the servers, if chosen, are kept for it
     this.remember = reason === "language" ? what : "";
