@@ -45,7 +45,7 @@ setInterval(() => { if (!window.hello?.ready) f.contentWindow.postMessage({ emka
 </script>`;
 const server = http.createServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(parent); })
   .listen(8092, "127.0.0.1");
-const port = 9349;
+const port = Number(process.env.PROBE_PORT || 9349);   // another probe on this machine may have 9349
 const chrome = spawn(process.env.CHROME, [
   "--headless=new", `--remote-debugging-port=${port}`, "--user-data-dir=/tmp/emkay-chrome-template",
   "--window-size=1000,800", "--autoplay-policy=no-user-gesture-required", "--no-first-run",
