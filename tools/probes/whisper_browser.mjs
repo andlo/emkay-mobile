@@ -42,6 +42,9 @@ ws.onmessage = (e) => {
   if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); }
   if (m.method === "Target.attachedToTarget" && m.params.targetInfo.type === "worker") {
     ws.send(JSON.stringify({ id: ++id, method: "Runtime.enable", sessionId: m.params.sessionId }));
+    // ... and the workers it starts (the speech worker, speech-worker.js)
+    ws.send(JSON.stringify({ id: ++id, method: "Target.setAutoAttach", sessionId: m.params.sessionId,
+                             params: { autoAttach: true, waitForDebuggerOnStart: false, flatten: true } }));
     ws.send(JSON.stringify({ id: ++id, method: "Runtime.runIfWaitingForDebugger", sessionId: m.params.sessionId }));
   }
   if (m.method === "Runtime.consoleAPICalled") {

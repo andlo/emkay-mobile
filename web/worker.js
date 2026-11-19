@@ -32,27 +32,78 @@ globalThis.emkayModelProgress = (what, name, progress, state = "loading") => {
   self.postMessage({ kind: "model", payload: { what, name, progress, state } });
 };
 
+// The speech models (piper.js, whisper.js, mt.js) run in a worker of their
+// own (speech-worker.js), started the first time one is needed: ONNX there
+// does not hold up Pyodide and OVOS here (#4).
+let speechWorker = null;
+const speechCalls = new Map();          // id -> {resolve, reject}
+let speechIds = 0;
+
+function speech() {
+  if (speechWorker) return speechWorker;
+  speechWorker = new Worker(new URL("./speech-worker.js", import.meta.url), { type: "module" });
+  speechWorker.onmessage = ({ data }) => {
+    if (data.kind === "model") return globalThis.emkayModelProgress(...data.args);
+    if (data.kind === "net") return netlog.add(data.entry);
+    const call = speechCalls.get(data.id);
+    if (!call) return;
+    speechCalls.delete(data.id);
+    if ("error" in data) {
+      const e = new Error(data.error);
+      e.name = data.name;
+      call.reject(e);
+    } else call.resolve(data.result);
+  };
+  speechWorker.onerror = (e) => {
+    console.error("[emkay] speech worker", e.message ?? e);
+    for (const call of speechCalls.values()) call.reject(new Error("the speech worker stopped"));
+    speechCalls.clear();
+    speechWorker = null;                 // the next call starts a new one
+  };
+  speechWorker.postMessage({ kind: "local-only", on: netlog.isLocalOnly() });
+  return speechWorker;
+}
+
+/** mod.fn(...args) in the speech worker; `transfer` are buffers handed over. */
+function speechCall(mod, fn, args, transfer = []) {
+  const id = ++speechIds;
+  const caller = globalThis.emkayNetCaller || null;
+  return new Promise((resolve, reject) => {
+    speechCalls.set(id, { resolve, reject });
+    speech().postMessage({ id, mod, fn, args, caller }, transfer);
+  });
+}
+
+// "local only" holds in the speech worker too
+globalThis.emkayNet.setLocalOnly = (on) => {
+  netlog.setLocalOnly(on);
+  speechWorker?.postMessage({ kind: "local-only", on: !!on });
+};
+
 // Piper TTS (web/piper.js), for ovos-tts-plugin-piper-browser through `js`;
 // loaded the first time a Piper voice speaks
 globalThis.emkayPiper = {
-  synth: async (text, voice, speaker) => (await import("./piper.js")).synth(text, voice, speaker),
-  ready: async (voice) => (await import("./piper.js")).ready(voice),
+  synth: (text, voice, speaker) => speechCall("piper", "synth", [String(text), String(voice), Number(speaker ?? 0)]),
+  ready: (voice) => speechCall("piper", "ready", [String(voice)]),
 };
 
 // Whisper STT on the phone (web/whisper.js), for ovos-stt-plugin-whisper-browser
 // through `js`; loaded the first time Whisper is chosen
 globalThis.emkayWhisper = {
-  ready: async (model) => (await import("./whisper.js")).ready(model),
-  transcribe: async (pcm, rate, lang, model) =>
-    (await import("./whisper.js")).transcribe(pcm, rate, lang, model),
+  ready: (model) => speechCall("whisper", "ready", [String(model)]),
+  // a copy of the samples, now: `pcm` may be a view into Pyodide's memory
+  transcribe: (pcm, rate, lang, model) => {
+    const own = pcm.slice();
+    return speechCall("whisper", "transcribe", [own, rate, lang, model], [own.buffer]);
+  },
 };
 
 // Machine translation for Emkay Dev's "Add language" (web/mt.js), for
 // py/emkay_mobile/translate.py through `js`; loaded the first time it is asked for
 globalThis.emkayMT = {
-  side: async (lang) => (await import("./mt.js")).side(lang),
-  ready: async (lang) => (await import("./mt.js")).ready(lang),
-  generate: async (lang, ids) => (await import("./mt.js")).generate(lang, Array.from(ids)),
+  side: (lang) => speechCall("mt", "side", [String(lang)]),
+  ready: (lang) => speechCall("mt", "ready", [String(lang)]),
+  generate: (lang, ids) => speechCall("mt", "generate", [String(lang), Array.from(ids)]),
 };
 
 let py = null;    // the Pyodide instance
