@@ -116,14 +116,18 @@ export function saveHivemindSettings(s) {
  */
 export function askHivemindSettings(prev = {}, error = "", { back = false, local = false } = {}) {
   return new Promise((resolve) => {
-    document.getElementById("hivemind-setup")?.remove();
+    document.getElementById("hivemind-setup")?.parentElement.remove();
+    // the same card as the menu and "Where should Emkay think?"
+    const box = document.createElement("div");
+    box.className = "menu setup";
     const form = document.createElement("form");
     form.id = "hivemind-setup";
-    form.className = "hivemind-setup";
+    form.className = "menu-card setup-card";
+    box.append(form);
     const field = (name, type, value, extra = "") =>
       `<label>${t(`hivemind.${name}`)}<input name="${name}" type="${type}" value="${value ?? ""}" ${extra}></label>`;
     form.innerHTML = `
-      <h2>${t("hivemind.title")}</h2>
+      <h2 class="with-icon"><img src="menu/brain.svg" alt="">${t("hivemind.title")}</h2>
       <p>${t("hivemind.hint")}</p>
       ${error ? `<p class="error"></p>` : ""}
       ${field("host", "text", prev.host, 'required autocapitalize="off" spellcheck="false"')}
@@ -135,7 +139,7 @@ export function askHivemindSettings(prev = {}, error = "", { back = false, local
       ${back ? `<button type="button" class="secondary" data-act="back">${t("hivemind.back")}</button>` : ""}
       ${local ? `<button type="button" class="secondary" data-act="local">${t("hivemind.use_local")}</button>` : ""}`;
     if (error) form.querySelector(".error").textContent = error;   // text, not HTML
-    form.querySelector('[data-act="back"]')?.addEventListener("click", () => { form.remove(); resolve(null); });
+    form.querySelector('[data-act="back"]')?.addEventListener("click", () => { box.remove(); resolve(null); });
     form.querySelector('[data-act="local"]')?.addEventListener("click", () => {
       setBrain("local");
       location.replace(location.pathname);
@@ -143,11 +147,11 @@ export function askHivemindSettings(prev = {}, error = "", { back = false, local
     form.onsubmit = (e) => {
       e.preventDefault();
       const f = new FormData(form);
-      form.remove();
+      box.remove();
       resolve({ ...prev, host: f.get("host").trim(), port: +f.get("port"), ssl: f.has("ssl"),
                 key: f.get("key").trim(), password: f.get("password") });
     };
-    document.body.append(form);
+    document.body.append(box);
   });
 }
 

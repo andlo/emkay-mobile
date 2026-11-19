@@ -77,12 +77,16 @@ export async function token(url, form) {
  */
 export function askHaUrl(prev = "", error = "", { back = false, local = false } = {}) {
   return new Promise((resolve) => {
-    document.getElementById("ha-setup")?.remove();
+    document.getElementById("ha-setup")?.parentElement.remove();
+    // the same card as the menu and "Where should Emkay think?"
+    const box = document.createElement("div");
+    box.className = "menu setup";
     const form = document.createElement("form");
     form.id = "ha-setup";
-    form.className = "hivemind-setup";
+    form.className = "menu-card setup-card";
+    box.append(form);
     form.innerHTML = `
-      <h2>${t("ha.title")}</h2>
+      <h2 class="with-icon"><img src="menu/brain.svg" alt="">${t("ha.title")}</h2>
       <p>${t("ha.hint")}</p>
       ${error ? `<p class="error"></p>` : ""}
       <label>${t("ha.url")}<input name="url" type="text" value="" required autocapitalize="off"
@@ -92,7 +96,7 @@ export function askHaUrl(prev = "", error = "", { back = false, local = false } 
       ${local ? `<button type="button" class="secondary" data-act="local">${t("hivemind.use_local")}</button>` : ""}`;
     form.querySelector("input").value = prev;
     if (error) form.querySelector(".error").textContent = error;   // text, not HTML
-    form.querySelector('[data-act="back"]')?.addEventListener("click", () => { form.remove(); resolve(null); });
+    form.querySelector('[data-act="back"]')?.addEventListener("click", () => { box.remove(); resolve(null); });
     form.querySelector('[data-act="local"]')?.addEventListener("click", () => {
       setBrain("local");
       location.replace(location.pathname);
@@ -109,10 +113,10 @@ export function askHaUrl(prev = "", error = "", { back = false, local = false } 
         form.querySelector("p").after(p);
         return;
       }
-      form.remove();
+      box.remove();
       resolve(url);
     };
-    document.body.append(form);
+    document.body.append(box);
   });
 }
 
