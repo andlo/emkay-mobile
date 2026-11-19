@@ -123,7 +123,7 @@ try {
   await op("say", { text: "stop" }).catch(() => {});
   await sleep(2000);
   for (const [text, expect] of script[lang] || script[lang.split("-")[0]] || []) {
-    await js(`window.said = []; window.raw = []`);
+    await js(`window.said = []; window.raw = []; window.trace = []`);
     await op("say", { text });
     const onBus = expect.startsWith("bus:");
     const re = new RegExp(onBus ? expect.slice(4) : expect, "i");
@@ -135,6 +135,18 @@ try {
     const said = await js(`window.said`);
     log(`say ${JSON.stringify(text)} -> ${ok ? "ok" : "NO MATCH /" + expect + "/"} ${JSON.stringify(said)}`);
     if (!ok) failed++;
+    if (process.env.DUMP_BUS) {   // DUMP_BUS=1: what went on the bus, and where the session was
+      const seen = await js(`window.raw.map((r) => { try { const m = JSON.parse(r); return m.type + " " + ((m.context||{}).session||{}).session_id; } catch (e) { return "?"; } })`);
+      log(`  bus: ${seen.join(" | ")}`);
+    }
+    if (process.env.DUMP_TRACE) {   // DUMP_TRACE=<regex>: those log and bus lines
+      const lines = await js(`window.trace.filter((l) => new RegExp(${JSON.stringify(process.env.DUMP_TRACE)}).test(l))`);
+      for (const l of lines) log(`  trace: ${l}`);
+    }
+    if (process.env.DUMP_RAW) {   // DUMP_RAW=<regex>: those bus messages in full
+      const raws = await js(`window.raw.filter((r) => new RegExp(${JSON.stringify(process.env.DUMP_RAW)}).test(r))`);
+      for (const r of raws) log(`  raw: ${r.slice(0, 3000)}`);
+    }
     await sleep(800);
   }
   if (process.env.SHOT) {   // SHOT=file.png: a picture of Emkay after the conversation
