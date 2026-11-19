@@ -94,7 +94,7 @@ INSTALLER_PIPELINE = (
 
 #: Version of the one-time defaults below; each step is written once, so a
 #: phone set up by an older build gets only the steps it has not had yet.
-DEFAULTS_VERSION = 13
+DEFAULTS_VERSION = 14
 #: the package index the control panel searches (defaults v7)
 STORE_INDEX = "https://store.emkay.ai"
 
@@ -323,6 +323,13 @@ def _browser_defaults(done: int) -> dict:
         if cfg.get("listener", {}).get("wake_word") in (None, "hey_mycroft"):
             out.setdefault("listener", {})["wake_word"] = EMKAY_WAKE_WORD
             out.setdefault("hotwords", {})[EMKAY_WAKE_WORD] = HEY_EMKAY
+    if done < 14:
+        # ask_yesno: ovos-workshop asks for "ovos-solver-yes-no-plugin" when
+        # nothing is set, but ovos-yes-no-plugin (what is installed) names its
+        # engine "ovos-yes-no-plugin". Every yes/no question logged "Failed to
+        # load YesNo plugin" and fell back to the same engine built in.
+        if not Configuration().get("skills", {}).get("ask_yesno_plugin"):
+            out.setdefault("skills", {})["ask_yesno_plugin"] = "ovos-yes-no-plugin"
     user = read_user_config()
     # defaults v3 turned padaos off (a ~30 s regex compile after boot); without
     # it padatious matched "what time is it" to the timer skill. v4 takes
