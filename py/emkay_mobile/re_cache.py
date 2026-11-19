@@ -58,6 +58,7 @@ _dirty = False
 _original = None     # re._compiler.compile as Python has it
 _hits = _new = 0
 _loaded = frozenset()   # the keys the file had (for looking at what missed)
+_seeded = frozenset()   # the keys the site's seeds have: shipped again, never saved here
 _misses = []            # a few patterns this process had to compile
 
 
@@ -110,25 +111,31 @@ def seeds(name=SEED_NAME):
 
 
 def _load():
-    global _cache, _loaded
+    global _cache, _loaded, _seeded
     if _cache is None:
         _cache = {}
         for seed in seeds():
             _cache.update(_read(seed))
+        _seeded = frozenset(_cache)
         _cache.update(_read(PATH))       # what this device compiled itself
         _loaded = frozenset(_cache)
     return _cache
 
 
 def save():
-    """Write what this process used, if it compiled anything new."""
+    """Write what this process used and the site's seeds don't have, if it
+    compiled anything new.
+
+    Only that: the seeds come with every start anyway, and writing all of
+    them again (23,000 regexes, zlib) took 1.7 s of the first start for the
+    two or three patterns a device compiles itself."""
     global _dirty
     if not _dirty or _cache is None:
         return
     tmp = f"{PATH}.{os.getpid()}.tmp"
     try:
         os.makedirs(os.path.dirname(PATH), exist_ok=True)
-        _write(tmp, {k: _cache[k] for k in _used if k in _cache})
+        _write(tmp, {k: _cache[k] for k in _used if k in _cache and k not in _seeded})
         os.replace(tmp, PATH)
         _dirty = False
     except (OSError, ValueError) as e:
