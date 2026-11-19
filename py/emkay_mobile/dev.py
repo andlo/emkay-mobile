@@ -307,6 +307,9 @@ _STEP_ENDS = ("ovos.utterance.handled", "ovos.intent.unmatched", "complete_inten
 #: ask_yesno): who took the sentence is known, and the answer would only come
 #: from the user. The question is then called off (_call_off).
 _ASKS = ("mycroft.mic.listen",)
+# OCP's pipeline takes a "play ..." sentence (ocp:*) and is handled at once;
+# which skill plays it comes seconds later, when the search is done
+_OCP_PICKS = ("ovos.common_play.play", "ovos.common_play.search.populate")
 _ASKS_SUFFIX = ".get_response.waiting"
 
 
@@ -365,7 +368,7 @@ async def test(row_json: str, timeout: float = 20.0) -> str:
     sid = sess.session_id
 
     claim = Claim(session_id=sid)
-    spoke, done, asked = [], asyncio.Event(), set()
+    spoke, done, asked, ocp = [], asyncio.Event(), set(), [False]
 
     def watch(raw):
         msg = json.loads(raw) if isinstance(raw, str) else json.loads(raw.serialize())
@@ -376,10 +379,15 @@ async def test(row_json: str, timeout: float = 20.0) -> str:
         t = msg.get("type", "")
         if t in ("speak", "ovos.utterance.speak"):
             spoke.append((msg.get("data") or {}).get("utterance", ""))
-        if t in _STEP_ENDS or t in _ASKS or t.endswith(_ASKS_SUFFIX):
+        if t.startswith("ocp:"):
+            ocp[0] = True
+        if t in _OCP_PICKS:
+            done.set()
+        elif t in _STEP_ENDS or t in _ASKS or t.endswith(_ASKS_SUFFIX):
             if t.endswith(_ASKS_SUFFIX):
                 asked.add(t[:-len(_ASKS_SUFFIX)])
-            done.set()
+            if not (ocp[0] and t in _STEP_ENDS):   # OCP: wait for its pick
+                done.set()
 
     bus = boot.bus()
     bus.on("message", watch)
