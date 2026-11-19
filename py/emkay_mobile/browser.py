@@ -548,6 +548,9 @@ def adapt_ovos():
       the answer, which only this same thread could deliver (_get_response
       above). This one does change answers: follow-up questions get "no
       answer" instead of hanging the assistant.
+    * padaos: its line regexes come from the cache of the last start
+      (re_cache.py) instead of Python's re parser, which took ~28 s after
+      every start in WebAssembly (#4). The same regexes, faster.
     * ovos-utils: is_process_running answers "no" instead of running `ps`,
       which a browser does not have (OCP asks it on every search).
     * ovos-bus-client: OCP's search waits until the media skills have gone
@@ -557,6 +560,22 @@ def adapt_ovos():
     try:
         from ovos_padatious.opm import PadatiousPipeline
         PadatiousPipeline._warm_prefilters = lambda self, lang: None
+    except ImportError:
+        pass
+    try:
+        # padaos' line regexes from the cache of the last start (re_cache.py):
+        # compiling them is Python's own re parser, ~28 s in WebAssembly
+        # (re_cache.py), and each line's pattern built without formatting
+        # the entities it doesn't use (padaos_speed.py)
+        from ovos_padatious import padaos
+        from . import padaos_speed, re_cache
+        if not getattr(padaos.IntentContainer._compile, "_emkay_re_cache", False):
+            padaos.IntentContainer._compile = re_cache.around(padaos.IntentContainer._compile)
+            padaos.IntentContainer._compile._emkay_re_cache = True
+            padaos.IntentContainer._create_intent_pattern = padaos_speed.create_intent_pattern
+            padaos.IntentContainer.create_regexes = padaos_speed.create_regexes
+            padaos.IntentContainer.add_entity = padaos_speed.sorted_lines(padaos.IntentContainer.add_entity)
+            padaos.IntentContainer.add_intent = padaos_speed.sorted_lines(padaos.IntentContainer.add_intent)
     except ImportError:
         pass
     try:

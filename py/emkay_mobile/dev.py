@@ -86,7 +86,7 @@ def _hook_logging():
 #: skills, matching intents, the media player's pick); everything else shows from WARNING up, and the
 #: skill being developed shows everything (DEBUG too).
 _TOLD = ("skill_launcher", "skill_manager", "intent_services", "ovos_workshop.skills",
-         "ovos_padatious", "ocp_pipeline", "apis.ocp", "emkay_mobile.dev", "emkay_mobile.pip")
+         "ovos_padatious", "ocp_pipeline", "apis.ocp", "re_cache", "emkay_mobile.dev", "emkay_mobile.pip")
 
 #: ERROR lines while a skill loads (load() names the first one as the problem)
 _capture = None
