@@ -71,11 +71,18 @@ try {
   log("booted");
   log(`install: ${await py(`from emkay_mobile import pip\ntry:\n    out = pip.run(['install', '--pre', 'ovos-dialog-normalizer-plugin'])\nexcept RuntimeError as e:\n    out = 'FAILED ' + str(e)\nout[-300:]`)}`);
   log(`enable: ${await py(`from ovos_config.config import update_mycroft_config\nfrom ovos_config import Configuration\nupdate_mycroft_config({"dialog_transformers": {"ovos-dialog-normalizer-plugin": {}}})\nConfiguration.reload()\nfrom emkay_mobile import speech\nspeech.reload()\nd, t = speech.transformers()\nstr([p[0] if isinstance(p, tuple) else getattr(p, 'name', p) for p in d.plugins])`)}`);
-  // what a skill's speak() emits
+  // the voice first: on a fresh profile it is still downloading, and since #80
+  // nothing stands in for it (the sentence would go unspoken)
+  log(`voice: ${await js(`window.emkay.call("python_async", {code: ${JSON.stringify(
+    "import js\nfrom pyodide.ffi import run_sync\nfrom ovos_tts_plugin_piper_browser import voice_for\n" +
+    "v = voice_for('en-US')\nrun_sync(js.emkayPiper.synth('ready', v, 0))\nv")}}).then(String)`)}`);
+  // what a skill's speak() emits - through python_async, which can wait as a
+  // skill's handler can: Piper (run_sync) cannot in the synchronous "python",
+  // and since #80 no server stands in for it
   const said = await js(`new Promise((ok) => {
     const orig = window.emkay.speaker.enqueue.bind(window.emkay.speaker);
     window.emkay.speaker.enqueue = (data, meta) => { ok(meta.utterance); return orig(data, meta); };
-    window.emkay.call("python", {code: "from emkay_mobile import boot\\nfrom ovos_bus_client.message import Message\\nboot.bus().emit(Message('speak', {'utterance': \\"I've got 3 apples, it's 2 o'clock\\", 'lang': 'en-US', 'meta': {'skill': 'test.skill'}}, {'skill_id': 'test.skill'}))"});
+    window.emkay.call("python_async", {code: "from emkay_mobile import boot\\nfrom ovos_bus_client.message import Message\\nboot.bus().emit(Message('speak', {'utterance': \\"I've got 3 apples, it's 2 o'clock\\", 'lang': 'en-US', 'meta': {'skill': 'test.skill'}}, {'skill_id': 'test.skill'}))"});
     setTimeout(() => ok("(nothing spoken in 60 s)"), 60000);
   })`);
   log(`spoken: ${said}`);
