@@ -51,6 +51,28 @@ FOREVER_LOOPS = (
 #: (seconds asked, what, where) for every wait that was answered at once.
 SKIPPED_WAITS = []
 
+#: (seconds, what) for each thread body or timer that held the event loop
+#: for SLOW seconds or more (waits it really waited, JSPI, included): the one
+#: thread does nothing else meanwhile, so what was said waits for it (#4).
+SLOW_WORK = []
+SLOW = 0.5
+
+
+def _timed(name, fn):
+    """Run fn(); note it in SLOW_WORK (and the dev log) when it took SLOW s or more."""
+    t0 = time.monotonic()
+    try:
+        return fn()
+    finally:
+        took = time.monotonic() - t0
+        if took >= SLOW:
+            SLOW_WORK.append((round(took, 2), name))
+            try:
+                from ovos_utils.log import LOG
+                LOG.info(f"slow on the event loop: {name} took {took:.1f} s")
+            except Exception:  # noqa: BLE001 - only a note
+                pass
+
 #: threading.Thread.join as Python has it, for threads this module did not start.
 _ORIGINAL_JOIN = threading.Thread.join
 
@@ -147,7 +169,7 @@ def _thread_start(self):
             return
         self._emkay_ran = True
         try:
-            self.run()
+            _timed(f"thread {name}", self.run)
         except Exception as e:  # a failing worker must not stop the page
             print(f"[emkay] thread {name} failed: {e!r}", file=sys.stderr)
         finally:
@@ -189,7 +211,8 @@ def _timer_start(self):
         if not self.finished.is_set():
             self.finished.set()
             try:
-                self.function(*self.args, **self.kwargs)
+                _timed(f"timer {self.name} ({getattr(self.function, '__qualname__', self.function)})",
+                       lambda: self.function(*self.args, **self.kwargs))
             except Exception as e:  # keep the page alive
                 print(f"[emkay] timer {self.name} failed: {e!r}", file=sys.stderr)
 
@@ -369,6 +392,46 @@ def mediawiki_cors():
     requests.sessions.Session.request = with_origin
 
 
+def _callback_name(handle):
+    cb = getattr(handle, "_callback", None)
+    cb = getattr(cb, "__func__", cb)
+    task = getattr(cb, "__self__", None)
+    coro = getattr(task, "get_coro", lambda: None)() if task is not None else None
+    if coro is not None:   # a Task step: name the coroutine it runs
+        return f"task {getattr(coro, '__qualname__', coro)}"
+    return f"{getattr(cb, '__module__', '?')}.{getattr(cb, '__qualname__', repr(cb))}"
+
+
+def _time_handles():
+    """Time every callback the event loop runs; note slow ones in SLOW_WORK.
+
+    The one thread runs one callback at a time, so a question waits for
+    whatever callback holds it. Thread bodies and timers are named by
+    _timed; this catches the rest (asyncio tasks, call_soon from packages)."""
+    import asyncio.events as events
+    if getattr(events.Handle._run, "_emkay_timed", False):
+        return
+    original = events.Handle._run
+
+    def run(self):
+        t0 = time.monotonic()
+        try:
+            return original(self)
+        finally:
+            took = time.monotonic() - t0
+            if took >= SLOW:
+                name = _callback_name(self)
+                if not name.startswith(f"{__name__}."):   # _timed names its own
+                    SLOW_WORK.append((round(took, 2), name))
+                    try:
+                        from ovos_utils.log import LOG
+                        LOG.info(f"slow on the event loop: {name} took {took:.1f} s")
+                    except Exception:  # noqa: BLE001 - only a note
+                        pass
+    run._emkay_timed = True
+    events.Handle._run = run
+
+
 def install():
     """Apply the platform patches above. Safe to call more than once."""
     if getattr(install, "_done", False):
@@ -384,6 +447,7 @@ def install():
         sys.path.insert(0, USER_SITE)
     threading.Thread.start = _thread_start
     threading.Thread.join = _thread_join
+    _time_handles()
     try:   # tqdm's own switch for its monitor thread (a loop that never ends here)
         import tqdm
         tqdm.tqdm.monitor_interval = 0
@@ -550,7 +614,10 @@ def adapt_ovos():
       answer" instead of hanging the assistant.
     * padaos: its line regexes come from the cache of the last start
       (re_cache.py) instead of Python's re parser, which took ~28 s after
-      every start in WebAssembly (#4). The same regexes, faster.
+      every start in WebAssembly (#4). The same regexes, faster; and its
+      pattern file keeps the lines of every container that shares it.
+    * chronologia: its loader reads the one language it loads instead of
+      all 61 of its locale tree (chronologia_speed.py, #4).
     * ovos-utils: is_process_running answers "no" instead of running `ps`,
       which a browser does not have (OCP asks it on every search).
     * ovos-bus-client: OCP's search waits until the media skills have gone
@@ -576,8 +643,13 @@ def adapt_ovos():
             padaos.IntentContainer.create_regexes = padaos_speed.create_regexes
             padaos.IntentContainer.add_entity = padaos_speed.sorted_lines(padaos.IntentContainer.add_entity)
             padaos.IntentContainer.add_intent = padaos_speed.sorted_lines(padaos.IntentContainer.add_intent)
+            padaos._PatternCache.save = padaos_speed.merged_save
     except ImportError:
         pass
+    # chronologia (typed slots: dates in what was said) reads only the
+    # language it loads, not all 61 of its tree (chronologia_speed.py)
+    from . import chronologia_speed
+    chronologia_speed.install()
     try:
         # ovos-utils asks `ps axw` whether a program is running
         # (is_process_running, used by is_gui_running, which OCP calls for

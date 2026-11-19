@@ -91,3 +91,45 @@ def sorted_lines(add):
         return add(self, name, _fixed_order(lines))
     wrapped.__wrapped__ = add
     return wrapped
+
+
+def merged_save(self):
+    """padaos._PatternCache.save, keeping what other containers wrote to the file.
+
+    padaos keeps each template line's regex source in intent_cache/<lang>/
+    padaos-patterns.json, so a restart need not rewrite the lines. But
+    padatious' own pipeline, OCP's and the persona pipeline each make a
+    padaos container on that same folder, and each saved only its own lines:
+    whichever saved last threw the others' away (121 intents' 22,477 lines
+    replaced by the 2 of OCP's "start {query}" container), so every other
+    start rewrote them all. This keeps the file's lines and adds this
+    container's. A line no container uses any more stays until padaos'
+    rules change (PATTERN_RULES_VERSION): template lines are small.
+    """
+    import json
+    import os
+    import uuid
+    from threading import get_ident
+    from ovos_padatious import padaos
+    if not (self.path and self._dirty and self._patterns is not None):
+        return
+    merged = {}
+    try:
+        with open(self.path, encoding="utf-8") as f:
+            data = json.load(f)
+        if data.get("rules") == padaos.PATTERN_RULES_VERSION:
+            merged.update({str(k): str(v) for k, v in data["patterns"].items()})
+    except (OSError, ValueError, KeyError, AttributeError, TypeError):
+        pass
+    merged.update({line: self._patterns[line] for line in self._used if line in self._patterns})
+    tmp = f"{self.path}.{os.getpid()}.{get_ident()}.{uuid.uuid4().hex[:8]}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"rules": padaos.PATTERN_RULES_VERSION, "patterns": merged}, f)
+        os.replace(tmp, self.path)
+        self._dirty = False
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass

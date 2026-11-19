@@ -105,8 +105,12 @@ try {
   const hello = await until(`window.hello?.ready && window.hello`, 400, "a ready dev Emkay");
   const lang = hello.lang;
   log(`emkay ready, speaks ${lang}`);
+  if (process.env.PY_BEFORE) {   // PY_BEFORE="<python>": run before the first question (e.g. start a profiler)
+    const r = await op("python", { code: process.env.PY_BEFORE }, 120);
+    log(`python before: ${JSON.stringify(r.result ?? r.error).slice(0, 300)}`);
+  }
   if (process.env.FIRST) {   // FIRST="what time is it": how long the first answer after "ready" takes (#4)
-    for (const round of ["first", "second"]) {
+    for (const round of (process.env.FIRST_ONLY ? ["first"] : ["first", "second"])) {
       await js(`window.said = []; window.trace = []`);
       const t1 = Date.now();
       log(`asked at ${(Date.now() / 1000 % 1000).toFixed(1)}`);
