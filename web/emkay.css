@@ -148,8 +148,9 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .offline-shield[hidden] { display: none; }
 
 /* a model download after a settings change (app.js modelStatus) */
+/* under the row of corner buttons (privacy chip, ⚙), which the open chip fills */
 .model-status { position: fixed; left: 50%; transform: translateX(-50%);
-  top: max(10px, env(safe-area-inset-top)); z-index: 31; max-width: min(86vw, 420px);
+  top: calc(max(10px, env(safe-area-inset-top)) + 54px); z-index: 31; max-width: min(86vw, 420px);
   background: #000c; color: #dfe6ee; border-radius: 14px; padding: 8px 14px;
   font-size: 13px; text-align: center; }
 .model-status[hidden], .model-bar[hidden], .model-interim[hidden] { display: none; }
@@ -244,3 +245,31 @@ body { font-family: system-ui, sans-serif; color: #fff; -webkit-tap-highlight-co
 .act-answered { border-color: #4ade80; }
 .act-network { border-color: #f0a022; }
 .act-note { border-color: #f08a8a; }
+
+/* the privacy chip (privacy.js): left of ⚙, faint at rest, open while
+   Emkay listens or speaks; amber when that goes elsewhere */
+.privacy-chip { position: fixed; right: 64px; top: max(10px, env(safe-area-inset-top)); z-index: 30;
+  height: 44px; min-width: 44px; box-sizing: border-box; padding: 0 9px; border-radius: 22px;
+  border: 1px solid transparent; background: #ffffff1f; color: #ddd; opacity: .55;
+  display: flex; align-items: center; gap: 8px; font-size: 13px; transition: opacity .25s, background .25s; }
+.privacy-chip[hidden] { display: none; }
+.privacy-chip svg { width: 26px; height: 26px; flex: none; }
+.privacy-chip .privacy-label { display: none; white-space: nowrap; max-width: 52vw; overflow: hidden; text-overflow: ellipsis; }
+.privacy-chip.open { opacity: 1; background: #000c; }
+.privacy-chip.open .privacy-label { display: inline; }
+.privacy-chip.external { color: #f0b429; border-color: #f0b42966; opacity: .85; }
+.privacy-chip.external.open { border-color: #f0b429; }
+
+/* the same three lines at the top of ⚙ → Settings */
+.privacy { background: #0c1016; border: 1px solid #1d2430; border-radius: 14px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px; }
+.privacy-title { margin: 0; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #789; }
+.privacy-rows { display: flex; flex-direction: column; gap: 8px; }
+.privacy-row { display: flex; align-items: center; gap: 10px; color: #ddd; }
+.privacy-row svg { width: 28px; height: 28px; flex: none; }
+.privacy-row span { display: flex; flex-direction: column; }
+.privacy-row small { color: #9ab; }
+.privacy-row.external, .privacy-row.external small { color: #f0b429; }
+.privacy-wake { margin: 2px 0 0; color: #789; }
+.privacy.flash { animation: privacy-flash 1.2s ease-out; }
+@keyframes privacy-flash { from { border-color: #22a7f0; } to { border-color: #1d2430; } }

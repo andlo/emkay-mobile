@@ -398,6 +398,14 @@ export function createHiveMindBrain({ ask = askHivemindSettings } = {}) {
         precise_models: precise, wake_words: wakeWords,
         site_langs: [lang], intent_langs: [lang], listener: {}, confirm_listening: false,
         speech: sp ? "house" : "phone",
+        // for the privacy chip (privacy.js): the house thinks; it also hears
+        // and speaks when it has speech, else this device does (the browser's
+        // own recognition, when chosen, goes to the browser's maker)
+        privacy: {
+          think: { what: "house", host: settings.host },
+          hear: sp ? { what: "house", host: settings.host } : { what: stt === BROWSER_STT ? "browser" : "device" },
+          voice: sp ? { what: "house", host: settings.host } : { what: "device" },
+        },
         // the house's own control panel (Emkay Home), for ⚙ → Settings
         house_panel: settings.panel || null,
       };

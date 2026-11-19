@@ -13,7 +13,7 @@ import os
 import sys
 import time
 
-from . import browser
+from . import browser, privacy
 
 if sys.platform == "emscripten":
     browser.install()
@@ -720,6 +720,8 @@ def start(on_message=None, user_config=None) -> dict:
             "hotword": Configuration().get("hotwords", {}).get(
                 Configuration().get("listener", {}).get("wake_word") or "", {}),
             "stt_module": Configuration().get("stt", {}).get("module"),
+            # where it hears and speaks, for the privacy chip (web/privacy.js)
+            "speech_route": privacy.route(),
             # how the page listens, from OVOS' own listener settings
             # (ovos-dinkum-listener's): end of speech, time limits, the
             # confirm-listening sound

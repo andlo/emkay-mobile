@@ -15,11 +15,21 @@ import { createBrain, chosenBrain } from "./brains/brain.js";
 import { haLinkWanted, startHaDevice } from "./ha-device.js";
 import { chooseBrain, brainHint } from "./brains/choose.js";
 import { createActivity } from "./activity.js";
+import { createPrivacy } from "./privacy.js";
 
 const $ = (id) => document.getElementById(id);
 apply();                    // the phone's language until OVOS is up
 $("boot-text").textContent = t("boot.loading");   // bootStatus' own line from here on
 onLangChange(() => { apply(); bootStatus(lastStatus.key, undefined, lastStatus.vars); });
+/** The privacy chip by ⚙ (privacy.js); a tap opens ⚙ → Settings at its three lines. */
+const privacy = createPrivacy({ t, $, openSettings: () => {
+  menuPage(true);
+  $("menu").hidden = false;
+  $("privacy").classList.remove("flash");
+  void $("privacy").offsetWidth;           // restart the animation
+  $("privacy").classList.add("flash");
+} });
+onLangChange(() => privacy.render());
 const params = new URLSearchParams(location.search);
 let kiosk = params.has("kiosk");
 
@@ -379,6 +389,7 @@ let housePanel = null;
     bootInfo = info;
     ovosLang = info.lang || ovosLang;
     sttModule = info.stt_module;
+    privacy.boot(info);
     ovosReady();
     showVisage();
     if (brain.kind === "local") bootStatus("boot.skills", 1, { n: info.skills.length });
@@ -422,6 +433,7 @@ const mic = {
     if (this.busy || this.muted || !audioCtx) return;
     this.busy = true;
     questionsAsked++;
+    privacy.active("hear", true);
     $("mic").className = "mic listening";
     caption(t("mic.listening"), 0);
     // OVOS' confirm-listening sound, before the recording (so it is not in it)
@@ -465,6 +477,7 @@ const mic = {
       caption(t("mic.error", { msg: e.message || String(e) }), null, 6000);
     } finally {
       $("mic").className = this.muted ? "mic muted" : "mic";
+      privacy.active("hear", false);
       this.busy = false;
     }
   },
@@ -838,7 +851,7 @@ const speaker = {
   },
   async next() {
     const item = this.queue.shift();
-    if (!item) { this.playing = false; return; }
+    if (!item) { this.playing = false; privacy.active("voice", false); return; }
     if (!audioCtx) {
       // nothing may sound before the first tap (browser rule): skip it, but
       // tell OVOS it is done, so its speech state does not hang
@@ -846,6 +859,7 @@ const speaker = {
       return this.next();
     }
     this.playing = true;
+    privacy.active("voice", true);
     try {
       const buf = await audioCtx.decodeAudioData(item.wav);
       const src = audioCtx.createBufferSource();
@@ -899,7 +913,7 @@ const modelStatus = {
     }
     clearTimeout(this.pending.get(key));
     this.pending.delete(key);
-    if (state === "ready") $("model-status-interim").hidden = true;   // the new one takes over now
+    if (state === "ready") { $("model-status-interim").hidden = true; privacy.ready(what); }   // the new one takes over now
     if (!this.shown.has(key) && state === "ready") return;   // came from the cache: nothing to say
     this.shown.delete(key);
     this.render(what, name, 1, state);
@@ -970,7 +984,7 @@ function locate() {
 /** React to the few bus events the page itself cares about. */
 function onBus(msg) {
   if (media.onBus(msg)) return;
-  if (msg.type === "emkay.speech.interim") return modelStatus.interim(msg.data);
+  if (msg.type === "emkay.speech.interim") { privacy.interim(msg.data); return modelStatus.interim(msg.data); }
   if (msg.type === "emkay.wakeword") {   // a new wake word in the settings
     wake.restart(msg.data.wake_word, msg.data.hotword).catch((e) => { wake.state = `error: ${e.message || e}`; });
     return;
@@ -982,6 +996,7 @@ function onBus(msg) {
     languageChanged(msg.data.lang);
     ovosLang = msg.data.lang || ovosLang;
     sttModule = msg.data.stt_module ?? sttModule;
+    privacy.route(msg.data.speech_route);
   }
   if (msg.type === "mycroft.mic.unmute") mic.setMuted(false);
 }
@@ -1574,4 +1589,4 @@ $("activity-close").onclick = () => {
   $("network").hidden = false;
 };
 
-window.emkay = { call, mic, speaker, media, wake, activity, stt: () => sttModule };
+window.emkay = { call, mic, speaker, media, wake, activity, privacy, stt: () => sttModule };

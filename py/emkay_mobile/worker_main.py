@@ -21,7 +21,7 @@ import time
 # Emkay's own modules first: importing boot runs browser.install(), which
 # puts the stand-ins for native packages (shims/: pexpect, psutil, ...) on
 # the path; ovos-utils' security module imports pexpect
-from . import boot, browser, gui, netlog, panel, speech
+from . import boot, browser, gui, netlog, panel, privacy, speech
 
 import ovos_phal_plugin_browser as phal   # the browser tab as the device
 
@@ -291,7 +291,9 @@ def _post_lang():
     from ovos_config import Configuration
     _post("bus", json.dumps({"type": "emkay.lang",
                              "data": {"lang": Configuration().get("lang", "en-US"),
-                                      "stt_module": Configuration().get("stt", {}).get("module")}}))
+                                      "stt_module": Configuration().get("stt", {}).get("module"),
+                                      # the privacy chip follows a change in the panel (web/privacy.js)
+                                      "speech_route": privacy.route()}}))
 
 
 # --- calls from the page -------------------------------------------------
