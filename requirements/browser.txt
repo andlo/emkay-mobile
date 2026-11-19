@@ -47,6 +47,11 @@ ovos-skill-horoscope-readings
 ovos-media-provider-pyradios
 ovos-media-provider-news
 
+# short, current facts ("who is the prime minister of denmark", "where is the
+# eiffel tower") from Wikidata and OpenStreetMap, which a browser may read -
+# in place of DuckDuckGo and Wolfram Alpha, which it may not (boot.py)
+ovos-skill-wikidata
+
 # who the assistant is, as Emkay: takes the place of ovos-skill-personal,
 # which boot.py blacklists (REPLACED_SKILLS)
 ovos-skill-about-emkay
