@@ -74,6 +74,14 @@ n = 0
 for d in src.glob("intent_cache*"):
     shutil.copytree(d, out / d.name, dirs_exist_ok=True)
     n += sum(1 for _ in (out / d.name).rglob("*") if _.is_file())
+# padaos' line regexes' sources, for the browser's first start (padaos_lines.py)
+from emkay_mobile import padaos_lines  # noqa: E402
+intents = padaos_lines.used()
+if intents:
+    seed = out / "intent_cache" / langs[0] / padaos_lines.SEED_NAME
+    seed.parent.mkdir(parents=True, exist_ok=True)
+    padaos_lines.write(intents, seed)
+    print(f"{len(intents)} padaos intents' regexes to {seed.relative_to(out)}")
 # padaos' patterns, for the browser's first start (re_cache.py, tools/re_seed.mjs)
 patterns = re_cache.used_patterns()
 if patterns:

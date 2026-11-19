@@ -65,10 +65,17 @@ def create_regexes(self, lines, intent_name, entities, counter):
     was arbitrary before as well.
     """
     from ovos_padatious.padaos import _PLAIN_LINE
+    from . import padaos_lines
+    k = padaos_lines.key(self, intent_name, lines, entities)
+    kept = padaos_lines.get(k)
+    if kept is not None:
+        return kept
     regexes = [self._create_regex(line, intent_name, entities, counter)
                for line in sorted(lines, key=lambda l: (-len(l), l))
                if line.strip() and not _PLAIN_LINE.match(line)]
-    return [r for r in regexes if r is not None]
+    regexes = [r for r in regexes if r is not None]
+    padaos_lines.put(k, regexes)
+    return regexes
 
 
 def _fixed_order(lines):
@@ -144,7 +151,16 @@ def install():
     from . import re_cache
     if getattr(padaos.IntentContainer._compile, "_emkay_re_cache", False):
         return
-    padaos.IntentContainer._compile = re_cache.around(padaos.IntentContainer._compile)
+    from . import padaos_lines
+    compile_fn = re_cache.around(padaos.IntentContainer._compile)
+
+    def compiled(*args, **kwargs):
+        try:
+            return compile_fn(*args, **kwargs)
+        finally:
+            padaos_lines.save()
+    compiled.__wrapped__ = compile_fn
+    padaos.IntentContainer._compile = compiled
     padaos.IntentContainer._compile._emkay_re_cache = True
     padaos.IntentContainer._create_intent_pattern = create_intent_pattern
     padaos.IntentContainer.create_regexes = create_regexes
