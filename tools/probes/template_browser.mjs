@@ -8,6 +8,8 @@
 // – a conversation, each line said once the previous answer was spoken. An
 // answer "bus:<regex>" is a bus message (as JSON) instead of something said:
 // a media skill plays, it does not speak.
+// A PHAL plugin (an opm.phal entry point in pyproject.toml) is started the
+// same way (load with kind "plugin"); it has no golden utterances.
 // Emkay must be served on http://127.0.0.1:8080 (tools/serve.py).
 import { spawn } from "child_process";
 import fs from "fs";
@@ -16,7 +18,10 @@ import path from "path";
 
 const repoDir = path.resolve(process.argv[2]);
 const script = process.argv[3] ? JSON.parse(fs.readFileSync(process.argv[3], "utf8")) : {};
-const pkg = fs.readdirSync(repoDir).find((d) => fs.existsSync(path.join(repoDir, d, "__init__.py")) && d !== "tests");
+const pyproject = fs.readFileSync(path.join(repoDir, "pyproject.toml"), "utf8");
+const phal = pyproject.match(/\[project\.entry-points\.["']?opm\.phal["']?\]\s*\n\s*["']?([^"'=\s]+)["']?\s*=\s*["']([^"']+)["']/);
+const pkg = phal ? phal[2].split(":")[0].split(".")[0]
+  : fs.readdirSync(repoDir).find((d) => fs.existsSync(path.join(repoDir, d, "__init__.py")) && d !== "tests");
 const skillDir = path.join(repoDir, pkg);
 const parent = `<!doctype html><meta charset=utf-8><title>template parent</title>
 <iframe id=f src="http://127.0.0.1:8080/?dev" allow="microphone; autoplay" style="width:390px;height:700px"></iframe>
@@ -99,11 +104,21 @@ try {
   const hello = await until(`window.hello?.ready && window.hello`, 400, "a ready dev Emkay");
   const lang = hello.lang;
   log(`emkay ready, speaks ${lang}`);
-  const gold = fs.readFileSync(path.join(repoDir, "test/end2end", `golden_utterances_${lang}.jsonl`), "utf8")
+  const goldFile = path.join(repoDir, "test/end2end", `golden_utterances_${lang}.jsonl`);
+  const gold = phal || !fs.existsSync(goldFile) ? [] : fs.readFileSync(goldFile, "utf8")
     .split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
-  const r = await op("load", { skillId: gold[0].skill_id, files: filesOf(skillDir), requirements: deps() });
-  log(`load: ok=${r.result?.ok} trained=${r.result?.trained} intents=${JSON.stringify(r.result?.intents)} problems=${JSON.stringify(r.result?.problems)}`);
+  const r = phal
+    ? await op("load", { skillId: phal[1], kind: "plugin", entry: phal[2], files: filesOf(skillDir), requirements: deps() })
+    : await op("load", { skillId: gold[0].skill_id, files: filesOf(skillDir), requirements: deps() });
+  log(`load: ok=${r.result?.ok} trained=${r.result?.trained} intents=${JSON.stringify(r.result?.intents)} listens=${JSON.stringify(r.result?.listens)} problems=${JSON.stringify(r.result?.problems)}`);
   if (!r.result?.ok) failed++;
+  if (process.env.RELOAD) {   // RELOAD=1: load it a second time, as each save does
+    const again = phal
+      ? await op("load", { skillId: phal[1], kind: "plugin", entry: phal[2], files: filesOf(skillDir), requirements: deps() })
+      : await op("load", { skillId: gold[0].skill_id, files: filesOf(skillDir), requirements: deps() });
+    log(`load again: ok=${again.result?.ok} problems=${JSON.stringify(again.result?.problems)}`);
+    if (!again.result?.ok) failed++;
+  }
   await sleep(2000);
   for (const row of gold) {
     const t = await op("test", { row });

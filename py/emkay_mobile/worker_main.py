@@ -374,8 +374,11 @@ def dev_enable() -> str:
     return dev.enable(_post)
 
 
-async def dev_load(skill_id: str, files_json: str, requirements_json: str = "[]") -> str:
+async def dev_load(skill_id: str, files_json: str, requirements_json: str = "[]",
+                   kind: str = "skill", entry: str = "") -> str:
     from . import dev
+    if kind == "plugin":
+        return await dev.load_plugin(skill_id, entry, files_json, requirements_json)
     return await dev.load(skill_id, files_json, requirements_json)
 
 
