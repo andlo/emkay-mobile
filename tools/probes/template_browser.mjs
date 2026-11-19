@@ -9,7 +9,8 @@
 // answer "bus:<regex>" is a bus message (as JSON) instead of something said:
 // a media skill plays, it does not speak.
 // A PHAL plugin (an opm.phal entry point in pyproject.toml) is started the
-// same way (load with kind "plugin"); it has no golden utterances.
+// same way (load with kind "plugin"); it has no golden utterances. A line
+// "emit:<type> <json data>" sends that bus message instead of saying something.
 // Emkay must be served on http://127.0.0.1:8080 (tools/serve.py).
 import { spawn } from "child_process";
 import fs from "fs";
@@ -139,7 +140,13 @@ try {
   await sleep(2000);
   for (const [text, expect] of script[lang] || script[lang.split("-")[0]] || []) {
     await js(`window.said = []; window.raw = []; window.trace = []`);
-    await op("say", { text });
+    if (text.startsWith("emit:")) {
+      const [type, ...rest] = text.slice(5).split(" ");
+      const data = rest.length ? rest.join(" ") : "{}";
+      await op("python", { code: `from emkay_mobile import boot\nimport json\nboot.emit(${JSON.stringify(type)}, json.loads(${JSON.stringify(data)}))` });
+    } else {
+      await op("say", { text });
+    }
     const onBus = expect.startsWith("bus:");
     const re = new RegExp(onBus ? expect.slice(4) : expect, "i");
     let ok = false;
