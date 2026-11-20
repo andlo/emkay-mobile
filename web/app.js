@@ -1070,6 +1070,19 @@ function locate() {
 }
 
 // ------------------------------------------------------------- bus events
+/**
+ * A bus message for the visage alone, not put on OVOS' bus. While Emkay
+ * sings (ovos-skill-karaoke) the face is told it speaks, so it shows and
+ * moves its mouth with the song's visemes (enclosure.mouth.viseme_list);
+ * OVOS itself must not hear that, or the listener would stop listening
+ * (mute_during_output) and "stop" could not end the song.
+ */
+let singing = false;
+function toVisage(type, data = {}) {
+  const raw = JSON.stringify({ type, data, context: {} });
+  for (const fn of coreListeners) fn(raw);
+}
+
 /** React to the few bus events the page itself cares about (`data`: bytes
  * that came with it, e.g. a file:// track for media.js). */
 function onBus(msg, data) {
@@ -1077,10 +1090,17 @@ function onBus(msg, data) {
   // ovos-skill-karaoke: while Emkay sings, the words go under the face (in
   // karaoke mode the skill's own screen shows them)
   if (msg.type === "ovos.karaoke.lyrics") {
-    if (msg.data.mode === "sing") caption(`♪ ${msg.data.line}`);
+    if (msg.data.mode === "sing") {
+      caption(`♪ ${msg.data.line}`);
+      if (!singing) { singing = true; toVisage("ovos.audio.output.started"); }
+    }
     return;
   }
-  if (msg.type === "ovos.karaoke.ended") { if ($("caption-text").textContent.startsWith("♪")) $("caption").hidden = true; return; }
+  if (msg.type === "ovos.karaoke.ended") {
+    if ($("caption-text").textContent.startsWith("♪")) $("caption").hidden = true;
+    if (singing) { singing = false; toVisage("ovos.audio.output.ended"); }
+    return;
+  }
   if (msg.type === "emkay.speech.interim") { privacy.interim(msg.data); return modelStatus.interim(msg.data); }
   if (msg.type === "emkay.speech.waiting") return speechWait.show(msg.data);
   if (msg.type === "emkay.wakeword") {   // a new wake word in the settings
