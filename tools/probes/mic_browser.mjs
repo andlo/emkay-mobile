@@ -111,6 +111,10 @@ try {
   // the same question again: the first one pays for loading models, this
   // one shows the time an answer usually takes
   await sleep(8000);
+  // Emkay keeps the microphone open, and Chromium's fake one loops
+  // SPEECH_WAV from when it was opened: let it go, so the next tap opens it
+  // again and hears the question from its start, not from a random point
+  await js(`window.emkay.releaseMic(); true`);
   await js(`window.__captions = []; window.__said = []; true`);
   const t2 = Date.now();
   await js(`window.emkay.mic.listen(); true`);

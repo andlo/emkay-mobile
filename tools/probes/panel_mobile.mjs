@@ -94,6 +94,10 @@ try {
   await tapAt(...await inFrame("#menu-toggle"));
   log(`menu open: ${await js(`${doc}.querySelector("nav").classList.contains("open")`)}`);
   log(`links: ${await js(`[...${doc}.querySelectorAll("nav a")].map(a => a.getAttribute("href")).join(" ")`)}`);
+  // Settings sits in the folded "Maintenance" group: open it by touch first
+  await tapAt(...await inFrame('.nav-group[data-group="maintenance"] .nav-fold'));
+  await sleep(500);
+  log(`Maintenance open: ${await js(`${doc}.querySelector('.nav-group[data-group="maintenance"] .nav-fold').getAttribute("aria-expanded")`)}`);
   await tapAt(...await inFrame('nav a[href$="/config"]'));
   await sleep(3000);
   log(`after tapping Settings: ${await js(`${doc}.location.pathname`)} | menu open: ${await js(`${doc}.querySelector("nav")?.classList.contains("open")`)}`);

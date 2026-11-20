@@ -50,7 +50,9 @@ try {
   await js(`document.getElementById("menu-panel").click(); true`);
   const navCount = `document.getElementById("panel-frame").contentDocument?.querySelectorAll("nav a").length`;
   await until(`(${navCount}) > 0`, 120, "the panel's page list");
-  log(`panel simple view: ${await js(`localStorage.getItem("ovos-simple")`)} | nav items: ${await js(navCount)} (${await js(`[...document.getElementById("panel-frame").contentDocument.querySelectorAll("nav a")].map(a => a.getAttribute("href")).join(" ")`)})`);
+  // every page is in the menu; the advanced groups start folded (hidden)
+  const shown = `[...document.getElementById("panel-frame").contentDocument.querySelectorAll("nav a")].filter(a => !a.closest(".nav-links[hidden]"))`;
+  log(`panel menu: ${await js(`${shown}.length`)} of ${await js(navCount)} pages shown (${await js(`${shown}.map(a => a.getAttribute("href")).join(" ")`)})`);
 } catch (e) {
   log(`FAILED: ${e.message}`);
 } finally {
