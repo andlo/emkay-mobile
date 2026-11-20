@@ -33,6 +33,7 @@ const SERVICES = [
   [/(^|\.)pypi\.org$|(^|\.)pythonhosted\.org$/, "packages", "package installs (PyPI)"],
   [/(^|\.)jsdelivr\.net$/, "pyodide", "Pyodide packages"],
   [/(^|\.)githubusercontent\.com$|(^|\.)github\.com$/, "github", "GitHub"],
+  [/(^|\.)openstreetmap\.org$/, "maps", "maps (OpenStreetMap)"],
   [/(^|\.)open-meteo\.com$|weather/, "weather", "weather"],
   [/radio-browser|somafm|(^|\.)dr\.dk$|stream/, "radio", "radio and news"],
 ];
