@@ -889,6 +889,35 @@ const speaker = {
   },
 };
 
+// ------------------------------------------------------------ midi synth
+/**
+ * ovos-phal-plugin-midi's sound. In a browser its synth (in the worker)
+ * sends what it plays as ovos.midi.pcm: {seq, sample_rate, at (wall-clock
+ * seconds of the first sample), pcm (base64 s16le mono)}. Each piece is
+ * played at its time, through the speaker's volume, so the music is
+ * seamless and on the beat the skill asked for. A piece that comes too late
+ * is played at once, after the one before it.
+ */
+const midiOut = {
+  until: 0,   // audioCtx time the last piece ends
+  play({ sample_rate: rate, at, pcm }) {
+    if (!audioCtx || !pcm) return;
+    const bytes = Uint8Array.from(atob(pcm), (c) => c.charCodeAt(0));
+    const ints = new Int16Array(bytes.buffer, 0, bytes.length >> 1);
+    const buf = audioCtx.createBuffer(1, ints.length, rate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < ints.length; i++) ch[i] = ints[i] / 32768;
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(speaker.gain || audioCtx.destination);
+    let when = audioCtx.currentTime + (at - Date.now() / 1000);
+    if (Math.abs(when - this.until) < 0.03) when = this.until;      // back to back: no gap, no click
+    when = Math.max(when, audioCtx.currentTime + 0.01);
+    src.start(when);
+    this.until = when + buf.duration;
+  },
+};
+
 // ------------------------------------------------------- model downloads
 /**
  * The status line at the top while a speech model or wake word is fetched
@@ -1087,6 +1116,7 @@ function toVisage(type, data = {}) {
  * that came with it, e.g. a file:// track for media.js). */
 function onBus(msg, data) {
   if (media.onBus(msg, data)) return;
+  if (msg.type === "ovos.midi.pcm") return midiOut.play(msg.data);
   // ovos-skill-karaoke: while Emkay sings, the words go under the face (in
   // karaoke mode the skill's own screen shows them)
   if (msg.type === "ovos.karaoke.lyrics") {

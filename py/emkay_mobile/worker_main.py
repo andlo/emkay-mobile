@@ -83,6 +83,8 @@ def start(js_post, user_config=None) -> str:
     # the phone's "hardware", also kiosk and local only (#23): the skills
     # send hardware-neutral bus messages, the plugin does the browser part
     phal.start(bus, lambda raw: _post("phal", raw), reload_speech=speech.reload)
+    from . import phal_extra   # PHAL plugins the user installed (phal_extra.py)
+    phal_extra.start(bus)
     boot.report("boot.services", 0.85)
     _report_status(bus)
     remember_speech_settings()   # later changes apply without a restart (_settings_changed)
@@ -151,6 +153,10 @@ def _report_status(bus):
 #: ovos-audio-plugin-browser's commands to the page's <audio> (web/media.js);
 #: the page answers with <prefix>state through core_send
 _MEDIA_PREFIX = "ovos.audio.browser."
+
+#: ovos-phal-plugin-midi's sound, when it plays through the bus ("audio": "bus",
+#: its default in a browser): played by the page (web/app.js, midiOut)
+_MIDI_PCM = "ovos.midi.pcm"
 
 _STATE_TOPICS = {
     "recognizer_loop:wakeword", "recognizer_loop:record_begin",
@@ -235,6 +241,9 @@ def _watch(raw):
     except Exception:
         return
     t = msg.get("type") if isinstance(msg, dict) else None
+    if t == _MIDI_PCM:   # the synth's sound: for the page's player alone (big, many a second)
+        _post("bus", json.dumps({"type": t, "data": msg.get("data", {})}))
+        return
     if _core_open or _dev_stream:   # the visage's bus socket (and Emkay Dev) get everything
         _post("core", raw if isinstance(raw, str) else raw.serialize())
     if t in _ACTIVITY or ((t or "").startswith(_FALLBACK_PREFIX) and t.endswith((".start", ".response"))):
