@@ -1291,12 +1291,8 @@ function openPanel(page = "") {
     $("panel").hidden = false;
     return;
   }
-  // the panel's own Simple view (only the everyday pages) to begin with, on
-  // a phone; its header toggle shows all pages and is remembered from then
-  // on (localStorage "ovos-simple" is the panel's own setting, same origin)
-  try {
-    if (localStorage.getItem("ovos-simple") === null) localStorage.setItem("ovos-simple", "1");
-  } catch {}
+  // the panel's menu starts with only the everyday pages; its advanced
+  // groups are folded until opened (ovos-control-panel 0.0.1a58)
   const frame = $("panel-frame");
   if (page || !frame.getAttribute("src")) frame.src = `panel/${page}`;
   $("panel").hidden = false;
@@ -1687,4 +1683,4 @@ $("activity-close").onclick = () => {
   $("network").hidden = false;
 };
 
-window.emkay = { call, mic, speaker, media, wake, activity, privacy, stt: () => sttModule };
+window.emkay = { call, mic, speaker, media, wake, activity, privacy, releaseMic, stt: () => sttModule };
