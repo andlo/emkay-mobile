@@ -40,8 +40,10 @@ URL_RE = re.compile(
 API = "https://api.github.com/repos/{owner}/{repo}"
 RAW = "https://raw.githubusercontent.com/{owner}/{repo}/{sha}/{path}"
 
-#: what is fetched: no more files or bytes than this (a skill is small)
-MAX_FILES = 400
+#: what is fetched: no more files or bytes than this (a skill is small).
+#: The file count is generous on purpose: a skill in all Emkay languages has
+#: hundreds of small locale files (#92); MAX_BYTES is what keeps it small.
+MAX_FILES = 2000
 MAX_BYTES = 20_000_000
 #: folders a skill's package never needs
 SKIP_DIRS = {".git", ".github", ".vscode", ".devcontainer", "test", "tests", "docs",
