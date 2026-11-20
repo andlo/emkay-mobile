@@ -35,6 +35,7 @@ export function createMediaPlayer(send) {
   let level = { volume: 0.75, muted: false };
   let factor = 1;          // ducking, from the backend
   let uri = null;          // what the backend asked for; null when stopped
+  let blobUrl = null;      // a file:// track's bytes, as the page can play them
   let lastReport = 0;
 
   const ms = (s) => (Number.isFinite(s) ? Math.round(s * 1000) : 0);
@@ -67,9 +68,19 @@ export function createMediaPlayer(send) {
     if (!audio.paused && Date.now() - lastReport > POSITION_EVERY) report("playing");
   });
 
-  function play({ uri: next, position_ms = 0 }) {
+  const dropBlob = () => { if (blobUrl) URL.revokeObjectURL(blobUrl); blobUrl = null; };
+  const MIME = { wav: "audio/wav", mp3: "audio/mpeg", ogg: "audio/ogg", oga: "audio/ogg",
+                 opus: "audio/ogg", flac: "audio/flac", m4a: "audio/mp4" };
+
+  /** `bytes`: a file:// track's content, read for us in the worker. */
+  function play({ uri: next, position_ms = 0 }, bytes) {
     uri = next;
-    audio.src = next;
+    dropBlob();
+    if (bytes) {
+      const ext = next.split("?")[0].split(".").pop().toLowerCase();
+      blobUrl = URL.createObjectURL(new Blob([bytes], { type: MIME[ext] || "" }));
+    }
+    audio.src = blobUrl || next;
     if (position_ms) audio.currentTime = position_ms / 1000;
     audio.play().catch((e) => {
       // NotAllowedError: the browser wants a tap first; AbortError: a newer
@@ -82,15 +93,17 @@ export function createMediaPlayer(send) {
     audio.pause();
     audio.removeAttribute("src");
     audio.load();          // drops the stream's connection
+    dropBlob();
   }
 
   return {
-    /** Handle an ovos.audio.browser.* message; true when it was one. */
-    onBus(msg) {
+    /** Handle an ovos.audio.browser.* message (`data`: a file:// track's
+     * bytes, if the worker read them); true when it was one. */
+    onBus(msg, data) {
       if (!msg.type?.startsWith(PREFIX) || msg.type === PREFIX + "state") return false;
       const d = msg.data || {};
       switch (msg.type.slice(PREFIX.length)) {
-        case "play": play(d); break;
+        case "play": play(d, data); break;
         case "pause": audio.pause(); break;
         case "resume": if (uri) audio.play().catch(() => {}); break;
         case "stop": stop(); break;
