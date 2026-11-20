@@ -160,6 +160,8 @@ _STATE_TOPICS = {
     "emkay.speech.interim",   # speech.py: what speaks or listens while a new model loads
     "emkay.speech.waiting",   # speech.py: the device's speech isn't ready, nothing stands in
     "complete_intent_failure", "ovos.intent.unmatched",
+    # ovos-skill-karaoke: the words being sung, for the caption under the face
+    "ovos.karaoke.lyrics", "ovos.karaoke.ended",
 }
 
 
@@ -211,6 +213,21 @@ def activity_setup() -> str:
                        "lang": cfg.get("lang")})
 
 
+def _local_file(uri):
+    """The bytes of a file:// track (a skill's own audio, e.g. a song
+    ovos-skill-karaoke made): it lives in Pyodide's file system, which the
+    page's <audio> can't open, so the page gets the bytes (web/media.js)."""
+    if not (uri or "").startswith("file://"):
+        return None
+    from urllib.parse import unquote
+    path = unquote(uri[len("file://"):])
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
 def _watch(raw):
     """Forward the bus events in _STATE_TOPICS to the page."""
     try:
@@ -224,7 +241,10 @@ def _watch(raw):
         _post("activity", json.dumps({"type": t, "data": _brief(msg.get("data") or {}),
                                       "skill_id": (msg.get("context") or {}).get("skill_id")},
                                      default=str))
-    if t in _STATE_TOPICS or (t or "").startswith(_MEDIA_PREFIX) and t != _MEDIA_PREFIX + "state":
+    if t == _MEDIA_PREFIX + "play":
+        _post("bus", json.dumps({"type": t, "data": msg.get("data", {})}),
+              _local_file(msg.get("data", {}).get("uri")))
+    elif t in _STATE_TOPICS or (t or "").startswith(_MEDIA_PREFIX) and t != _MEDIA_PREFIX + "state":
         _post("bus", json.dumps({"type": t, "data": msg.get("data", {})}))
     elif t in ("configuration.updated", "configuration.patch", "configuration.patch.clear"):
         # the page's own texts follow OVOS' language (web/i18n.js); read it

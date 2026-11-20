@@ -100,7 +100,7 @@ brain.onMessage((raw) => { for (const f of coreListeners) f(raw); });
 brain.on("audio", (d) => d.payload.sound ? speaker.playSound(d.data) : speaker.enqueue(d.data, d.payload));
 brain.on("phal", (d) => onPhal(JSON.parse(d.payload)));
 brain.on("model", (d) => modelStatus.show(d.payload));   // whisper.js / piper.js downloads
-brain.on("bus", (d) => onBus(JSON.parse(d.payload)));
+brain.on("bus", (d) => onBus(JSON.parse(d.payload), d.data));
 // the menu shows what this brain has: the control panel, the skill store and
 // the network log belong to the OVOS in this browser
 $("menu-panel").hidden = !brain.can.panel;
@@ -1070,9 +1070,17 @@ function locate() {
 }
 
 // ------------------------------------------------------------- bus events
-/** React to the few bus events the page itself cares about. */
-function onBus(msg) {
-  if (media.onBus(msg)) return;
+/** React to the few bus events the page itself cares about (`data`: bytes
+ * that came with it, e.g. a file:// track for media.js). */
+function onBus(msg, data) {
+  if (media.onBus(msg, data)) return;
+  // ovos-skill-karaoke: while Emkay sings, the words go under the face (in
+  // karaoke mode the skill's own screen shows them)
+  if (msg.type === "ovos.karaoke.lyrics") {
+    if (msg.data.mode === "sing") caption(`♪ ${msg.data.line}`);
+    return;
+  }
+  if (msg.type === "ovos.karaoke.ended") { if ($("caption-text").textContent.startsWith("♪")) $("caption").hidden = true; return; }
   if (msg.type === "emkay.speech.interim") { privacy.interim(msg.data); return modelStatus.interim(msg.data); }
   if (msg.type === "emkay.speech.waiting") return speechWait.show(msg.data);
   if (msg.type === "emkay.wakeword") {   // a new wake word in the settings
