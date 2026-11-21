@@ -1100,16 +1100,18 @@ function locate() {
 
 // ------------------------------------------------------------- bus events
 /**
- * A bus message for the visage alone, not put on OVOS' bus. While Emkay
+ * A status event for the visage alone, not put on OVOS' bus. While Emkay
  * sings (ovos-skill-karaoke) the face is told it speaks, so it shows and
  * moves its mouth with the song's visemes (enclosure.mouth.viseme_list);
  * OVOS itself must not hear that, or the listener would stop listening
- * (mute_during_output) and "stop" could not end the song.
+ * (mute_during_output) and "stop" could not end the song. The visage takes
+ * its status from the GUI socket, as ovos-gui forwards it there: an event
+ * in the "system" namespace.
  */
 let singing = false;
 function toVisage(type, data = {}) {
-  const raw = JSON.stringify({ type, data, context: {} });
-  for (const fn of coreListeners) fn(raw);
+  const raw = JSON.stringify({ type: "mycroft.events.triggered", namespace: "system", event_name: type, data });
+  for (const s of guiSockets) s.deliver(raw);
 }
 
 /** React to the few bus events the page itself cares about (`data`: bytes
