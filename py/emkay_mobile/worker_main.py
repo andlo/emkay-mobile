@@ -168,6 +168,10 @@ _STATE_TOPICS = {
     "complete_intent_failure", "ovos.intent.unmatched",
     # ovos-skill-karaoke: the words being sung, for the caption under the face
     "ovos.karaoke.lyrics", "ovos.karaoke.ended",
+    # the listener's recording mode, as ovos-dinkum-listener has it: a skill
+    # asks the microphone for a recording to a file (ovos-skill-jamband: a
+    # hummed melody); the page records, speech.recorded writes it
+    "recognizer_loop:state.set", "recognizer_loop:record_stop",
 }
 
 
@@ -521,6 +525,13 @@ def gh_installed() -> str:
     """JSON list of what was installed from GitHub (github.installed)."""
     from . import github
     return json.dumps(github.installed())
+
+
+def recorded(pcm16, sample_rate=16000, name="") -> str:
+    """The page recorded for the listener's recording mode (a skill asked:
+    recognizer_loop:state.set "recording"): to a file, no STT (speech.recorded)."""
+    data = pcm16.to_bytes() if hasattr(pcm16, "to_bytes") else bytes(pcm16)
+    return speech.recorded(data, int(sample_rate), str(name))
 
 
 def heard_text(text: str) -> str:

@@ -392,6 +392,34 @@ def heard(pcm16: bytes, sample_rate: int = 16000):
     return text
 
 
+def recorded(pcm16: bytes, sample_rate: int, name: str) -> str:
+    """The listener's recording mode (recognizer_loop:state.set {"state":
+    "recording", "recording_name": name}), as ovos-dinkum-listener does it:
+    no STT - the audio is written to <listener save_path>/recordings/<name>.wav
+    (and its .json), then recognizer_loop:record_end. A skill that asked for
+    it reads the file (ovos-skill-jamband: a hummed melody)."""
+    import json
+    import os
+    import wave
+    from ovos_config.locations import get_xdg_data_save_path
+    from . import boot
+    from ovos_bus_client.message import Message
+    listener = _config().get("listener", {})
+    folder = os.path.join(listener.get("save_path") or f"{get_xdg_data_save_path()}/listener", "recordings")
+    os.makedirs(folder, exist_ok=True)
+    name = os.path.basename(name or "") or f"{time.time()}"
+    path = os.path.join(folder, f"{name}.wav")
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(int(sample_rate))
+        w.writeframes(pcm16 or b"")
+    with open(os.path.join(folder, f"{name}.json"), "w") as f:
+        json.dump({"recording_name": name}, f)
+    boot.bus().emit(Message("recognizer_loop:record_end"))
+    return path
+
+
 def heard_text(text: str) -> str:
     """The browser's speech recognition (ovos-stt-plugin-browser) heard `text`:
     the rest of heard(), as after an STT plugin."""

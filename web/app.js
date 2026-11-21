@@ -491,6 +491,45 @@ const mic = {
   },
 };
 
+/**
+ * The listener's recording mode (recognizer_loop:state.set "recording", as in
+ * ovos-dinkum-listener): a skill wants the microphone's sound itself, not
+ * words - ovos-skill-jamband, a hummed melody. Recorded like an utterance,
+ * but longer, with longer pauses allowed, and never through the browser's
+ * speech recognition; the worker writes it to the listener's recordings
+ * folder and says recognizer_loop:record_end. recognizer_loop:record_stop
+ * ends it early.
+ */
+const recording = {
+  stop: false,
+  async start(name) {
+    if (mic.busy || mic.muted || !audioCtx) {
+      call("recorded", { pcm: new ArrayBuffer(0), rate: 16000, name });   // nothing, but the skill hears it ended
+      return;
+    }
+    mic.busy = true;
+    this.stop = false;
+    privacy.active("hear", true);
+    $("mic").className = "mic listening";
+    caption("♪ " + t("mic.listening"), 0);
+    call("record_begin");
+    let pcm = null;
+    try {
+      pcm = await record({ level: (v) => caption("♪ " + t("mic.listening"), v), silenceMs: 1600,
+                           maxSeconds: 15, noSpeechMs: 6000, stop: () => this.stop });
+    } catch (e) {
+      console.warn("[emkay] recording", e);
+    } finally {
+      $("mic").className = mic.muted ? "mic muted" : "mic";
+      $("caption").hidden = true;
+      privacy.active("hear", false);
+      mic.busy = false;
+    }
+    const buf = pcm ? pcm.buffer : new ArrayBuffer(0);
+    await call("recorded", { pcm: buf, rate: 16000, name }, [buf]);
+  },
+};
+
 let stream = null;
 let captionTimer = null;
 let questionsAsked = 0;   // typed or spoken; ends the warm-up note
@@ -768,7 +807,7 @@ function caption(text, level = null, hideAfter = 0) {
  * @returns {Promise<Uint8Array|null>} 16 kHz mono 16-bit PCM, or null if
  *   nothing was said
  */
-async function record({ maxSeconds = 10, silenceMs = 700, noSpeechMs = 3000, level } = {}) {
+async function record({ maxSeconds = 10, silenceMs = 700, noSpeechMs = 3000, level, stop } = {}) {
   const source = audioCtx.createMediaStreamSource(await micStream());
   const proc = audioCtx.createScriptProcessor(4096, 1, 1);
   const chunks = [];
@@ -790,7 +829,8 @@ async function record({ maxSeconds = 10, silenceMs = 700, noSpeechMs = 3000, lev
       const bar = Math.max(0.006, Math.min(0.03, (floor === Infinity ? 0 : floor) * 3));
       if (now - t0 >= 150 && rms > bar) { spoke = true; lastLoud = now; }
       level?.(Math.sqrt(rms / 0.1));                                 // for the eye only
-      if ((spoke && now - lastLoud > silenceMs) || (!spoke && now - t0 > noSpeechMs) || now - t0 > maxSeconds * 1000) done();
+      if ((spoke && now - lastLoud > silenceMs) || (!spoke && now - t0 > noSpeechMs) || now - t0 > maxSeconds * 1000
+          || stop?.()) done();
     };
     source.connect(proc);
     proc.connect(audioCtx.destination);
@@ -1140,6 +1180,11 @@ function onBus(msg, data) {
     return;
   }
   if (msg.type === "mycroft.mic.listen") setTimeout(() => mic.listen(), 150);  // a skill asked a question
+  if (msg.type === "recognizer_loop:state.set" && msg.data?.state === "recording") {
+    recording.start(msg.data.recording_name || String(Date.now()));
+    return;
+  }
+  if (msg.type === "recognizer_loop:record_stop") { recording.stop = true; return; }
   if (msg.type === "ovos.utterance.handled") utterancesHandled++;
   if (msg.type === "mycroft.mic.mute") mic.setMuted(true);
   if (msg.type === "emkay.lang") {   // a config change, e.g. in the panel
